@@ -1,0 +1,14 @@
+# Append-only progress log
+#
+# Example entry:
+# 2026-03-02T14:21:00-05:00
+# Task: auth-login-01
+# Baseline: smoke PASS
+# Change: implemented login endpoint + session cookie
+# Evidence:
+# - bash scripts/agent/quality.sh => PASS
+# - bash scripts/agent/e2e.sh => PASS
+# Feature toggle: auth-login-01 passes=false -> true
+# Next: auth-logout-01
+# Notes: watch cookie domain in production
+# Commit: abc1234

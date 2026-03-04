@@ -1,0 +1,10 @@
+.agent/triage/
+.agent/artifacts/
+.agent/tmp/
+!.agent/
+!.agent/feature_list.json
+!.agent/current_task.md
+!.agent/handoff.md
+!.agent/progress.log
+__pycache__/
+*.pyc

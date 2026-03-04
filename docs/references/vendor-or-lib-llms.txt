@@ -1,0 +1,3 @@
+# Vendor/Library Notes (LLM-friendly)
+
+Add curated notes or copied excerpts from official docs as needed.

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "harness-baseline-smoke-01",
+    "priority": 1,
+    "category": "reliability",
+    "description": "Baseline smoke workflow runs and reports deterministic status",
+    "steps": [
+      "Run bash scripts/agent/smoke.sh",
+      "Confirm output indicates PASS or actionable missing-runner warnings"
+    ],
+    "passes": true,
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-04T23:28:29Z)"
+  },
+  {
+    "id": "wip-carryover-01",
+    "priority": 1,
+    "category": "handoff",
+    "description": "Carry forward seeded work-in-progress context",
+    "steps": [
+      "Read .agent/handoff.md and active execution plan",
+      "Implement next smallest verifiable slice of the pending work"
+    ],
+    "passes": false,
+    "evidence": null
+  },
+  {
+    "id": "docs-source-of-truth-01",
+    "priority": 2,
+    "category": "documentation",
+    "description": "Core docs and index reflect current architecture and workflow",
+    "steps": [
+      "Update docs/PRODUCT.md docs/ARCHITECTURE.md docs/SECURITY.md docs/RELIABILITY.md",
+      "Ensure docs/index.md links all relevant docs"
+    ],
+    "passes": false,
+    "evidence": null
+  },
+  {
+    "id": "first-real-feature-01",
+    "priority": 3,
+    "category": "functional",
+    "description": "Replace starter tasks with project-specific acceptance criteria",
+    "steps": [
+      "Infer or collect real requirements",
+      "Encode them as explicit tasks in .agent/feature_list.json"
+    ],
+    "passes": false,
+    "evidence": null
+  }
+]
