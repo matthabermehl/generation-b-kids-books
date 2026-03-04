@@ -12,3 +12,11 @@
 # Next: auth-logout-01
 # Notes: watch cookie domain in production
 # Commit: abc1234
+2026-03-04T18:28:29-05:00
+Task: harness-baseline-smoke-01
+Baseline: smoke PASS
+Change: harness bootstrap/injection
+Evidence: bash scripts/agent/smoke.sh => PASS
+Notes: smoke tail: [agent] smoke: PASS | [agent] tracker: harness-baseline-smoke-01 marked passing |  | [agent][warn] No test runner detected. Continuing because AGENT_TEST_FALLBACK=warn.
+Commit: 64739f0
+
