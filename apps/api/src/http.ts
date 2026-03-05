@@ -9,6 +9,7 @@ import { createLoginToken, createSessionToken, verifyLoginToken, verifySessionTo
 import { requiredEnv } from "./lib/env.js";
 import { sendLoginLink } from "./lib/email.js";
 import { withIdempotency } from "./lib/idempotency.js";
+import { redactText, sanitizeForLog } from "./lib/log-redaction.js";
 import { execute, query } from "./lib/rds.js";
 import { json } from "./lib/response.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
@@ -75,12 +76,13 @@ function logWithContext(
   eventName: string,
   context: Record<string, unknown> = {}
 ): void {
+  const safeContext = sanitizeForLog(context) as Record<string, unknown>;
   console.log(
     JSON.stringify({
       level: "info",
       requestId,
       event: eventName,
-      ...context
+      ...safeContext
     })
   );
 }
@@ -477,7 +479,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       } catch (error) {
         console.error("STRIPE_WEBHOOK_FAILURE", {
           requestId,
-          message: error instanceof Error ? error.message : String(error)
+          message: redactText(error instanceof Error ? error.message : String(error))
         });
         return json(400, { error: "Invalid webhook signature" });
       }
@@ -1023,7 +1025,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   } catch (error) {
     console.error("API_REQUEST_FAILURE", {
       requestId,
-      message: error instanceof Error ? error.message : String(error)
+      message: redactText(error instanceof Error ? error.message : String(error))
     });
     return json(500, {
       error: error instanceof Error ? error.message : "Unknown error"

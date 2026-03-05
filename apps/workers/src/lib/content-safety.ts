@@ -1,3 +1,5 @@
+import { redactText } from "./helpers.js";
+
 interface ModerationResult {
   flagged: boolean;
   categories: Record<string, boolean>;
@@ -88,7 +90,7 @@ export async function moderateTexts(openAiApiKey: string, texts: string[]): Prom
     mode = "deterministic+openai";
   } catch (error) {
     console.error("CONTENT_MODERATION_FAILURE", {
-      message: error instanceof Error ? error.message : String(error)
+      message: redactText(error instanceof Error ? error.message : String(error))
     });
   }
 

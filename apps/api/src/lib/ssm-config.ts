@@ -1,6 +1,7 @@
 import { GetParametersByPathCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { z } from "zod";
 import { getOperationalEnv } from "./env.js";
+import { redactText } from "./log-redaction.js";
 
 export interface RuntimeSecrets {
   sendgridApiKey: string;
@@ -209,7 +210,7 @@ export async function getRuntimeConfig(): Promise<RuntimeConfig> {
       console.error("SSM_CONFIG_LOAD_FAILURE", {
         appEnv: operational.APP_ENV,
         ssmPrefix: operational.SSM_PREFIX,
-        message: error instanceof Error ? error.message : String(error)
+        message: redactText(error instanceof Error ? error.message : String(error))
       });
       throw error;
     })

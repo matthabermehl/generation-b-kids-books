@@ -1,6 +1,7 @@
 import type { SQSHandler } from "aws-lambda";
 import { DeleteObjectsCommand, S3Client } from "@aws-sdk/client-s3";
 import { execute } from "./lib/rds.js";
+import { redactText } from "./lib/helpers.js";
 
 interface PrivacyPurgeMessage {
   privacyEventId: string;
@@ -118,7 +119,7 @@ export const handler: SQSHandler = async (event) => {
             name: "error",
             value: {
               stringValue: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
+                message: redactText(error instanceof Error ? error.message : String(error))
               })
             }
           }
@@ -128,7 +129,7 @@ export const handler: SQSHandler = async (event) => {
         JSON.stringify({
           event: "PRIVACY_PURGE_FAILED",
           privacyEventId: payload.privacyEventId,
-          message: error instanceof Error ? error.message : String(error)
+          message: redactText(error instanceof Error ? error.message : String(error))
         })
       );
       throw error;
