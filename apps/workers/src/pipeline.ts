@@ -3,7 +3,8 @@ import type { Handler } from "aws-lambda";
 import type { MoneyLessonKey, ReadingProfile } from "@book/domain";
 import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
 import { putJson, putBuffer } from "./lib/storage.js";
-import { makeId } from "./lib/helpers.js";
+import { fileExtensionForContentType, makeId, logStructured } from "./lib/helpers.js";
+import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { resolveImageProvider } from "./providers/image.js";
 import { resolveLlmProvider } from "./providers/llm.js";
 
@@ -61,7 +62,7 @@ async function loadBookContext(bookId: string): Promise<BookContextRow> {
 
 async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount: number }> {
   const context = await loadBookContext(bookId);
-  const llm = resolveLlmProvider();
+  const llm = await resolveLlmProvider();
   const pageCount = Number(process.env.BOOK_DEFAULT_PAGE_COUNT ?? "12");
   const interests = (context.interest_tags ?? "").split(",").filter(Boolean);
 
@@ -75,7 +76,7 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
     pageCount
   });
 
-  let story = await llm.draftPages(
+  let drafted = await llm.draftPages(
     {
       bookId,
       childFirstName: context.child_first_name,
@@ -87,9 +88,17 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
     },
     beatSheet.beats
   );
+  let story = drafted.story;
 
   const critiques: string[] = [];
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  const providerMeta = {
+    beatSheet: beatSheet.meta,
+    drafts: [drafted.meta],
+    critics: [] as Array<{ provider: string; model: string; latencyMs: number }>
+  };
+
+  const maxRewrites = 2;
+  for (let rewriteAttempt = 0; rewriteAttempt <= maxRewrites; rewriteAttempt += 1) {
     const verdict = await llm.critic(
       {
         bookId,
@@ -103,12 +112,21 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
       story
     );
 
+    providerMeta.critics.push({
+      provider: verdict.meta.provider,
+      model: verdict.meta.model,
+      latencyMs: verdict.meta.latencyMs
+    });
     critiques.push(...verdict.notes);
     if (verdict.ok) {
       break;
     }
 
-    story = await llm.draftPages(
+    if (rewriteAttempt === maxRewrites) {
+      break;
+    }
+
+    drafted = await llm.draftPages(
       {
         bookId,
         childFirstName: context.child_first_name,
@@ -120,6 +138,8 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
       },
       beatSheet.beats
     );
+    providerMeta.drafts.push(drafted.meta);
+    story = drafted.story;
   }
 
   await withTransaction(async (tx) => {
@@ -153,18 +173,35 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
       );
     }
 
+    const finalCritic = providerMeta.critics[providerMeta.critics.length - 1];
+    const modelUsed = finalCritic ? `${finalCritic.provider}:${finalCritic.model}` : "unknown";
+
     await txExecute(
       tx,
       `
         INSERT INTO evaluations (id, book_id, stage, model_used, score_json, verdict, notes)
-        VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'final_text', 'mock-llm', CAST(:score AS jsonb), :verdict, :notes)
+        VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'final_text', :modelUsed, CAST(:score AS jsonb), :verdict, :notes)
       `,
       [
         { name: "id", value: { stringValue: makeId() } },
         { name: "bookId", value: { stringValue: bookId } },
-        { name: "score", value: { stringValue: JSON.stringify({ critiqueCount: critiques.length }) } },
+        { name: "modelUsed", value: { stringValue: modelUsed } },
+        {
+          name: "score",
+          value: {
+            stringValue: JSON.stringify({
+              critiqueCount: critiques.length,
+              llm: providerMeta
+            })
+          }
+        },
         { name: "verdict", value: { stringValue: critiques.length === 0 ? "pass" : "warning" } },
-        { name: "notes", value: { stringValue: critiques.join(" | ") || "No issues" } }
+        {
+          name: "notes",
+          value: {
+            stringValue: critiques.join(" | ") || "No issues"
+          }
+        }
       ]
     );
 
@@ -202,7 +239,8 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
 
 async function generateCharacterSheet(bookId: string): Promise<{ bookId: string; key: string }> {
   const context = await loadBookContext(bookId);
-  const imageProvider = resolveImageProvider();
+  const runtimeConfig = await getRuntimeConfig();
+  const imageProvider = await resolveImageProvider();
   const image = await imageProvider.generate(
     {
       bookId,
@@ -213,15 +251,16 @@ async function generateCharacterSheet(bookId: string): Promise<{ bookId: string;
     1
   );
 
-  const key = `books/${bookId}/images/character-sheet.svg`;
+  const extension = fileExtensionForContentType(image.contentType);
+  const key = `books/${bookId}/images/character-sheet.${extension}`;
   const s3Url = await putBuffer(key, image.bytes, image.contentType);
 
   await execute(
     `
       INSERT INTO images (
-        id, book_id, role, model_endpoint, prompt, seed, loras_json, s3_url, qa_json, status
+        id, book_id, role, model_endpoint, prompt, seed, loras_json, fal_request_id, width, height, s3_url, qa_json, status
       ) VALUES (
-        CAST(:id AS uuid), CAST(:bookId AS uuid), 'character_sheet', :endpoint, :prompt, :seed, CAST(:loras AS jsonb), :s3, CAST(:qa AS jsonb), 'ready'
+        CAST(:id AS uuid), CAST(:bookId AS uuid), 'character_sheet', :endpoint, :prompt, :seed, CAST(:loras AS jsonb), :requestId, :width, :height, :s3, CAST(:qa AS jsonb), 'ready'
       )
     `,
     [
@@ -235,7 +274,13 @@ async function generateCharacterSheet(bookId: string): Promise<{ bookId: string;
         }
       },
       { name: "seed", value: { longValue: image.seed } },
-      { name: "loras", value: { stringValue: JSON.stringify({ styleLora: process.env.FAL_STYLE_LORA_URL ?? null }) } },
+      {
+        name: "loras",
+        value: { stringValue: JSON.stringify({ styleLora: runtimeConfig.falStyleLoraUrl ?? null }) }
+      },
+      { name: "requestId", value: { stringValue: image.requestId ?? "" } },
+      { name: "width", value: { longValue: image.width ?? 1536 } },
+      { name: "height", value: { longValue: image.height ?? 1024 } },
       { name: "s3", value: { stringValue: s3Url } },
       { name: "qa", value: { stringValue: JSON.stringify(image.qa) } }
     ]
@@ -343,6 +388,12 @@ export const handler: Handler<PipelineEvent> = async (event) => {
   if (!event?.action || !event.bookId) {
     throw new Error("action and bookId are required");
   }
+
+  logStructured("PipelineActionStart", {
+    action: event.action,
+    bookId: event.bookId,
+    orderId: event.orderId ?? null
+  });
 
   switch (event.action) {
     case "prepare_story":

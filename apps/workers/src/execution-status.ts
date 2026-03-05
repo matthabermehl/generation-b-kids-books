@@ -40,6 +40,16 @@ export const handler: Handler<EventBridgeEvent> = async (event) => {
     return { ignored: true, reason: "missing-book-id" };
   }
 
+  console.error(
+    JSON.stringify({
+      event: "StepFunctionTerminalFailure",
+      executionArn: detail.executionArn,
+      status: detail.status,
+      bookId: parsed.bookId,
+      orderId: parsed.orderId ?? null
+    })
+  );
+
   await execute(`UPDATE books SET status = 'failed' WHERE id = CAST(:bookId AS uuid)`, [
     { name: "bookId", value: { stringValue: parsed.bookId } }
   ]);

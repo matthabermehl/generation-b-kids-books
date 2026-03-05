@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { requiredEnv } from "./env.js";
+import { getRuntimeConfig } from "./ssm-config.js";
 
 interface LoginTokenPayload {
   email: string;
@@ -12,21 +12,24 @@ interface SessionTokenPayload {
   purpose: "session";
 }
 
-const signingSecret = () => requiredEnv("JWT_SIGNING_SECRET");
+async function signingSecret(): Promise<string> {
+  const config = await getRuntimeConfig();
+  return config.secrets.jwtSigningSecret;
+}
 
-export function createLoginToken(email: string, ttlMinutes: number): string {
+export async function createLoginToken(email: string, ttlMinutes: number): Promise<string> {
   const payload: LoginTokenPayload = {
     email,
     purpose: "login"
   };
 
-  return jwt.sign(payload, signingSecret(), {
+  return jwt.sign(payload, await signingSecret(), {
     expiresIn: `${ttlMinutes}m`
   });
 }
 
-export function verifyLoginToken(token: string): LoginTokenPayload {
-  const decoded = jwt.verify(token, signingSecret()) as LoginTokenPayload;
+export async function verifyLoginToken(token: string): Promise<LoginTokenPayload> {
+  const decoded = jwt.verify(token, await signingSecret()) as LoginTokenPayload;
   if (decoded.purpose !== "login") {
     throw new Error("Invalid login token purpose");
   }
@@ -34,23 +37,23 @@ export function verifyLoginToken(token: string): LoginTokenPayload {
   return decoded;
 }
 
-export function createSessionToken(userId: string, email: string): string {
+export async function createSessionToken(userId: string, email: string): Promise<string> {
   const payload: SessionTokenPayload = {
     userId,
     email,
     purpose: "session"
   };
 
-  return jwt.sign(payload, signingSecret(), { expiresIn: "7d" });
+  return jwt.sign(payload, await signingSecret(), { expiresIn: "7d" });
 }
 
-export function verifySessionToken(header?: string): SessionTokenPayload {
+export async function verifySessionToken(header?: string): Promise<SessionTokenPayload> {
   if (!header || !header.startsWith("Bearer ")) {
     throw new Error("Missing bearer token");
   }
 
   const token = header.slice("Bearer ".length);
-  const decoded = jwt.verify(token, signingSecret()) as SessionTokenPayload;
+  const decoded = jwt.verify(token, await signingSecret()) as SessionTokenPayload;
   if (decoded.purpose !== "session") {
     throw new Error("Invalid session token purpose");
   }

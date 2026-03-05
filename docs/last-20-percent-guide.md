@@ -1,132 +1,120 @@
-# Last 20% Guide: AI Children's Book App
+# Last 20% Guide (Post-Phase-2)
 
-This guide is the handoff artifact to complete production-facing readiness after the 80% pass.
+Phase 2 completed real-provider cutover and SSM runtime config loading. This guide covers what remains for production readiness and how to safely operate/rollback the current system.
 
-## 1. Switch-Over Runbook for Real-World Testing
+## 1. Key Runbook for Real-World Testing
 
-### 1.1 Preconditions
-- AWS credentials configured and valid for profile `personal`.
-- Deployed `AiChildrensBookDevStack` in `us-east-1`.
-- Stack outputs recorded: API URL, distribution URL, artifact bucket, state machine ARN.
+1. Convert and verify secret parameter typing:
+   - `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:ssm:migrate-secure`
+   - Confirm each key is `SecureString`:
+     - `/ai-childrens-book/dev/sendgrid_api_key`
+     - `/ai-childrens-book/dev/openai_api_key`
+     - `/ai-childrens-book/dev/anthropic_api_key`
+     - `/ai-childrens-book/dev/fal_key`
+     - `/ai-childrens-book/dev/jwt_signing_secret`
 
-### 1.2 Set SSM parameters (real keys)
-Use `SecureString` for sensitive values.
+2. Ensure SSM non-secret config keys exist:
+   - `/ai-childrens-book/dev/sendgrid_from_email`
+   - `/ai-childrens-book/dev/web_base_url`
+   - `/ai-childrens-book/dev/auth_link_ttl_minutes`
+   - `/ai-childrens-book/dev/openai_model_json`
+   - `/ai-childrens-book/dev/openai_model_vision`
+   - `/ai-childrens-book/dev/anthropic_model_writer`
+   - `/ai-childrens-book/dev/fal_endpoint_base`
+   - `/ai-childrens-book/dev/fal_endpoint_lora`
+   - `/ai-childrens-book/dev/fal_endpoint_general`
+   - `/ai-childrens-book/dev/fal_style_lora_url` (optional)
+   - `/ai-childrens-book/dev/enable_mock_llm`
+   - `/ai-childrens-book/dev/enable_mock_image`
 
-```bash
-AWS_PROFILE=personal AWS_REGION=us-east-1 aws ssm put-parameter --name /ai-childrens-book/dev/sendgrid_api_key --type SecureString --value '<SENDGRID_API_KEY>' --overwrite
-AWS_PROFILE=personal AWS_REGION=us-east-1 aws ssm put-parameter --name /ai-childrens-book/dev/openai_api_key --type SecureString --value '<OPENAI_API_KEY>' --overwrite
-AWS_PROFILE=personal AWS_REGION=us-east-1 aws ssm put-parameter --name /ai-childrens-book/dev/anthropic_api_key --type SecureString --value '<ANTHROPIC_API_KEY>' --overwrite
-AWS_PROFILE=personal AWS_REGION=us-east-1 aws ssm put-parameter --name /ai-childrens-book/dev/fal_key --type SecureString --value '<FAL_KEY>' --overwrite
-AWS_PROFILE=personal AWS_REGION=us-east-1 aws ssm put-parameter --name /ai-childrens-book/dev/jwt_signing_secret --type SecureString --value '<JWT_SECRET>' --overwrite
-```
+3. Phase-2 desired runtime flags:
+   - `/ai-childrens-book/dev/enable_mock_llm=false`
+   - `/ai-childrens-book/dev/enable_mock_image=false`
+   - Keep checkout mocked (`ENABLE_MOCK_CHECKOUT=true` Lambda env).
 
-### 1.3 Flip mock toggles off for realistic generation
-In deploy environment (or parameterized config), set:
-- `ENABLE_MOCK_LLM=false`
-- `ENABLE_MOCK_IMAGE=false`
-- keep `ENABLE_MOCK_CHECKOUT=true` for initial smoke unless Stripe is complete.
+4. Validate provider/API connectivity:
+   - `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke`
 
-Then redeploy:
+5. Run full phase-2 smoke:
+   - Set `API_BASE_URL` from stack output.
+   - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> SMOKE_EMAIL=<email> pnpm ops:phase2-e2e`
 
-```bash
-AWS_PROFILE=personal ENABLE_MOCK_LLM=false ENABLE_MOCK_IMAGE=false pnpm cdk:deploy:dev
-```
+## 2. Rollback and Troubleshooting
 
-### 1.4 Smoke-test order (run in sequence)
-1. `pnpm lint && pnpm test && pnpm build`
-2. `pnpm openapi:generate`
-3. `AWS_PROFILE=personal pnpm cdk:synth`
-4. Deploy (`pnpm cdk:deploy:dev`)
-5. Frontend auth flow: request link, verify link
-6. Create order + mark-paid
-7. Confirm Step Functions execution succeeds
-8. Confirm 12+ page image artifacts in S3
-9. Confirm PDF artifact generated and downloadable via API
-10. Check CloudWatch dashboard and alarms show healthy baseline
+### Rollback lever (fast)
+1. Set SSM flags back to mocks:
+   - `/ai-childrens-book/dev/enable_mock_llm=true`
+   - `/ai-childrens-book/dev/enable_mock_image=true`
+2. Wait for runtime config cache expiry (`RUNTIME_CONFIG_CACHE_TTL_SECONDS`, default 300s) or redeploy to force cold starts.
 
-## 2. Remaining Product Work
+### Provider failure triage
+1. Check CloudWatch alarms:
+   - `ProviderErrorSpikeAlarm`
+   - `SsmConfigLoadFailureAlarm`
+2. Search logs for:
+   - `PROVIDER_ERROR`
+   - `SSM_CONFIG_LOAD_FAILURE`
+3. If OpenAI fails with retryable errors, confirm Anthropic fallback events appear in worker logs.
+4. For fal issues, inspect `fal_request_id` and endpoint values in `images` rows to isolate provider-side errors.
 
-### 2.1 Payments
-- Replace mock checkout with Stripe Checkout session creation.
-- Add webhook verification, replay protection, and idempotent event processing.
-- Add payment failure/refund lifecycle reconciliation.
+### Auth failure triage
+1. Verify SendGrid key and from-email in SSM.
+2. Confirm `/ai-childrens-book/dev/jwt_signing_secret` exists and decrypts.
+3. Verify `WEB_BASE_URL` in SSM points to active frontend host for login links.
 
-### 2.2 Prompt and generation optimization
-- Tune prompts with real-model outputs and QA metrics.
-- Add token/image cost budgets and per-order guardrails.
-- Persist model versioning for reproducibility and A/B testing.
+## 3. Remaining Product Work
 
-### 2.3 LLM failover routing
-- Implement active fallback chain between OpenAI and Anthropic.
-- Add policy-based route selection for latency/cost/quality.
-- Add circuit-breaker and per-provider error budget handling.
+1. Stripe checkout and webhook hardening:
+   - Replace mock endpoint with real checkout session creation.
+   - Add signature validation, replay protection, and idempotent webhook event handling.
 
-### 2.4 Safety and moderation hardening
-- Expand content moderation (prompt, output text, image prompt, image result metadata).
-- Add deny/allow policy packs and incident logging.
-- Add human-review queue path for ambiguous cases.
+2. Prompt tuning and cost controls:
+   - Add cost budgets and hard caps per order.
+   - Persist per-stage token/image cost into DB for analytics and throttling.
 
-### 2.5 Security hardening and threat modeling
-- Complete threat model (auth abuse, artifact leakage, prompt injection, data exfiltration).
-- Lock IAM policies further (resource-level and condition-level constraints).
-- Add WAF, stricter CORS, and audit log retention/security controls.
-- Rotate/encrypt operational secrets with defined cadence and detection.
+3. Provider routing and resilience:
+   - Add policy-based OpenAI/Anthropic routing (latency/cost/quality).
+   - Add circuit-breakers and per-provider health windows.
 
-### 2.6 Physical book/POD pipeline
-- Integrate print-on-demand provider and order sync.
-- Add print layout pipeline (bleed, trim, CMYK/300dpi, font embedding checks).
-- Add shipping/status webhooks and customer notification path.
+4. Moderation and safety:
+   - Add text/image moderation checks for prompts and outputs.
+   - Add escalation path and audit trail for blocked generations.
 
-## 3. Known Risks and Mitigation Playbooks
+5. Production security hardening:
+   - Threat model pass, WAF, tighter IAM/resource conditions, and log retention controls.
 
-### Risk: Model output quality drift
-- Mitigation: daily canary prompt suite + regression scorecards + blocked deploy threshold.
-
-### Risk: Generation cost spikes
-- Mitigation: enforce per-order token/image caps, fallback to cheaper model tier, auto-throttle.
-
-### Risk: Workflow stalls in async steps
-- Mitigation: dead-letter monitoring, timeout alarms, replay script for safe resume.
-
-### Risk: Unsafe or non-compliant story content
-- Mitigation: deterministic + model-based safety checks and human escalation path.
-
-### Risk: Delivery link misuse
-- Mitigation: short-lived presigned URLs, auth checks, artifact access logging.
+6. POD/print fulfillment:
+   - Integrate print provider, bleed/trim/300dpi pipeline, and shipment status flow.
 
 ## 4. Prioritized Backlog (Effort + Dependencies)
 
-1. Stripe checkout + webhook idempotency
-- Effort: M
-- Depends on: webhook endpoint, secret management, order lifecycle updates
+1. Stripe checkout + webhook reliability
+   - Effort: M
+   - Depends on: payment secrets, webhook endpoint, order lifecycle table updates
 
-2. Real provider adapters (OpenAI/Anthropic/fal) with retries/backoff
-- Effort: M
-- Depends on: SSM secret retrieval wiring, observability tags, quota handling
+2. Cost observability + guardrails
+   - Effort: M
+   - Depends on: provider metadata capture (already in place), reporting queries
 
-3. Safety policy engine and moderation pipeline
-- Effort: M/L
-- Depends on: provider responses, logging schema, escalation queues
+3. Safety moderation pipeline
+   - Effort: M/L
+   - Depends on: provider integration stable path, policy definitions
 
-4. LLM failover router + health-based routing
-- Effort: M
-- Depends on: multiple live provider adapters and latency metrics
+4. Production security package
+   - Effort: M
+   - Depends on: finalized environment topology and domains
 
-5. Production security hardening package (WAF/CORS/IAM tightening)
-- Effort: M
-- Depends on: finalized API/CloudFront traffic model
+5. POD integration
+   - Effort: L
+   - Depends on: stable story/image generation quality
 
-6. POD integration + print-ready renderer upgrades
-- Effort: L
-- Depends on: stable story/image outputs and vendor selection
+## 5. Resume Prompt
 
-## 5. Resume Prompt (for next chat)
-
-Use this exact starter prompt:
+Use this in the next chat:
 
 ```text
 Continue from /Users/matthabermehl/scratch/ai-childrens-book on branch codex/bitcoin-book-80-pass.
-Read docs/last-20-percent-guide.md first, then implement backlog item #1 (Stripe checkout + webhook hardening) end-to-end.
-Use AWS CDK JavaScript and keep all AWS/CDK CLI commands prefixed with AWS_PROFILE=personal.
-Do not regress the existing mock flow; add Stripe behind a flag and include tests + rollout notes.
+Read docs/last-20-percent-guide.md first, then implement Stripe checkout + webhook hardening end-to-end.
+Keep AWS/CDK commands prefixed with AWS_PROFILE=personal and do not remove the existing mock fallback path.
+Include tests for webhook signature verification, idempotency, and duplicate-event handling.
 ```

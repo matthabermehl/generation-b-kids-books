@@ -33,6 +33,6 @@ export async function runImageGenerationAttempts(
   return {
     generated,
     attempts,
-    generatedKey: `books/${input.bookId}/images/page-${input.pageIndex + 1}-v${attempts}.svg`
+    generatedKey: `books/${input.bookId}/images/page-${input.pageIndex + 1}-v${attempts}`
   };
 }

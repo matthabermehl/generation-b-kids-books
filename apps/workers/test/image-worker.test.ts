@@ -35,7 +35,7 @@ describe("runImageGenerationAttempts", () => {
 
     expect(result.attempts).toBe(1);
     expect(result.generated.qa.passed).toBe(true);
-    expect(result.generatedKey).toBe("books/book-1/images/page-3-v1.svg");
+    expect(result.generatedKey).toBe("books/book-1/images/page-3-v1");
   });
 
   it("retries until attempt budget is exhausted", async () => {
@@ -55,7 +55,7 @@ describe("runImageGenerationAttempts", () => {
 
     expect(result.attempts).toBe(2);
     expect(result.generated.qa.passed).toBe(true);
-    expect(result.generatedKey).toBe("books/book-1/images/page-3-v2.svg");
+    expect(result.generatedKey).toBe("books/book-1/images/page-3-v2");
   });
 
   it("returns failed result when all attempts fail", async () => {

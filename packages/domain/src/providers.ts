@@ -1,6 +1,29 @@
 import type { CreateOrderInput, StoryPackage } from "./types.js";
 import type { MoneyLessonKey, ReadingProfile } from "./enums.js";
 
+export interface ProviderUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
+export interface LlmCallMetadata {
+  provider: "mock" | "openai" | "anthropic";
+  model: string;
+  latencyMs: number;
+  usage: ProviderUsage | null;
+}
+
+export interface ImageCallMetadata {
+  provider: "mock" | "fal";
+  endpoint: string;
+  requestId?: string;
+  width?: number;
+  height?: number;
+  latencyMs: number;
+}
+
 export interface StoryGenerationContext {
   bookId: string;
   childFirstName: string;
@@ -12,9 +35,12 @@ export interface StoryGenerationContext {
 }
 
 export interface LlmProviderContract {
-  generateBeatSheet(context: StoryGenerationContext): Promise<{ beats: string[] }>;
-  draftPages(context: StoryGenerationContext, beats: string[]): Promise<StoryPackage>;
-  critic(context: StoryGenerationContext, story: StoryPackage): Promise<{ ok: boolean; notes: string[] }>;
+  generateBeatSheet(context: StoryGenerationContext): Promise<{ beats: string[]; meta: LlmCallMetadata }>;
+  draftPages(context: StoryGenerationContext, beats: string[]): Promise<{ story: StoryPackage; meta: LlmCallMetadata }>;
+  critic(
+    context: StoryGenerationContext,
+    story: StoryPackage
+  ): Promise<{ ok: boolean; notes: string[]; meta: LlmCallMetadata }>;
 }
 
 export interface ImageProviderContract {
@@ -22,13 +48,13 @@ export interface ImageProviderContract {
     bookId: string;
     prompt: string;
     seed?: number;
-  }): Promise<{ s3Url: string; seed: number }>;
+  }): Promise<{ s3Url: string; seed: number; meta: ImageCallMetadata }>;
   generatePageImage(input: {
     bookId: string;
     pageIndex: number;
     prompt: string;
     seed: number;
-  }): Promise<{ s3Url: string; seed: number; qaPassed: boolean; issues: string[] }>;
+  }): Promise<{ s3Url: string; seed: number; qaPassed: boolean; issues: string[]; meta: ImageCallMetadata }>;
 }
 
 export interface RendererContract {

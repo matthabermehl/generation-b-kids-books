@@ -1,15 +1,19 @@
-import { optionalEnv } from "./env.js";
+import { z } from "zod";
+import { getRuntimeConfig } from "./ssm-config.js";
 
 const sendgridEndpoint = "https://api.sendgrid.com/v3/mail/send";
+const fromEmailSchema = z
+  .string()
+  .email()
+  .refine((value) => {
+    const domain = value.split("@")[1] ?? "";
+    return domain.includes(".");
+  }, "SENDGRID_FROM_EMAIL must use a valid domain");
 
 export async function sendLoginLink(email: string, link: string): Promise<void> {
-  const apiKey = optionalEnv("SENDGRID_API_KEY");
-  const fromEmail = optionalEnv("SENDGRID_FROM_EMAIL", "noreply@example.com");
-
-  if (!apiKey) {
-    console.log(`SENDGRID_API_KEY missing; login link for ${email}: ${link}`);
-    return;
-  }
+  const config = await getRuntimeConfig();
+  const apiKey = config.secrets.sendgridApiKey;
+  const fromEmail = fromEmailSchema.parse(config.sendgridFromEmail);
 
   const body = {
     personalizations: [
@@ -38,6 +42,12 @@ export async function sendLoginLink(email: string, link: string): Promise<void> 
 
   if (!response.ok) {
     const text = await response.text();
+    console.error("SENDGRID_DELIVERY_FAILURE", {
+      status: response.status,
+      toEmail: email,
+      fromEmail,
+      responseSnippet: text.slice(0, 512)
+    });
     throw new Error(`SendGrid send failed: ${response.status} ${text}`);
   }
 }

@@ -47,6 +47,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     const envName = "dev";
     const ssmPrefix = process.env.SSM_PREFIX ?? "/ai-childrens-book/dev";
+    const runtimeConfigCacheTtlSeconds = process.env.RUNTIME_CONFIG_CACHE_TTL_SECONDS ?? "300";
     const rendererCpu = Number(process.env.RENDERER_TASK_CPU ?? "1024");
     const rendererMemory = Number(process.env.RENDERER_TASK_MEMORY ?? "2048");
 
@@ -165,6 +166,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     const commonFunctionEnv = {
       APP_ENV: envName,
+      SSM_PREFIX: ssmPrefix,
+      RUNTIME_CONFIG_CACHE_TTL_SECONDS: runtimeConfigCacheTtlSeconds,
       ARTIFACT_BUCKET: artifactBucket.bucketName,
       DB_CLUSTER_ARN: cluster.clusterArn,
       DB_SECRET_ARN: cluster.secret?.secretArn ?? "",
@@ -172,17 +175,10 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       IDEMPOTENCY_TABLE: idempotencyTable.tableName,
       IDEMPOTENCY_TTL_SECONDS: process.env.IDEMPOTENCY_TTL_SECONDS ?? "86400",
       BOOK_DEFAULT_PAGE_COUNT: process.env.BOOK_DEFAULT_PAGE_COUNT ?? "12",
-      ENABLE_MOCK_LLM: process.env.ENABLE_MOCK_LLM ?? "true",
-      ENABLE_MOCK_IMAGE: process.env.ENABLE_MOCK_IMAGE ?? "true",
       ENABLE_STRICT_DECODABLE_CHECKS: process.env.ENABLE_STRICT_DECODABLE_CHECKS ?? "true",
       ENABLE_MOCK_CHECKOUT: process.env.ENABLE_MOCK_CHECKOUT ?? "true",
-      FAL_ENDPOINT_BASE: process.env.FAL_ENDPOINT_BASE ?? "fal-ai/flux-2",
-      FAL_ENDPOINT_LORA: process.env.FAL_ENDPOINT_LORA ?? "fal-ai/flux-lora",
-      FAL_ENDPOINT_GENERAL: process.env.FAL_ENDPOINT_GENERAL ?? "fal-ai/flux-general",
-      FAL_STYLE_LORA_URL: process.env.FAL_STYLE_LORA_URL ?? "",
-      OPENAI_MODEL_JSON: process.env.OPENAI_MODEL_JSON ?? "gpt-4.1-mini",
-      OPENAI_MODEL_VISION: process.env.OPENAI_MODEL_VISION ?? "gpt-4.1-mini",
-      ANTHROPIC_MODEL_WRITER: process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-4-5"
+      AUTH_LINK_TTL_MINUTES: process.env.AUTH_LINK_TTL_MINUTES ?? "15",
+      WEB_BASE_URL: process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`
     };
 
     const apiFunction = new lambdaNode.NodejsFunction(this, "ApiFunction", {
@@ -194,11 +190,6 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       depsLockFilePath: path.resolve(repoRoot, "pnpm-lock.yaml"),
       environment: {
         ...commonFunctionEnv,
-        JWT_SIGNING_SECRET: process.env.JWT_SIGNING_SECRET ?? "dev-insecure-secret",
-        AUTH_LINK_TTL_MINUTES: process.env.AUTH_LINK_TTL_MINUTES ?? "15",
-        SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ?? "",
-        SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL ?? "noreply@example.com",
-        WEB_BASE_URL: process.env.WEB_BASE_URL ?? "http://localhost:5173",
         ARTIFACT_PUBLIC_BASE_URL: `https://${distribution.distributionDomainName}`
       },
       bundling: {
@@ -335,6 +326,43 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     imageQueue.grantSendMessages(pipelineFunction);
 
+    const runtimeConfigReaders = [
+      apiFunction,
+      pipelineFunction,
+      imageWorkerFunction,
+      checkImagesFunction,
+      finalizeFunction,
+      executionStatusFunction
+    ];
+    const ssmRootArn = `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${ssmPrefix}`;
+    const ssmPathArn = `${ssmRootArn}/*`;
+    for (const fn of runtimeConfigReaders) {
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["ssm:GetParameter", "ssm:GetParameters"],
+          resources: [ssmRootArn, ssmPathArn]
+        })
+      );
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["ssm:GetParametersByPath", "ssm:DescribeParameters"],
+          resources: ["*"]
+        })
+      );
+
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ["kms:Decrypt"],
+          resources: ["*"],
+          conditions: {
+            StringEquals: {
+              "kms:ViaService": `ssm.${this.region}.amazonaws.com`
+            }
+          }
+        })
+      );
+    }
+
     if (cluster.secret) {
       cluster.secret.grantRead(apiFunction);
       cluster.secret.grantRead(pipelineFunction);
@@ -382,12 +410,19 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       publicLoadBalancer: false
     });
 
+    const configuredCorsOrigins = (
+      process.env.WEB_CORS_ORIGINS ?? process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`
+    )
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0);
+
     const api = new apigwv2.HttpApi(this, "ControlPlaneApi", {
       createDefaultStage: true,
       corsPreflight: {
         allowHeaders: ["authorization", "content-type", "idempotency-key"],
         allowMethods: [apigwv2.CorsHttpMethod.ANY],
-        allowOrigins: ["*"]
+        allowOrigins: configuredCorsOrigins
       }
     });
 
@@ -551,19 +586,44 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
     migrationsCustomResource.node.addDependency(cluster);
 
-    const ssmParameters = [
-      "SENDGRID_API_KEY",
-      "OPENAI_API_KEY",
-      "ANTHROPIC_API_KEY",
-      "FAL_KEY",
-      "JWT_SIGNING_SECRET"
-    ];
+    const secretSsmParameterPlaceholders = {
+      SENDGRID_API_KEY: "SET_ME",
+      OPENAI_API_KEY: "SET_ME",
+      ANTHROPIC_API_KEY: "SET_ME",
+      FAL_KEY: "SET_ME",
+      JWT_SIGNING_SECRET: "SET_ME"
+    };
 
-    for (const key of ssmParameters) {
+    const standardSsmParameters = {
+      SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL ?? "noreply@example.com",
+      AUTH_LINK_TTL_MINUTES: process.env.AUTH_LINK_TTL_MINUTES ?? "15",
+      WEB_BASE_URL: process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`,
+      OPENAI_MODEL_JSON: process.env.OPENAI_MODEL_JSON ?? "gpt-4.1-mini",
+      OPENAI_MODEL_VISION: process.env.OPENAI_MODEL_VISION ?? "gpt-4.1-mini",
+      ANTHROPIC_MODEL_WRITER: process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-4-5",
+      FAL_ENDPOINT_BASE: process.env.FAL_ENDPOINT_BASE ?? "fal-ai/flux-2",
+      FAL_ENDPOINT_LORA: process.env.FAL_ENDPOINT_LORA ?? "fal-ai/flux-lora",
+      FAL_ENDPOINT_GENERAL: process.env.FAL_ENDPOINT_GENERAL ?? "fal-ai/flux-general",
+      ENABLE_MOCK_LLM: process.env.ENABLE_MOCK_LLM ?? "false",
+      ENABLE_MOCK_IMAGE: process.env.ENABLE_MOCK_IMAGE ?? "false"
+    };
+
+    // CloudFormation does not support SecureString for AWS::SSM::Parameter.
+    // Use scripts/ops/migrate-ssm-params.sh to enforce SecureString typing in-place.
+    for (const [key, value] of Object.entries(secretSsmParameterPlaceholders)) {
       new ssm.CfnParameter(this, `Param${key}`, {
         name: `${ssmPrefix}/${key.toLowerCase()}`,
         type: "String",
-        value: "SET_ME",
+        value,
+        tier: "Standard"
+      });
+    }
+
+    for (const [key, value] of Object.entries(standardSsmParameters)) {
+      new ssm.CfnParameter(this, `ConfigParam${key}`, {
+        name: `${ssmPrefix}/${key.toLowerCase()}`,
+        type: "String",
+        value,
         tier: "Standard"
       });
     }
@@ -587,6 +647,58 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       ]
     });
 
+    const apiFunctionLogGroup = logs.LogGroup.fromLogGroupName(
+      this,
+      "ApiFunctionLogGroupRef",
+      `/aws/lambda/${apiFunction.functionName}`
+    );
+    const pipelineFunctionLogGroup = logs.LogGroup.fromLogGroupName(
+      this,
+      "PipelineFunctionLogGroupRef",
+      `/aws/lambda/${pipelineFunction.functionName}`
+    );
+    const imageWorkerLogGroup = logs.LogGroup.fromLogGroupName(
+      this,
+      "ImageWorkerFunctionLogGroupRef",
+      `/aws/lambda/${imageWorkerFunction.functionName}`
+    );
+
+    new logs.MetricFilter(this, "PipelineProviderErrorMetricFilter", {
+      logGroup: pipelineFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "ProviderErrorCount",
+      filterPattern: logs.FilterPattern.literal("PROVIDER_ERROR"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "ImageWorkerProviderErrorMetricFilter", {
+      logGroup: imageWorkerLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "ProviderErrorCount",
+      filterPattern: logs.FilterPattern.literal("PROVIDER_ERROR"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "ApiSsmConfigFailureMetricFilter", {
+      logGroup: apiFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "SsmConfigLoadFailureCount",
+      filterPattern: logs.FilterPattern.literal("SSM_CONFIG_LOAD_FAILURE"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "PipelineSsmConfigFailureMetricFilter", {
+      logGroup: pipelineFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "SsmConfigLoadFailureCount",
+      filterPattern: logs.FilterPattern.literal("SSM_CONFIG_LOAD_FAILURE"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "ImageWorkerSsmConfigFailureMetricFilter", {
+      logGroup: imageWorkerLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "SsmConfigLoadFailureCount",
+      filterPattern: logs.FilterPattern.literal("SSM_CONFIG_LOAD_FAILURE"),
+      metricValue: "1"
+    });
+
     const dashboard = new cloudwatch.Dashboard(this, "OpsDashboard", {
       dashboardName: `${this.stackName}-ops`
     });
@@ -596,6 +708,18 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const api5xxMetric = api.metricServerError();
     const rendererTaskFailedMetric = rendererService.service.metric("RunningTaskCount", {
       statistic: "Average"
+    });
+    const providerErrorMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "ProviderErrorCount",
+      statistic: "Sum",
+      period: cdk.Duration.minutes(5)
+    });
+    const ssmConfigLoadFailureMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "SsmConfigLoadFailureCount",
+      statistic: "Sum",
+      period: cdk.Duration.minutes(5)
     });
 
     dashboard.addWidgets(
@@ -614,6 +738,14 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       new cloudwatch.GraphWidget({
         title: "Renderer Running Task Count",
         left: [rendererTaskFailedMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Provider Error Count",
+        left: [providerErrorMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "SSM Config Load Failures",
+        left: [ssmConfigLoadFailureMetric]
       })
     );
 
@@ -640,6 +772,18 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       threshold: 1,
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD
+    });
+
+    new cloudwatch.Alarm(this, "ProviderErrorSpikeAlarm", {
+      metric: providerErrorMetric,
+      threshold: 5,
+      evaluationPeriods: 1
+    });
+
+    new cloudwatch.Alarm(this, "SsmConfigLoadFailureAlarm", {
+      metric: ssmConfigLoadFailureMetric,
+      threshold: 1,
+      evaluationPeriods: 1
     });
 
     new cdk.CfnOutput(this, "ApiUrl", { value: api.apiEndpoint });

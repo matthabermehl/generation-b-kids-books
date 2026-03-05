@@ -17,11 +17,16 @@
     "cdk:synth": "AWS_PROFILE=personal pnpm --filter @book/cdk cdk:synth",
     "cdk:diff": "AWS_PROFILE=personal pnpm --filter @book/cdk cdk:diff",
     "cdk:deploy:dev": "AWS_PROFILE=personal pnpm --filter @book/cdk cdk:deploy:dev",
-    "dev:web": "pnpm --filter @book/web dev"
+    "dev:web": "pnpm --filter @book/web dev",
+    "ops:ssm:migrate-secure": "AWS_PROFILE=personal AWS_REGION=us-east-1 bash ./scripts/ops/migrate-ssm-params.sh",
+    "ops:provider-smoke": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/provider-connectivity-smoke.mjs",
+    "ops:phase2-e2e": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/phase2-e2e-smoke.mjs"
   },
   "devDependencies": {
+    "@aws-sdk/client-ssm": "^3.750.0",
     "@types/node": "^22.13.10",
     "eslint": "^9.22.0",
+    "jsonwebtoken": "^9.0.2",
     "typescript": "^5.8.2",
     "vitest": "^2.1.9"
   }

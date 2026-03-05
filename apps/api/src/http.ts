@@ -4,11 +4,12 @@ import { z } from "zod";
 import { StartExecutionCommand, SFNClient } from "@aws-sdk/client-sfn";
 import { moneyLessonKeys, readingProfiles, type MoneyLessonKey, type ReadingProfile } from "@book/domain";
 import { createLoginToken, createSessionToken, verifyLoginToken, verifySessionToken } from "./lib/auth.js";
-import { requiredEnv, optionalEnv, boolEnv } from "./lib/env.js";
+import { getOperationalEnv, requiredEnv } from "./lib/env.js";
 import { sendLoginLink } from "./lib/email.js";
 import { withIdempotency } from "./lib/idempotency.js";
 import { execute, query } from "./lib/rds.js";
 import { json } from "./lib/response.js";
+import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { signPdfDownload } from "./lib/storage.js";
 
 const sfn = new SFNClient({});
@@ -35,7 +36,7 @@ function s3ToPublicUrl(s3Url: string | null): string | null {
     return null;
   }
 
-  const base = optionalEnv("ARTIFACT_PUBLIC_BASE_URL", "");
+  const base = process.env.ARTIFACT_PUBLIC_BASE_URL ?? "";
   if (!base || !s3Url.startsWith("s3://")) {
     return s3Url;
   }
@@ -44,6 +45,21 @@ function s3ToPublicUrl(s3Url: string | null): string | null {
   const firstSlash = stripped.indexOf("/");
   const key = firstSlash >= 0 ? stripped.slice(firstSlash + 1) : stripped;
   return `${base.replace(/\/$/, "")}/artifacts/${key}`;
+}
+
+function logWithContext(
+  requestId: string,
+  message: string,
+  context: Record<string, unknown> = {}
+): void {
+  console.log(
+    JSON.stringify({
+      level: "info",
+      requestId,
+      message,
+      ...context
+    })
+  );
 }
 
 async function parseBody<T>(event: APIGatewayProxyEventV2, schema: z.ZodSchema<T>): Promise<T> {
@@ -150,6 +166,8 @@ async function createOrder(
 }
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+  const requestId = event.requestContext.requestId ?? randomUUID();
+
   try {
     const method = event.requestContext.http.method;
     const path = event.rawPath;
@@ -165,10 +183,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         `REQUEST_LINK#${payload.email.toLowerCase()}`,
         idempotencyKey,
         async () => {
-          const ttlMinutes = Number(optionalEnv("AUTH_LINK_TTL_MINUTES", "15"));
-          const token = createLoginToken(payload.email, ttlMinutes);
-          const link = `${optionalEnv("WEB_BASE_URL", "http://localhost:5173")}/verify?token=${encodeURIComponent(token)}`;
+          const runtimeConfig = await getRuntimeConfig();
+          const ttlMinutes = runtimeConfig.authLinkTtlMinutes;
+          const token = await createLoginToken(payload.email, ttlMinutes);
+          const link = `${runtimeConfig.webBaseUrl}/verify?token=${encodeURIComponent(token)}`;
           await sendLoginLink(payload.email, link);
+          logWithContext(requestId, "AuthLoginLinkSent", { email: payload.email.toLowerCase() });
           return { ok: true, sent: true };
         }
       );
@@ -183,13 +203,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       }
 
       const payload = await parseBody(event, verifyLinkSchema);
-      const loginPayload = verifyLoginToken(payload.token);
+      const loginPayload = await verifyLoginToken(payload.token);
       const response = await withIdempotency(
         `VERIFY_LINK#${loginPayload.email.toLowerCase()}`,
         idempotencyKey,
         async () => {
           const user = await upsertUser(loginPayload.email);
-          const sessionToken = createSessionToken(user.id, user.email);
+          const sessionToken = await createSessionToken(user.id, user.email);
           return { token: sessionToken, user };
         }
       );
@@ -198,7 +218,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     if (method === "POST" && path === "/v1/orders") {
-      const auth = verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
       const idempotencyKey = readIdempotencyKey(event);
 
       if (!idempotencyKey) {
@@ -212,8 +232,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const paidMatch = pathMatch(path, /^\/v1\/orders\/([^/]+)\/mark-paid$/);
     if (method === "POST" && paidMatch) {
-      const auth = verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
-      if (!boolEnv("ENABLE_MOCK_CHECKOUT", true)) {
+      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const operational = getOperationalEnv();
+      if (!operational.enableMockCheckout) {
         return json(403, { error: "Mock checkout disabled" });
       }
 
@@ -255,6 +276,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           })
         );
 
+        logWithContext(requestId, "OrderPipelineExecutionStarted", {
+          orderId,
+          bookId,
+          executionArn: started.executionArn ?? null
+        });
+
         return {
           ok: true,
           orderId,
@@ -268,7 +295,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const orderMatch = pathMatch(path, /^\/v1\/orders\/([^/]+)$/);
     if (method === "GET" && orderMatch) {
-      const auth = verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
       const orderId = orderMatch[1];
 
       const rows = await query<{
@@ -307,7 +334,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const bookMatch = pathMatch(path, /^\/v1\/books\/([^/]+)$/);
     if (method === "GET" && bookMatch) {
-      const auth = verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
       const bookId = bookMatch[1];
 
       const bookRows = await query<{
@@ -368,7 +395,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const downloadMatch = pathMatch(path, /^\/v1\/books\/([^/]+)\/download$/);
     if (method === "GET" && downloadMatch) {
-      const auth = verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
       const bookId = downloadMatch[1];
       const format = event.queryStringParameters?.format ?? "pdf";
 
@@ -409,7 +436,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     return json(404, { error: "Not found" });
   } catch (error) {
-    console.error(error);
+    console.error("API_REQUEST_FAILURE", {
+      requestId,
+      message: error instanceof Error ? error.message : String(error)
+    });
     return json(500, {
       error: error instanceof Error ? error.message : "Unknown error"
     });
