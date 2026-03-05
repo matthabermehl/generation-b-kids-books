@@ -1,0 +1,26 @@
+{
+  "name": "@book/cdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'cdk package build not required'",
+    "lint": "node --check bin/cdk.js && node --check lib/book-stack.js",
+    "test": "vitest run",
+    "format": "echo 'format: @book/cdk no-op'",
+    "cdk": "pnpm exec cdk",
+    "cdk:synth": "pnpm exec cdk synth",
+    "cdk:diff": "pnpm exec cdk diff",
+    "cdk:deploy:dev": "pnpm exec cdk deploy AiChildrensBookDevStack --require-approval never"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.188.0",
+    "constructs": "^10.4.2",
+    "source-map-support": "^0.5.21"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.1029.1",
+    "esbuild": "^0.25.1",
+    "vitest": "^2.1.9"
+  }
+}

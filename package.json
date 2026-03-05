@@ -1,0 +1,28 @@
+{
+  "name": "ai-childrens-book",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.4.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "infra/cdk"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "format": "pnpm -r format",
+    "openapi:generate": "pnpm --filter @book/api openapi:generate",
+    "cdk:synth": "AWS_PROFILE=personal pnpm --filter @book/cdk cdk:synth",
+    "cdk:diff": "AWS_PROFILE=personal pnpm --filter @book/cdk cdk:diff",
+    "cdk:deploy:dev": "AWS_PROFILE=personal pnpm --filter @book/cdk cdk:deploy:dev",
+    "dev:web": "pnpm --filter @book/web dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "eslint": "^9.22.0",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.9"
+  }
+}

@@ -2,7 +2,9 @@
 
 ## Core
 - [PRODUCT.md](PRODUCT.md)
-- [ARCHITECTURE.md](ARCHITECTURE.md)
+- [architecture.md](architecture.md)
+- [decision-log.md](decision-log.md)
+- [last-20-percent-guide.md](last-20-percent-guide.md)
 - [SECURITY.md](SECURITY.md)
 - [RELIABILITY.md](RELIABILITY.md)
 - [QUALITY_SCORE.md](QUALITY_SCORE.md)

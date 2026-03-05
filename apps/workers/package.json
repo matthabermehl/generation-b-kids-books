@@ -1,0 +1,27 @@
+{
+  "name": "@book/workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "format": "echo 'format: @book/workers no-op'"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.750.0",
+    "@aws-sdk/client-s3": "^3.750.0",
+    "@aws-sdk/client-sfn": "^3.750.0",
+    "@aws-sdk/client-sqs": "^3.750.0",
+    "@book/domain": "workspace:*",
+    "@book/prompts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.9"
+  }
+}

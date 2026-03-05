@@ -38,7 +38,7 @@ This repository is configured for long-running autonomous execution. The reposit
 
 ## Source of Truth
 - Product: `docs/PRODUCT.md`
-- Architecture: `docs/ARCHITECTURE.md`
+- Architecture: `docs/architecture.md`
 - Security posture: `docs/SECURITY.md`
 - Reliability/escalation: `docs/RELIABILITY.md`
 - Quality rubric and trend: `docs/QUALITY_SCORE.md`

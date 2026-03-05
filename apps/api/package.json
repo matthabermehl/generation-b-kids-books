@@ -1,0 +1,32 @@
+{
+  "name": "@book/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/http.js",
+  "types": "dist/http.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "format": "echo 'format: @book/api no-op'",
+    "openapi:generate": "node ./scripts/generate-openapi.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.750.0",
+    "@aws-sdk/client-rds-data": "^3.750.0",
+    "@aws-sdk/client-s3": "^3.750.0",
+    "@aws-sdk/client-sfn": "^3.750.0",
+    "@aws-sdk/lib-dynamodb": "^3.750.0",
+    "@aws-sdk/s3-request-presigner": "^3.750.0",
+    "@book/domain": "workspace:*",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@types/jsonwebtoken": "^9.0.9",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.9"
+  }
+}
