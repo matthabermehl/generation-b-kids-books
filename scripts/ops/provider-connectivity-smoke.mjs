@@ -105,6 +105,20 @@ async function checkSendGrid(config) {
   };
 }
 
+async function checkStripe(config) {
+  const response = await fetch("https://api.stripe.com/v1/account", {
+    headers: {
+      Authorization: `Bearer ${config.stripe_secret_key}`
+    }
+  });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    detail: response.ok ? "stripe account reachable" : await response.text()
+  };
+}
+
 function assertRequired(config, key) {
   if (!config[key]) {
     throw new Error(`Missing required SSM key: ${key}`);
@@ -113,13 +127,16 @@ function assertRequired(config, key) {
 
 async function main() {
   const config = await loadSsmParams();
-  ["openai_api_key", "anthropic_api_key", "fal_key", "sendgrid_api_key"].forEach((key) => assertRequired(config, key));
+  ["openai_api_key", "anthropic_api_key", "fal_key", "sendgrid_api_key", "stripe_secret_key"].forEach((key) =>
+    assertRequired(config, key)
+  );
 
   const checks = [
     ["openai", () => checkOpenAi(config)],
     ["anthropic", () => checkAnthropic(config)],
     ["fal", () => checkFal(config)],
-    ["sendgrid", () => checkSendGrid(config)]
+    ["sendgrid", () => checkSendGrid(config)],
+    ["stripe", () => checkStripe(config)]
   ];
 
   let failed = false;

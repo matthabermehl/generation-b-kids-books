@@ -6,7 +6,7 @@ import {
   runDeterministicStoryChecks
 } from "@book/prompts";
 import { z } from "zod";
-import { boolFromEnv, sleep } from "../lib/helpers.js";
+import { boolFromEnv, redactText, sleep } from "../lib/helpers.js";
 import { getRuntimeConfig, type RuntimeConfig } from "../lib/ssm-config.js";
 
 export interface StoryContext {
@@ -122,7 +122,7 @@ function providerErrorContext(stage: string, error: ProviderRequestError): Recor
     provider: error.provider,
     status: error.status,
     retryable: error.retryable,
-    message: error.message
+    message: redactText(error.message)
   };
 }
 
@@ -331,7 +331,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
           attempt,
           status: error.status,
           retryable: error.retryable,
-          message: error.message
+          message: redactText(error.message)
         });
         await sleep(attempt * 500);
       }

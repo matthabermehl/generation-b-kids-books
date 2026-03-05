@@ -4,6 +4,7 @@ import type { MoneyLessonKey, ReadingProfile } from "@book/domain";
 import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
 import { putJson, putBuffer } from "./lib/storage.js";
 import { fileExtensionForContentType, makeId, logStructured } from "./lib/helpers.js";
+import { moderateTexts } from "./lib/content-safety.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { resolveImageProvider } from "./providers/image.js";
 import { resolveLlmProvider } from "./providers/llm.js";
@@ -58,6 +59,57 @@ async function loadBookContext(bookId: string): Promise<BookContextRow> {
   }
 
   return row;
+}
+
+async function markBookNeedsReview(
+  bookId: string,
+  orderId: string,
+  stage: string,
+  notes: string[],
+  score: Record<string, unknown> = {}
+): Promise<void> {
+  await execute(
+    `
+      UPDATE books
+      SET status = 'needs_review'
+      WHERE id = CAST(:bookId AS uuid)
+    `,
+    [{ name: "bookId", value: { stringValue: bookId } }]
+  );
+
+  await execute(
+    `
+      UPDATE orders
+      SET status = 'needs_review'
+      WHERE id = CAST(:orderId AS uuid)
+    `,
+    [{ name: "orderId", value: { stringValue: orderId } }]
+  );
+
+  await execute(
+    `
+      INSERT INTO evaluations (id, book_id, stage, model_used, score_json, verdict, notes)
+      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), :stage, :model, CAST(:score AS jsonb), 'needs_review', :notes)
+    `,
+    [
+      { name: "id", value: { stringValue: makeId() } },
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "stage", value: { stringValue: stage } },
+      { name: "model", value: { stringValue: "policy_gate" } },
+      { name: "score", value: { stringValue: JSON.stringify(score) } },
+      { name: "notes", value: { stringValue: notes.join(" | ").slice(0, 4096) } }
+    ]
+  );
+
+  console.error(
+    JSON.stringify({
+      event: "BOOK_NEEDS_REVIEW",
+      stage,
+      bookId,
+      orderId,
+      notes
+    })
+  );
 }
 
 async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount: number }> {
@@ -140,6 +192,17 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
     );
     providerMeta.drafts.push(drafted.meta);
     story = drafted.story;
+  }
+
+  const moderation = await moderateTexts(
+    (await getRuntimeConfig()).secrets.openaiApiKey,
+    story.pages.flatMap((page) => [page.pageText, page.illustrationBrief])
+  );
+  if (!moderation.ok) {
+    await markBookNeedsReview(bookId, context.order_id, "text_moderation", moderation.reasons, {
+      mode: moderation.mode
+    });
+    throw new Error(`BOOK_NEEDS_REVIEW:text_moderation:${moderation.reasons[0] ?? "policy_violation"}`);
   }
 
   await withTransaction(async (tx) => {
@@ -337,6 +400,7 @@ interface PageWithImageStatus {
 }
 
 async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: string; outputPdfKey: string }> {
+  const context = await loadBookContext(bookId);
   const rows = await query<PageWithImageStatus>(
     `
       SELECT p.id, p.page_index, i.status as image_status
@@ -351,6 +415,23 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
   const pending = rows.filter((row) => row.image_status !== "ready");
   if (pending.length > 0) {
     throw new Error(`Cannot prepare render input while ${pending.length} page images are not ready.`);
+  }
+
+  const imageSafetyRows = await query<{ safety_flags: number }>(
+    `
+      SELECT
+        COUNT(*) FILTER (WHERE COALESCE(qa_json::text, '') ILIKE '%safety_flagged_prompt:%')::int AS safety_flags
+      FROM images
+      WHERE book_id = CAST(:bookId AS uuid) AND role = 'page'
+    `,
+    [{ name: "bookId", value: { stringValue: bookId } }]
+  );
+  const safetyFlags = Number(imageSafetyRows[0]?.safety_flags ?? 0);
+  if (safetyFlags > 0) {
+    await markBookNeedsReview(bookId, context.order_id, "image_safety", [
+      `${safetyFlags} page image prompts were flagged by the safety policy`
+    ]);
+    throw new Error("BOOK_NEEDS_REVIEW:image_safety");
   }
 
   const pageData = await query<{

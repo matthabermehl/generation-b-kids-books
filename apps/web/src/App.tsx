@@ -6,6 +6,7 @@ type LessonKey = "inflation_candy" | "saving_later" | "delayed_gratification";
 interface OrderResponse {
   orderId: string;
   bookId: string;
+  childProfileId: string;
   status: string;
 }
 
@@ -14,6 +15,7 @@ interface OrderStatus {
   status: string;
   bookId: string;
   bookStatus: string;
+  childProfileId: string;
 }
 
 interface BookPayload {
@@ -57,12 +59,32 @@ export function App() {
   const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(null);
   const [bookPayload, setBookPayload] = useState<BookPayload | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [privacyStatus, setPrivacyStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const verifyTokenFromUrl = useMemo(() => {
     const url = new URL(window.location.href);
     return url.searchParams.get("token");
   }, []);
+
+  const checkoutOutcome = useMemo(() => {
+    const url = new URL(window.location.href);
+    return url.searchParams.get("checkout");
+  }, []);
+
+  useEffect(() => {
+    if (!checkoutOutcome) {
+      return;
+    }
+
+    if (checkoutOutcome === "success") {
+      setVerifyStatus("Checkout returned successfully. Order status will update shortly.");
+    }
+    if (checkoutOutcome === "cancel") {
+      setVerifyStatus("Checkout was canceled.");
+    }
+  }, [checkoutOutcome]);
 
   useEffect(() => {
     if (!verifyTokenFromUrl) {
@@ -102,7 +124,12 @@ export function App() {
   }, [verifyTokenFromUrl]);
 
   useEffect(() => {
-    if (!orderStatus || orderStatus.bookStatus === "ready" || !token) {
+    if (!orderStatus || !token) {
+      return;
+    }
+
+    const terminal = ["ready", "failed", "needs_review"];
+    if (terminal.includes(orderStatus.bookStatus)) {
       return;
     }
 
@@ -163,7 +190,10 @@ export function App() {
         pronouns,
         ageYears,
         moneyLessonKey,
-        interestTags: interestTags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        interestTags: interestTags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
         readingProfileId
       })
     });
@@ -180,11 +210,46 @@ export function App() {
       orderId: payload.orderId,
       status: payload.status,
       bookId: payload.bookId,
+      childProfileId: payload.childProfileId,
       bookStatus: "draft"
     });
+    setCheckoutUrl(null);
   };
 
-  const startBuild = async () => {
+  const startCheckout = async () => {
+    if (!token || !order) return;
+
+    const response = await apiFetch(`/v1/orders/${order.orderId}/checkout`, {
+      method: "POST",
+      headers: {
+        "Idempotency-Key": crypto.randomUUID(),
+        ...authHeader(token)
+      }
+    });
+
+    if (!response.ok) {
+      setError(await response.text());
+      return;
+    }
+
+    const payload = (await response.json()) as {
+      status: string;
+      checkoutUrl: string | null;
+      stripeSessionId: string | null;
+    };
+
+    setCheckoutUrl(payload.checkoutUrl);
+
+    const statusResponse = await apiFetch(`/v1/orders/${order.orderId}`, {
+      headers: authHeader(token)
+    });
+
+    if (statusResponse.ok) {
+      setOrderStatus((await statusResponse.json()) as OrderStatus);
+    }
+  };
+
+  const fallbackMarkPaid = async () => {
     if (!token || !order) return;
 
     const response = await apiFetch(`/v1/orders/${order.orderId}/mark-paid`, {
@@ -240,10 +305,38 @@ export function App() {
     setDownloadUrl(payload.url);
   };
 
+  const deleteChildProfile = async () => {
+    if (!token || !orderStatus?.childProfileId) {
+      return;
+    }
+
+    const response = await apiFetch(`/v1/child-profiles/${orderStatus.childProfileId}`, {
+      method: "DELETE",
+      headers: {
+        ...authHeader(token)
+      }
+    });
+
+    if (!response.ok) {
+      setPrivacyStatus(`Delete failed: ${await response.text()}`);
+      return;
+    }
+
+    const payload = (await response.json()) as { privacyEventId: string; queuedArtifacts: number };
+    setPrivacyStatus(
+      `Deletion queued. Event ${payload.privacyEventId}. Queued artifacts: ${payload.queuedArtifacts}.`
+    );
+    setOrder(null);
+    setOrderStatus(null);
+    setBookPayload(null);
+    setCheckoutUrl(null);
+    setDownloadUrl(null);
+  };
+
   return (
     <div className="shell">
       <header className="hero">
-        <p className="eyebrow">AI Children&apos;s Book Builder</p>
+        <p className="eyebrow">AI Children's Book Builder</p>
         <h1>Calm, Personalized Bitcoin Stories</h1>
         <p className="sub">No child photo upload. Parent-only account. Montessori-leaning visual style.</p>
       </header>
@@ -257,6 +350,7 @@ export function App() {
           <p className="hint">{linkStatus}</p>
           <p className="hint">{verifyStatus}</p>
           <p className="hint">Auth: {token ? "signed in" : "signed out"}</p>
+          <p className="hint">Privacy: we collect parent email + child first name/age only. No child photos.</p>
         </section>
 
         <section className="card">
@@ -297,7 +391,18 @@ export function App() {
           </select>
 
           <button onClick={createOrder}>Create order</button>
-          <button onClick={startBuild} disabled={!order}>Mark paid + start build</button>
+          <button onClick={startCheckout} disabled={!order}>
+            Create checkout session
+          </button>
+          <button onClick={fallbackMarkPaid} disabled={!order}>
+            Fallback mark paid
+          </button>
+
+          {checkoutUrl && (
+            <p className="hint">
+              Checkout URL: <a href={checkoutUrl}>Open Stripe Checkout</a>
+            </p>
+          )}
 
           {orderStatus && (
             <div className="status">
@@ -305,28 +410,41 @@ export function App() {
               <p>Status: {orderStatus.status}</p>
               <p>Book: {orderStatus.bookId}</p>
               <p>Book status: {orderStatus.bookStatus}</p>
+              <p>Child profile: {orderStatus.childProfileId}</p>
             </div>
+          )}
+
+          {orderStatus?.bookStatus === "failed" && (
+            <p className="hint">Build failed. Check logs/alarms and retry with a new order.</p>
+          )}
+          {orderStatus?.bookStatus === "needs_review" && (
+            <p className="hint">This book was flagged for manual review and is blocked from release.</p>
           )}
         </section>
 
         <section className="card full">
-          <h2>3. Reader + Download</h2>
+          <h2>3. Reader + Download + Privacy</h2>
           <div className="button-row">
-            <button onClick={loadBook} disabled={!orderStatus?.bookId}>Load book</button>
-            <button onClick={loadDownload} disabled={!orderStatus?.bookId}>Get PDF link</button>
+            <button onClick={loadBook} disabled={!orderStatus?.bookId}>
+              Load book
+            </button>
+            <button onClick={loadDownload} disabled={!orderStatus?.bookId}>
+              Get PDF link
+            </button>
+            <button onClick={deleteChildProfile} disabled={!orderStatus?.childProfileId}>
+              Delete child profile + artifacts
+            </button>
           </div>
+
+          {privacyStatus && <p className="hint">{privacyStatus}</p>}
 
           {bookPayload && (
             <div className="pages">
               {bookPayload.pages.map((page) => (
-                <article key={page.pageIndex} className="page">
+                <article key={page.pageIndex} className="page-card">
                   <h3>Page {page.pageIndex + 1}</h3>
                   <p>{page.text}</p>
-                  {page.imageUrl ? (
-                    <img src={page.imageUrl.replace("s3://", "https://")} alt={`Page ${page.pageIndex + 1} illustration`} />
-                  ) : (
-                    <p className="hint">Illustration pending...</p>
-                  )}
+                  {page.imageUrl ? <img src={page.imageUrl} alt={`Page ${page.pageIndex + 1}`} /> : <p>No image yet</p>}
                 </article>
               ))}
             </div>
@@ -334,13 +452,13 @@ export function App() {
 
           {downloadUrl && (
             <p>
-              PDF: <a href={downloadUrl} target="_blank" rel="noreferrer">Download generated PDF</a>
+              PDF: <a href={downloadUrl}>Download</a>
             </p>
           )}
+
+          {error && <p className="error">{error}</p>}
         </section>
       </main>
-
-      {error && <aside className="error">{error}</aside>}
     </div>
   );
 }

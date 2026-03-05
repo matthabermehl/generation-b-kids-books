@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { redactText } from "./log-redaction.js";
 import { getRuntimeConfig } from "./ssm-config.js";
 
 const sendgridEndpoint = "https://api.sendgrid.com/v3/mail/send";
@@ -46,8 +47,8 @@ export async function sendLoginLink(email: string, link: string): Promise<void> 
       status: response.status,
       toEmail: email,
       fromEmail,
-      responseSnippet: text.slice(0, 512)
+      responseSnippet: redactText(text.slice(0, 512))
     });
-    throw new Error(`SendGrid send failed: ${response.status} ${text}`);
+    throw new Error(`SendGrid send failed: ${response.status} ${redactText(text)}`);
   }
 }

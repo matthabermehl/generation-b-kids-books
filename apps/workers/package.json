@@ -12,11 +12,12 @@
     "format": "echo 'format: @book/workers no-op'"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.750.0",
     "@aws-sdk/client-rds-data": "^3.750.0",
     "@aws-sdk/client-s3": "^3.750.0",
-    "@aws-sdk/client-ssm": "^3.750.0",
     "@aws-sdk/client-sfn": "^3.750.0",
     "@aws-sdk/client-sqs": "^3.750.0",
+    "@aws-sdk/client-ssm": "^3.750.0",
     "@book/domain": "workspace:*",
     "@book/prompts": "workspace:*",
     "zod": "^3.24.2"

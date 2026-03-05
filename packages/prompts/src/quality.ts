@@ -1,4 +1,11 @@
-import { validateBannedPhrases, validateNarrativeRatio, validateReadingProfile, type StoryPage, type ReadingProfile } from "@book/domain";
+import {
+  validateBannedPhrases,
+  validateMontessoriRealism,
+  validateNarrativeRatio,
+  validateReadingProfile,
+  type StoryPage,
+  type ReadingProfile
+} from "@book/domain";
 
 export interface QualitySummary {
   ok: boolean;
@@ -27,6 +34,11 @@ export function runDeterministicStoryChecks(
     if (!reading.ok) {
       issues.push(...reading.issues.map((issue) => issue.message));
     }
+  }
+
+  const realism = validateMontessoriRealism(profile, pages);
+  if (!realism.ok) {
+    issues.push(...realism.issues.map((issue) => issue.message));
   }
 
   return { ok: issues.length === 0, issues };

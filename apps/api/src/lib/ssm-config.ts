@@ -1,6 +1,7 @@
 import { GetParametersByPathCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { z } from "zod";
 import { getOperationalEnv } from "./env.js";
+import { redactText } from "./log-redaction.js";
 
 export interface RuntimeSecrets {
   sendgridApiKey: string;
@@ -8,6 +9,8 @@ export interface RuntimeSecrets {
   anthropicApiKey: string;
   falKey: string;
   jwtSigningSecret: string;
+  stripeSecretKey: string;
+  stripeWebhookSecret: string;
 }
 
 export interface RuntimeConfig {
@@ -20,6 +23,11 @@ export interface RuntimeConfig {
     openaiVision: string;
     anthropicWriter: string;
   };
+  stripe: {
+    priceId: string;
+    successUrl: string;
+    cancelUrl: string;
+  };
   falEndpoints: {
     base: string;
     lora: string;
@@ -29,6 +37,7 @@ export interface RuntimeConfig {
   featureFlags: {
     enableMockLlm: boolean;
     enableMockImage: boolean;
+    enableMockCheckout: boolean;
   };
 }
 
@@ -40,7 +49,9 @@ const runtimeConfigSchema = z.object({
     openaiApiKey: z.string().min(1),
     anthropicApiKey: z.string().min(1),
     falKey: z.string().min(1),
-    jwtSigningSecret: z.string().min(32)
+    jwtSigningSecret: z.string().min(32),
+    stripeSecretKey: z.string().min(1),
+    stripeWebhookSecret: z.string().min(1)
   }),
   sendgridFromEmail: z.string().email(),
   authLinkTtlMinutes: z.number().int().positive(),
@@ -50,6 +61,11 @@ const runtimeConfigSchema = z.object({
     openaiVision: z.string().min(1),
     anthropicWriter: z.string().min(1)
   }),
+  stripe: z.object({
+    priceId: z.string().min(1),
+    successUrl: z.string().url(),
+    cancelUrl: z.string().url()
+  }),
   falEndpoints: z.object({
     base: z.string().min(1),
     lora: z.string().min(1),
@@ -58,7 +74,8 @@ const runtimeConfigSchema = z.object({
   falStyleLoraUrl: z.string().url().nullable(),
   featureFlags: z.object({
     enableMockLlm: z.boolean(),
-    enableMockImage: z.boolean()
+    enableMockImage: z.boolean(),
+    enableMockCheckout: z.boolean()
   })
 });
 
@@ -136,7 +153,9 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
       openaiApiKey: requiredParam(byName, "openai_api_key"),
       anthropicApiKey: requiredParam(byName, "anthropic_api_key"),
       falKey: requiredParam(byName, "fal_key"),
-      jwtSigningSecret: requiredParam(byName, "jwt_signing_secret")
+      jwtSigningSecret: requiredParam(byName, "jwt_signing_secret"),
+      stripeSecretKey: requiredParam(byName, "stripe_secret_key"),
+      stripeWebhookSecret: requiredParam(byName, "stripe_webhook_secret")
     },
     sendgridFromEmail: requiredParam(byName, "sendgrid_from_email"),
     authLinkTtlMinutes: Number(byName.auth_link_ttl_minutes ?? operational.AUTH_LINK_TTL_MINUTES),
@@ -146,6 +165,11 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
       openaiVision: byName.openai_model_vision ?? "gpt-4.1-mini",
       anthropicWriter: byName.anthropic_model_writer ?? "claude-sonnet-4-5"
     },
+    stripe: {
+      priceId: requiredParam(byName, "stripe_price_id"),
+      successUrl: requiredParam(byName, "stripe_success_url"),
+      cancelUrl: requiredParam(byName, "stripe_cancel_url")
+    },
     falEndpoints: {
       base: byName.fal_endpoint_base ?? "fal-ai/flux-2",
       lora: byName.fal_endpoint_lora ?? "fal-ai/flux-lora",
@@ -154,7 +178,8 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
     falStyleLoraUrl: byName.fal_style_lora_url ? byName.fal_style_lora_url : null,
     featureFlags: {
       enableMockLlm: parseBool(byName.enable_mock_llm, false),
-      enableMockImage: parseBool(byName.enable_mock_image, false)
+      enableMockImage: parseBool(byName.enable_mock_image, false),
+      enableMockCheckout: parseBool(byName.enable_mock_checkout, false)
     }
   });
 
@@ -185,7 +210,7 @@ export async function getRuntimeConfig(): Promise<RuntimeConfig> {
       console.error("SSM_CONFIG_LOAD_FAILURE", {
         appEnv: operational.APP_ENV,
         ssmPrefix: operational.SSM_PREFIX,
-        message: error instanceof Error ? error.message : String(error)
+        message: redactText(error instanceof Error ? error.message : String(error))
       });
       throw error;
     })

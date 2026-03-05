@@ -30,6 +30,30 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS payment_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  stripe_session_id TEXT NOT NULL UNIQUE,
+  checkout_url TEXT NOT NULL,
+  status TEXT NOT NULL,
+  payload_json JSONB NOT NULL DEFAULT '{}'::JSONB,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS payment_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+  stripe_event_id TEXT NOT NULL UNIQUE,
+  stripe_event_type TEXT NOT NULL,
+  payload_sha256 TEXT NOT NULL,
+  payload_json JSONB NOT NULL,
+  processed_status TEXT NOT NULL,
+  processing_notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  processed_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS books (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -92,8 +116,22 @@ CREATE TABLE IF NOT EXISTS evaluations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS privacy_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  child_profile_id UUID,
+  event_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  payload_json JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_sessions_order ON payment_sessions(order_id);
+CREATE INDEX IF NOT EXISTS idx_payment_events_order ON payment_events(order_id);
 CREATE INDEX IF NOT EXISTS idx_books_order ON books(order_id);
 CREATE INDEX IF NOT EXISTS idx_pages_book ON pages(book_id);
 CREATE INDEX IF NOT EXISTS idx_images_book ON images(book_id);
 CREATE INDEX IF NOT EXISTS idx_images_page ON images(page_id);
+CREATE INDEX IF NOT EXISTS idx_privacy_events_user ON privacy_events(user_id);

@@ -11,6 +11,8 @@ SECRET_KEYS=(
   "anthropic_api_key"
   "fal_key"
   "jwt_signing_secret"
+  "stripe_secret_key"
+  "stripe_webhook_secret"
 )
 
 echo "Migrating secret params to SecureString (profile=${PROFILE}, region=${REGION}, prefix=${PREFIX})"

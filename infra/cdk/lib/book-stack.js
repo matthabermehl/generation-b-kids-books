@@ -117,6 +117,22 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       }
     });
 
+    const privacyQueueDlq = new sqs.Queue(this, "PrivacyPurgeQueueDlq", {
+      encryption: sqs.QueueEncryption.KMS,
+      encryptionMasterKey: encryptionKey,
+      retentionPeriod: cdk.Duration.days(14)
+    });
+
+    const privacyPurgeQueue = new sqs.Queue(this, "PrivacyPurgeQueue", {
+      encryption: sqs.QueueEncryption.KMS,
+      encryptionMasterKey: encryptionKey,
+      visibilityTimeout: cdk.Duration.minutes(5),
+      deadLetterQueue: {
+        queue: privacyQueueDlq,
+        maxReceiveCount: 3
+      }
+    });
+
     const vpc = new ec2.Vpc(this, "AppVpc", {
       natGateways: 1,
       maxAzs: 2,
@@ -176,9 +192,9 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       IDEMPOTENCY_TTL_SECONDS: process.env.IDEMPOTENCY_TTL_SECONDS ?? "86400",
       BOOK_DEFAULT_PAGE_COUNT: process.env.BOOK_DEFAULT_PAGE_COUNT ?? "12",
       ENABLE_STRICT_DECODABLE_CHECKS: process.env.ENABLE_STRICT_DECODABLE_CHECKS ?? "true",
-      ENABLE_MOCK_CHECKOUT: process.env.ENABLE_MOCK_CHECKOUT ?? "true",
       AUTH_LINK_TTL_MINUTES: process.env.AUTH_LINK_TTL_MINUTES ?? "15",
-      WEB_BASE_URL: process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`
+      WEB_BASE_URL: process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`,
+      ORDER_STUCK_MINUTES: process.env.ORDER_STUCK_MINUTES ?? "45"
     };
 
     const apiFunction = new lambdaNode.NodejsFunction(this, "ApiFunction", {
@@ -190,7 +206,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       depsLockFilePath: path.resolve(repoRoot, "pnpm-lock.yaml"),
       environment: {
         ...commonFunctionEnv,
-        ARTIFACT_PUBLIC_BASE_URL: `https://${distribution.distributionDomainName}`
+        ARTIFACT_PUBLIC_BASE_URL: `https://${distribution.distributionDomainName}`,
+        PRIVACY_PURGE_QUEUE_URL: privacyPurgeQueue.queueUrl
       },
       bundling: {
         externalModules: ["aws-sdk"]
@@ -286,6 +303,41 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       securityGroups: [lambdaSecurityGroup]
     });
 
+    const privacyPurgeFunction = new lambdaNode.NodejsFunction(this, "PrivacyPurgeFunction", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.minutes(2),
+      memorySize: 512,
+      entry: path.resolve(repoRoot, "apps/workers/src/privacy-purge.ts"),
+      projectRoot: repoRoot,
+      depsLockFilePath: path.resolve(repoRoot, "pnpm-lock.yaml"),
+      environment: {
+        ...commonFunctionEnv
+      },
+      bundling: {
+        externalModules: ["aws-sdk"]
+      },
+      vpc,
+      securityGroups: [lambdaSecurityGroup],
+      reservedConcurrentExecutions: 10
+    });
+
+    const orderHealthFunction = new lambdaNode.NodejsFunction(this, "OrderHealthFunction", {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 512,
+      entry: path.resolve(repoRoot, "apps/workers/src/order-health.ts"),
+      projectRoot: repoRoot,
+      depsLockFilePath: path.resolve(repoRoot, "pnpm-lock.yaml"),
+      environment: {
+        ...commonFunctionEnv
+      },
+      bundling: {
+        externalModules: ["aws-sdk"]
+      },
+      vpc,
+      securityGroups: [lambdaSecurityGroup]
+    });
+
     const migrationFunction = new lambdaNode.NodejsFunction(this, "MigrationFunction", {
       runtime: lambda.Runtime.NODEJS_22_X,
       timeout: cdk.Duration.minutes(5),
@@ -310,6 +362,13 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       })
     );
 
+    privacyPurgeFunction.addEventSource(
+      new lambdaEventSources.SqsEventSource(privacyPurgeQueue, {
+        batchSize: 5,
+        reportBatchItemFailures: true
+      })
+    );
+
     idempotencyTable.grantReadWriteData(apiFunction);
     cluster.grantDataApiAccess(apiFunction);
     cluster.grantDataApiAccess(pipelineFunction);
@@ -317,14 +376,18 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     cluster.grantDataApiAccess(checkImagesFunction);
     cluster.grantDataApiAccess(finalizeFunction);
     cluster.grantDataApiAccess(executionStatusFunction);
+    cluster.grantDataApiAccess(privacyPurgeFunction);
+    cluster.grantDataApiAccess(orderHealthFunction);
     cluster.grantDataApiAccess(migrationFunction);
 
     artifactBucket.grantReadWrite(pipelineFunction);
     artifactBucket.grantReadWrite(imageWorkerFunction);
     artifactBucket.grantReadWrite(finalizeFunction);
     artifactBucket.grantRead(apiFunction);
+    artifactBucket.grantDelete(privacyPurgeFunction);
 
     imageQueue.grantSendMessages(pipelineFunction);
+    privacyPurgeQueue.grantSendMessages(apiFunction);
 
     const runtimeConfigReaders = [
       apiFunction,
@@ -332,7 +395,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       imageWorkerFunction,
       checkImagesFunction,
       finalizeFunction,
-      executionStatusFunction
+      executionStatusFunction,
+      orderHealthFunction
     ];
     const ssmRootArn = `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${ssmPrefix}`;
     const ssmPathArn = `${ssmRootArn}/*`;
@@ -370,8 +434,15 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       cluster.secret.grantRead(checkImagesFunction);
       cluster.secret.grantRead(finalizeFunction);
       cluster.secret.grantRead(executionStatusFunction);
+      cluster.secret.grantRead(privacyPurgeFunction);
+      cluster.secret.grantRead(orderHealthFunction);
       cluster.secret.grantRead(migrationFunction);
     }
+
+    new events.Rule(this, "OrderHealthScheduleRule", {
+      schedule: events.Schedule.rate(cdk.Duration.minutes(5)),
+      targets: [new eventsTargets.LambdaFunction(orderHealthFunction)]
+    });
 
     const rendererCluster = new ecs.Cluster(this, "RendererCluster", {
       vpc,
@@ -432,7 +503,17 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     api.addRoutes({ path: "/v1/auth/verify-link", methods: [apigwv2.HttpMethod.POST], integration: apiIntegration });
     api.addRoutes({ path: "/v1/orders", methods: [apigwv2.HttpMethod.POST], integration: apiIntegration });
     api.addRoutes({
+      path: "/v1/orders/{orderId}/checkout",
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration
+    });
+    api.addRoutes({
       path: "/v1/orders/{orderId}/mark-paid",
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration
+    });
+    api.addRoutes({
+      path: "/v1/webhooks/stripe",
       methods: [apigwv2.HttpMethod.POST],
       integration: apiIntegration
     });
@@ -441,6 +522,11 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     api.addRoutes({
       path: "/v1/books/{bookId}/download",
       methods: [apigwv2.HttpMethod.GET],
+      integration: apiIntegration
+    });
+    api.addRoutes({
+      path: "/v1/child-profiles/{childProfileId}",
+      methods: [apigwv2.HttpMethod.DELETE],
       integration: apiIntegration
     });
 
@@ -542,12 +628,17 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       error: "ImageQAFailed",
       cause: "One or more page images failed QA after retry budget."
     });
+    const imageNeedsReviewFailure = new sfn.Fail(this, "ImageNeedsReview", {
+      error: "ImageNeedsReview",
+      cause: "Image safety policy flagged one or more pages for manual review."
+    });
 
     imageDoneChoice
       .when(
         sfn.Condition.booleanEquals("$.imageStatus.Payload.done", true),
         prepareRenderInputTask.next(renderPdfTask).next(finalizeTask)
       )
+      .when(sfn.Condition.booleanEquals("$.imageStatus.Payload.needsReview", true), imageNeedsReviewFailure)
       .when(sfn.Condition.numberGreaterThan("$.imageStatus.Payload.failed", 0), imageFailure)
       .otherwise(pollWait.next(waitForImagesRetryTask).next(imageDoneChoice));
 
@@ -582,7 +673,10 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
 
     const migrationsCustomResource = new cdk.CustomResource(this, "RunMigrations", {
-      serviceToken: migrationsProvider.serviceToken
+      serviceToken: migrationsProvider.serviceToken,
+      properties: {
+        MigrationVersion: "v3"
+      }
     });
     migrationsCustomResource.node.addDependency(cluster);
 
@@ -591,7 +685,9 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       OPENAI_API_KEY: "SET_ME",
       ANTHROPIC_API_KEY: "SET_ME",
       FAL_KEY: "SET_ME",
-      JWT_SIGNING_SECRET: "SET_ME"
+      JWT_SIGNING_SECRET: "SET_ME",
+      STRIPE_SECRET_KEY: "SET_ME",
+      STRIPE_WEBHOOK_SECRET: "SET_ME"
     };
 
     const standardSsmParameters = {
@@ -604,8 +700,14 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       FAL_ENDPOINT_BASE: process.env.FAL_ENDPOINT_BASE ?? "fal-ai/flux-2",
       FAL_ENDPOINT_LORA: process.env.FAL_ENDPOINT_LORA ?? "fal-ai/flux-lora",
       FAL_ENDPOINT_GENERAL: process.env.FAL_ENDPOINT_GENERAL ?? "fal-ai/flux-general",
+      STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID ?? "price_SET_ME",
+      STRIPE_SUCCESS_URL:
+        process.env.STRIPE_SUCCESS_URL ?? `https://${distribution.distributionDomainName}/?checkout=success`,
+      STRIPE_CANCEL_URL:
+        process.env.STRIPE_CANCEL_URL ?? `https://${distribution.distributionDomainName}/?checkout=cancel`,
       ENABLE_MOCK_LLM: process.env.ENABLE_MOCK_LLM ?? "false",
-      ENABLE_MOCK_IMAGE: process.env.ENABLE_MOCK_IMAGE ?? "false"
+      ENABLE_MOCK_IMAGE: process.env.ENABLE_MOCK_IMAGE ?? "false",
+      ENABLE_MOCK_CHECKOUT: process.env.ENABLE_MOCK_CHECKOUT ?? "false"
     };
 
     // CloudFormation does not support SecureString for AWS::SSM::Parameter.
@@ -662,6 +764,16 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       "ImageWorkerFunctionLogGroupRef",
       `/aws/lambda/${imageWorkerFunction.functionName}`
     );
+    const checkImagesLogGroup = logs.LogGroup.fromLogGroupName(
+      this,
+      "CheckImagesFunctionLogGroupRef",
+      `/aws/lambda/${checkImagesFunction.functionName}`
+    );
+    const finalizeFunctionLogGroup = logs.LogGroup.fromLogGroupName(
+      this,
+      "FinalizeFunctionLogGroupRef",
+      `/aws/lambda/${finalizeFunction.functionName}`
+    );
 
     new logs.MetricFilter(this, "PipelineProviderErrorMetricFilter", {
       logGroup: pipelineFunctionLogGroup,
@@ -698,12 +810,62 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       filterPattern: logs.FilterPattern.literal("SSM_CONFIG_LOAD_FAILURE"),
       metricValue: "1"
     });
+    new logs.MetricFilter(this, "ApiStripeWebhookFailureMetricFilter", {
+      logGroup: apiFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "StripeWebhookFailureCount",
+      filterPattern: logs.FilterPattern.literal("STRIPE_WEBHOOK_FAILURE"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "ApiStripeWebhookDuplicateMetricFilter", {
+      logGroup: apiFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "StripeWebhookDuplicateCount",
+      filterPattern: logs.FilterPattern.literal("STRIPE_WEBHOOK_DUPLICATE"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "ApiStripeCheckoutCreatedMetricFilter", {
+      logGroup: apiFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "StripeCheckoutCreatedCount",
+      filterPattern: logs.FilterPattern.literal("STRIPE_CHECKOUT_CREATED"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "ApiStripeWebhookCompletedMetricFilter", {
+      logGroup: apiFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "StripeWebhookCompletedCount",
+      filterPattern: logs.FilterPattern.literal("STRIPE_WEBHOOK_COMPLETED"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "PipelineNeedsReviewMetricFilter", {
+      logGroup: pipelineFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "NeedsReviewCount",
+      filterPattern: logs.FilterPattern.literal("BOOK_NEEDS_REVIEW"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "CheckImagesNeedsReviewMetricFilter", {
+      logGroup: checkImagesLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "NeedsReviewCount",
+      filterPattern: logs.FilterPattern.literal("BOOK_NEEDS_REVIEW"),
+      metricValue: "1"
+    });
+    new logs.MetricFilter(this, "FinalizeNeedsReviewMetricFilter", {
+      logGroup: finalizeFunctionLogGroup,
+      metricNamespace: "AiChildrensBook",
+      metricName: "NeedsReviewCount",
+      filterPattern: logs.FilterPattern.literal("BOOK_NEEDS_REVIEW"),
+      metricValue: "1"
+    });
 
     const dashboard = new cloudwatch.Dashboard(this, "OpsDashboard", {
       dashboardName: `${this.stackName}-ops`
     });
 
     const workflowFailedMetric = stateMachine.metricFailed();
+    const workflowSucceededMetric = stateMachine.metricSucceeded();
     const queueDepthMetric = imageQueue.metricApproximateNumberOfMessagesVisible();
     const api5xxMetric = api.metricServerError();
     const rendererTaskFailedMetric = rendererService.service.metric("RunningTaskCount", {
@@ -719,6 +881,42 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       namespace: "AiChildrensBook",
       metricName: "SsmConfigLoadFailureCount",
       statistic: "Sum",
+      period: cdk.Duration.minutes(5)
+    });
+    const stripeWebhookFailureMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "StripeWebhookFailureCount",
+      statistic: "Sum",
+      period: cdk.Duration.minutes(5)
+    });
+    const stripeWebhookDuplicateMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "StripeWebhookDuplicateCount",
+      statistic: "Sum",
+      period: cdk.Duration.minutes(5)
+    });
+    const stripeCheckoutCreatedMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "StripeCheckoutCreatedCount",
+      statistic: "Sum",
+      period: cdk.Duration.minutes(5)
+    });
+    const stripeWebhookCompletedMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "StripeWebhookCompletedCount",
+      statistic: "Sum",
+      period: cdk.Duration.minutes(5)
+    });
+    const needsReviewMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "NeedsReviewCount",
+      statistic: "Sum",
+      period: cdk.Duration.minutes(5)
+    });
+    const orderStuckMetric = new cloudwatch.Metric({
+      namespace: "AiChildrensBook",
+      metricName: "OrderStuckCount",
+      statistic: "Maximum",
       period: cdk.Duration.minutes(5)
     });
 
@@ -746,6 +944,30 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       new cloudwatch.GraphWidget({
         title: "SSM Config Load Failures",
         left: [ssmConfigLoadFailureMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Stripe Webhook Failures",
+        left: [stripeWebhookFailureMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Stripe Duplicates",
+        left: [stripeWebhookDuplicateMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Needs Review Signals",
+        left: [needsReviewMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Order Stuck Count",
+        left: [orderStuckMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Payment Conversion Funnel",
+        left: [stripeCheckoutCreatedMetric, stripeWebhookCompletedMetric]
+      }),
+      new cloudwatch.GraphWidget({
+        title: "Pipeline Success vs Failure",
+        left: [workflowSucceededMetric, workflowFailedMetric]
       })
     );
 
@@ -785,6 +1007,26 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       threshold: 1,
       evaluationPeriods: 1
     });
+    new cloudwatch.Alarm(this, "StripeWebhookFailureAlarm", {
+      metric: stripeWebhookFailureMetric,
+      threshold: 1,
+      evaluationPeriods: 1
+    });
+    new cloudwatch.Alarm(this, "StripeWebhookDuplicateSpikeAlarm", {
+      metric: stripeWebhookDuplicateMetric,
+      threshold: 20,
+      evaluationPeriods: 1
+    });
+    new cloudwatch.Alarm(this, "NeedsReviewSpikeAlarm", {
+      metric: needsReviewMetric,
+      threshold: 3,
+      evaluationPeriods: 1
+    });
+    new cloudwatch.Alarm(this, "OrderStuckAlarm", {
+      metric: orderStuckMetric,
+      threshold: 1,
+      evaluationPeriods: 1
+    });
 
     new cdk.CfnOutput(this, "ApiUrl", { value: api.apiEndpoint });
     new cdk.CfnOutput(this, "WebDistributionUrl", { value: `https://${distribution.distributionDomainName}` });
@@ -792,6 +1034,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     new cdk.CfnOutput(this, "IdempotencyTableName", { value: idempotencyTable.tableName });
     new cdk.CfnOutput(this, "BookBuildStateMachineArn", { value: stateMachine.stateMachineArn });
     new cdk.CfnOutput(this, "ImageQueueUrl", { value: imageQueue.queueUrl });
+    new cdk.CfnOutput(this, "PrivacyPurgeQueueUrl", { value: privacyPurgeQueue.queueUrl });
     new cdk.CfnOutput(this, "DbClusterArn", { value: cluster.clusterArn });
     if (cluster.secret) {
       new cdk.CfnOutput(this, "DbSecretArn", { value: cluster.secret.secretArn });

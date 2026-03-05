@@ -16,12 +16,14 @@
     "@aws-sdk/client-dynamodb": "^3.750.0",
     "@aws-sdk/client-rds-data": "^3.750.0",
     "@aws-sdk/client-s3": "^3.750.0",
-    "@aws-sdk/client-ssm": "^3.750.0",
     "@aws-sdk/client-sfn": "^3.750.0",
+    "@aws-sdk/client-sqs": "^3.750.0",
+    "@aws-sdk/client-ssm": "^3.750.0",
     "@aws-sdk/lib-dynamodb": "^3.750.0",
     "@aws-sdk/s3-request-presigner": "^3.750.0",
     "@book/domain": "workspace:*",
     "jsonwebtoken": "^9.0.2",
+    "stripe": "^18.4.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

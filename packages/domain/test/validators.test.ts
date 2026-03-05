@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageSeed, validateNarrativeRatio, validateReadingProfile } from "../src/index.js";
+import { pageSeed, validateMontessoriRealism, validateNarrativeRatio, validateReadingProfile } from "../src/index.js";
 
 describe("seed", () => {
   it("returns deterministic page seed", () => {
@@ -25,6 +25,16 @@ describe("reading profile", () => {
     const longText = Array.from({ length: 60 }, () => "word").join(" ");
     const result = validateReadingProfile("early_decoder_5_7", [
       { pageIndex: 1, pageText: longText, illustrationBrief: "", newWordsIntroduced: [], repetitionTargets: [] }
+    ]);
+
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("montessori realism", () => {
+  it("flags fantasy terms for read-aloud profile", () => {
+    const result = validateMontessoriRealism("read_aloud_3_4", [
+      { pageIndex: 0, pageText: "A dragon flew over town.", illustrationBrief: "", newWordsIntroduced: [], repetitionTargets: [] }
     ]);
 
     expect(result.ok).toBe(false);

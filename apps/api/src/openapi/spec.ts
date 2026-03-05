@@ -101,36 +101,65 @@ export const openApiSpec = {
       },
       CreateOrderResponse: {
         type: "object",
-        required: ["orderId", "bookId", "status", "checkoutMode"],
+        required: ["orderId", "bookId", "childProfileId", "status", "checkoutMode"],
         properties: {
           orderId: { type: "string", format: "uuid" },
           bookId: { type: "string", format: "uuid" },
+          childProfileId: { type: "string", format: "uuid" },
           status: { type: "string", enum: ["created"] },
-          checkoutMode: { type: "string", enum: ["mock"] }
+          checkoutMode: { type: "string", enum: ["stripe"] }
+        }
+      },
+      CheckoutResponse: {
+        type: "object",
+        required: ["orderId", "bookId", "status", "checkoutUrl", "stripeSessionId"],
+        properties: {
+          orderId: { type: "string", format: "uuid" },
+          bookId: { type: "string", format: "uuid" },
+          status: {
+            type: "string",
+            enum: ["created", "checkout_pending", "paid", "building", "needs_review", "ready", "failed", "refunded"]
+          },
+          checkoutUrl: { type: ["string", "null"] },
+          stripeSessionId: { type: ["string", "null"] },
+          message: { type: "string" }
         }
       },
       MarkPaidResponse: {
         type: "object",
-        required: ["ok", "orderId", "bookId", "executionArn"],
+        required: ["ok", "orderId", "bookId", "executionArn", "started"],
         properties: {
           ok: { type: "boolean" },
           orderId: { type: "string", format: "uuid" },
           bookId: { type: "string", format: "uuid" },
-          executionArn: { type: "string" }
+          executionArn: { type: ["string", "null"] },
+          started: { type: "boolean" }
+        }
+      },
+      StripeWebhookResponse: {
+        type: "object",
+        required: ["ok", "stripeEventId", "stripeEventType", "processingStatus", "executionArn"],
+        properties: {
+          ok: { type: "boolean" },
+          stripeEventId: { type: "string" },
+          stripeEventType: { type: "string" },
+          processingStatus: { type: "string" },
+          executionArn: { type: ["string", "null"] }
         }
       },
       OrderResponse: {
         type: "object",
-        required: ["orderId", "status", "createdAt", "bookId", "bookStatus"],
+        required: ["orderId", "status", "createdAt", "bookId", "bookStatus", "childProfileId"],
         properties: {
           orderId: { type: "string", format: "uuid" },
           status: {
             type: "string",
-            enum: ["created", "paid", "building", "ready", "failed", "refunded"]
+            enum: ["created", "checkout_pending", "paid", "building", "needs_review", "ready", "failed", "refunded"]
           },
           createdAt: { type: "string" },
           bookId: { type: "string", format: "uuid" },
-          bookStatus: { type: "string", enum: ["draft", "building", "ready", "failed"] }
+          bookStatus: { type: "string", enum: ["draft", "building", "needs_review", "ready", "failed"] },
+          childProfileId: { type: "string", format: "uuid" }
         }
       },
       BookResponse: {
@@ -145,7 +174,7 @@ export const openApiSpec = {
         ],
         properties: {
           bookId: { type: "string", format: "uuid" },
-          status: { type: "string", enum: ["draft", "building", "ready", "failed"] },
+          status: { type: "string", enum: ["draft", "building", "needs_review", "ready", "failed"] },
           childFirstName: { type: "string" },
           readingProfileId: {
             type: "string",
@@ -176,6 +205,16 @@ export const openApiSpec = {
         properties: {
           url: { type: "string", format: "uri" },
           expiresInSeconds: { type: "integer", minimum: 60 }
+        }
+      },
+      DeleteChildProfileResponse: {
+        type: "object",
+        required: ["ok", "childProfileId", "privacyEventId", "queuedArtifacts"],
+        properties: {
+          ok: { type: "boolean" },
+          childProfileId: { type: "string", format: "uuid" },
+          privacyEventId: { type: "string", format: "uuid" },
+          queuedArtifacts: { type: "integer", minimum: 0 }
         }
       }
     }
@@ -286,9 +325,50 @@ export const openApiSpec = {
         }
       }
     },
+    "/v1/orders/{orderId}/checkout": {
+      post: {
+        summary: "Create Stripe checkout session",
+        security: bearerAuth,
+        parameters: [
+          idempotencyHeader,
+          {
+            in: "path",
+            name: "orderId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Checkout response",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CheckoutResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Order not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/orders/{orderId}/mark-paid": {
       post: {
-        summary: "Mark order paid (mock) and trigger build",
+        summary: "Mark order paid (fallback-only) and trigger build",
         security: bearerAuth,
         parameters: [
           idempotencyHeader,
@@ -326,6 +406,40 @@ export const openApiSpec = {
           },
           "401": {
             description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/webhooks/stripe": {
+      post: {
+        summary: "Stripe webhook receiver",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: true
+              }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Webhook handled",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/StripeWebhookResponse" }
+              }
+            }
+          },
+          "400": {
+            description: "Invalid signature or payload",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -444,6 +558,46 @@ export const openApiSpec = {
           },
           "404": {
             description: "PDF not ready",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/child-profiles/{childProfileId}": {
+      delete: {
+        summary: "Delete child profile and queue artifact purge",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "childProfileId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        responses: {
+          "202": {
+            description: "Deletion queued",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/DeleteChildProfileResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Child profile not found",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" }
