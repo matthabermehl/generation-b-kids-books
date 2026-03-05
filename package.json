@@ -20,6 +20,7 @@
     "dev:web": "pnpm --filter @book/web dev",
     "ops:ssm:migrate-secure": "AWS_PROFILE=personal AWS_REGION=us-east-1 bash ./scripts/ops/migrate-ssm-params.sh",
     "ops:provider-smoke": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/provider-connectivity-smoke.mjs",
+    "ops:stripe-smoke": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/stripe-smoke.mjs",
     "ops:phase2-e2e": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/phase2-e2e-smoke.mjs"
   },
   "devDependencies": {

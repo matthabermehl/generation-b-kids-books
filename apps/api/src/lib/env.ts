@@ -28,13 +28,10 @@ const operationalEnvSchema = z.object({
   SSM_PREFIX: z.string().default("/ai-childrens-book/dev"),
   RUNTIME_CONFIG_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   AUTH_LINK_TTL_MINUTES: z.coerce.number().int().positive().default(15),
-  WEB_BASE_URL: z.string().default("http://localhost:5173"),
-  ENABLE_MOCK_CHECKOUT: z.string().optional()
+  WEB_BASE_URL: z.string().default("http://localhost:5173")
 });
 
-export type ApiOperationalEnv = z.infer<typeof operationalEnvSchema> & {
-  enableMockCheckout: boolean;
-};
+export type ApiOperationalEnv = z.infer<typeof operationalEnvSchema>;
 
 let cachedOperationalEnv: ApiOperationalEnv | null = null;
 
@@ -43,11 +40,7 @@ export function getOperationalEnv(): ApiOperationalEnv {
     return cachedOperationalEnv;
   }
 
-  const parsed = operationalEnvSchema.parse(process.env);
-  cachedOperationalEnv = {
-    ...parsed,
-    enableMockCheckout: boolEnv("ENABLE_MOCK_CHECKOUT", true)
-  };
+  cachedOperationalEnv = operationalEnvSchema.parse(process.env);
 
   return cachedOperationalEnv;
 }

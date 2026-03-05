@@ -1,4 +1,4 @@
-# Decision Log (80% Pass)
+# Decision Log
 
 ## 2026-03-04: Harness bootstrap first
 - Decision: initialize repository with `harness-init-empty-repo` before product scaffolding.
@@ -10,10 +10,10 @@
 
 ## 2026-03-04: AWS CDK in JavaScript
 - Decision: infra authored in JS CDK (`infra/cdk`).
-- Rationale: explicit user requirement; balances speed and maintainability for this pass.
+- Rationale: explicit user requirement; balances speed and maintainability.
 
 ## 2026-03-04: Real Aurora Serverless v2 now
-- Decision: provision Aurora PostgreSQL with Data API in 80% pass.
+- Decision: provision Aurora PostgreSQL with Data API in the first pass.
 - Rationale: validates real persistence/integration patterns early.
 
 ## 2026-03-04: PDF rendering on ECS Fargate now
@@ -24,22 +24,38 @@
 - Decision: Vite React SPA deployed as static assets.
 - Rationale: lowest complexity delivery for parent auth/order flow.
 
-## 2026-03-04: Mock checkout for 80%
-- Decision: implement `mark-paid` guarded endpoint; defer Stripe.
-- Rationale: unblocks orchestration and artifact testing without payment-webhook complexity.
+## 2026-03-04: 80% pass used mock checkout
+- Decision: implement `mark-paid` guarded endpoint and defer Stripe in phase 1.
+- Rationale: unblocked orchestration and artifact testing while payment integration was pending.
 
-## 2026-03-04: Provider strategy pattern with mock-first runtime
-- Decision: adapters for LLM/image/email; default mock for LLM/image.
-- Rationale: keeps orchestration real while allowing fast, deterministic validation.
+## 2026-03-04: Runtime config via SSM Parameter Store prefix
+- Decision: standardize config and secrets under `/ai-childrens-book/dev`.
+- Rationale: consistent retrieval and promotion path.
 
-## 2026-03-04: Idempotency on POST routes
-- Decision: require `Idempotency-Key` and store responses in DynamoDB with TTL.
-- Rationale: prevents accidental duplicate writes/build starts and aligns with API resilience goals.
+## 2026-03-04: Phase 2 real-provider cutover
+- Decision: move LLM/image/email to real providers with fallback and SSM runtime loading.
+- Rationale: production-like pipeline behavior without changing public API shape.
 
-## 2026-03-04: Secrets/config pathing via SSM Parameter Store prefix
-- Decision: standardize secret paths under `/ai-childrens-book/dev` (`SSM_PREFIX`).
-- Rationale: consistent retrieval and easier environment promotion later.
+## 2026-03-04: Phase 3 private-beta payment cutover
+- Decision: Stripe becomes primary payment path with webhook-driven build start.
+- Rationale: remove mock payment from normal path while retaining controlled fallback.
 
-## 2026-03-04: Stop point at 80%
-- Decision: defer Stripe production flow, failover routing, advanced moderation, threat model hardening, and POD integration.
-- Rationale: maximize shipped value quickly and reserve high-risk external integrations for focused phase 2.
+## 2026-03-04: Keep secrets/config source-of-truth in SSM
+- Decision: keep SSM (not Secrets Manager) for this phase.
+- Rationale: minimizes migration risk and reuses established runtime loaders.
+
+## 2026-03-04: Add explicit `needs_review` lifecycle state
+- Decision: add `needs_review` to order/book statuses and preserve it through failure sync.
+- Rationale: safety/policy escalations should not be collapsed into generic failures.
+
+## 2026-03-04: Pragmatic privacy baseline with async purge
+- Decision: add parent self-service child profile deletion, async artifact purge queue, and privacy event audit table.
+- Rationale: supports COPPA-aware data minimization and deletion flow without full compliance program overhead.
+
+## 2026-03-04: Baseline safety hardening
+- Decision: add deterministic + moderation gating before image generation and final release.
+- Rationale: reduce unsafe output risk and improve private-beta trust posture.
+
+## 2026-03-04: Dev-only private beta scope
+- Decision: keep rollout in `dev` only for this phase.
+- Rationale: faster iteration with lower operational overhead before staging/prod promotion.

@@ -16,8 +16,10 @@ export type ReadingProfile = (typeof readingProfiles)[number];
 
 export const orderStatuses = [
   "created",
+  "checkout_pending",
   "paid",
   "building",
+  "needs_review",
   "ready",
   "failed",
   "refunded"
@@ -25,7 +27,7 @@ export const orderStatuses = [
 
 export type OrderStatus = (typeof orderStatuses)[number];
 
-export const bookStatuses = ["draft", "building", "ready", "failed"] as const;
+export const bookStatuses = ["draft", "building", "needs_review", "ready", "failed"] as const;
 export type BookStatus = (typeof bookStatuses)[number];
 
 export const pageStatuses = ["pending", "ready", "failed"] as const;

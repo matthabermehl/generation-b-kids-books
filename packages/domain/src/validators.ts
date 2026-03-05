@@ -12,6 +12,16 @@ export interface ValidationResult {
 }
 
 const bannedPhrases = ["get rich", "guaranteed returns", "risk-free gains"];
+const montessoriFantasyTerms = [
+  "dragon",
+  "wizard",
+  "fairy",
+  "spell",
+  "enchanted",
+  "unicorn",
+  "magic wand",
+  "sorcerer"
+];
 
 export function validateNarrativeRatio(pages: StoryPage[]): ValidationResult {
   if (pages.length < 4) {
@@ -88,6 +98,26 @@ export function validateReadingProfile(
           message: `Page ${page.pageIndex} likely exceeds decodability limits.`
         });
       }
+    }
+  });
+
+  return { ok: issues.length === 0, issues };
+}
+
+export function validateMontessoriRealism(profile: ReadingProfile, pages: StoryPage[]): ValidationResult {
+  if (profile !== "read_aloud_3_4") {
+    return { ok: true, issues: [] };
+  }
+
+  const issues: ValidationIssue[] = [];
+  pages.forEach((page) => {
+    const lowered = page.pageText.toLowerCase();
+    const flagged = montessoriFantasyTerms.find((term) => lowered.includes(term));
+    if (flagged) {
+      issues.push({
+        code: "MONTESSORI_REALISM",
+        message: `Page ${page.pageIndex} includes fantasy term not aligned to Montessori realism: ${flagged}`
+      });
     }
   });
 

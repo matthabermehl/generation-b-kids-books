@@ -50,14 +50,19 @@ export const handler: Handler<EventBridgeEvent> = async (event) => {
     })
   );
 
-  await execute(`UPDATE books SET status = 'failed' WHERE id = CAST(:bookId AS uuid)`, [
-    { name: "bookId", value: { stringValue: parsed.bookId } }
-  ]);
+  await execute(
+    `
+      UPDATE books
+      SET status = CASE WHEN status = 'needs_review' THEN status ELSE 'failed' END
+      WHERE id = CAST(:bookId AS uuid)
+    `,
+    [{ name: "bookId", value: { stringValue: parsed.bookId } }]
+  );
 
   await execute(
     `
       UPDATE orders
-      SET status = 'failed'
+      SET status = CASE WHEN status = 'needs_review' THEN status ELSE 'failed' END
       WHERE id = (SELECT order_id FROM books WHERE id = CAST(:bookId AS uuid) LIMIT 1)
     `,
     [{ name: "bookId", value: { stringValue: parsed.bookId } }]

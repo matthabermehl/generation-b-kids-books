@@ -51,10 +51,16 @@ describe("worker runtime ssm config", () => {
         parameter("anthropic_api_key", "an"),
         parameter("fal_key", "fk"),
         parameter("jwt_signing_secret", "x".repeat(32)),
+        parameter("stripe_secret_key", "sk_test_123"),
+        parameter("stripe_webhook_secret", "whsec_123"),
+        parameter("stripe_price_id", "price_123"),
+        parameter("stripe_success_url", "https://example.com/success"),
+        parameter("stripe_cancel_url", "https://example.com/cancel"),
         parameter("sendgrid_from_email", "hello@example.com"),
         parameter("web_base_url", "https://example.com"),
         parameter("enable_mock_llm", "false"),
-        parameter("enable_mock_image", "false")
+        parameter("enable_mock_image", "false"),
+        parameter("enable_mock_checkout", "false")
       ]
     };
 
@@ -66,6 +72,8 @@ describe("worker runtime ssm config", () => {
     const second = await getRuntimeConfig();
     expect(first.featureFlags.enableMockLlm).toBe(false);
     expect(second.featureFlags.enableMockImage).toBe(false);
+    expect(second.featureFlags.enableMockCheckout).toBe(false);
+    expect(first.stripe.priceId).toBe("price_123");
     expect(sendMock).toHaveBeenCalledTimes(1);
 
     vi.setSystemTime(new Date("2026-03-04T12:00:02.000Z"));

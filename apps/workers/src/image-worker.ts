@@ -2,6 +2,7 @@ import type { SQSHandler } from "aws-lambda";
 import { execute, query } from "./lib/rds.js";
 import { putBuffer } from "./lib/storage.js";
 import { fileExtensionForContentType, logStructured, makeId } from "./lib/helpers.js";
+import { blockedTermsInText } from "./lib/content-safety.js";
 import { runImageGenerationAttempts } from "./lib/image-attempts.js";
 import { resolveImageProvider } from "./providers/image.js";
 
@@ -38,6 +39,17 @@ async function generatePageImage(job: JobPayload): Promise<void> {
   });
 
   const { generated, generatedKey } = attemptResult;
+  const promptSafetyTerms = blockedTermsInText(prompt);
+  const qaIssues = [
+    ...generated.qa.issues,
+    ...promptSafetyTerms.map((term) => `safety_flagged_prompt:${term}`)
+  ];
+  const qaPassed = generated.qa.passed && promptSafetyTerms.length === 0;
+  const qaPayload = {
+    ...generated.qa,
+    passed: qaPassed,
+    issues: qaIssues
+  };
   const extension = fileExtensionForContentType(generated.contentType);
   const keyWithExtension = `${generatedKey}.${extension}`;
   await putBuffer(keyWithExtension, generated.bytes, generated.contentType);
@@ -74,8 +86,8 @@ async function generatePageImage(job: JobPayload): Promise<void> {
         { name: "width", value: { longValue: generated.width ?? 1536 } },
         { name: "height", value: { longValue: generated.height ?? 1024 } },
         { name: "s3", value: { stringValue: s3Url } },
-        { name: "qa", value: { stringValue: JSON.stringify(generated.qa) } },
-        { name: "status", value: { stringValue: generated.qa.passed ? "ready" : "failed" } },
+        { name: "qa", value: { stringValue: JSON.stringify(qaPayload) } },
+        { name: "status", value: { stringValue: qaPassed ? "ready" : "failed" } },
         { name: "id", value: { stringValue: existing[0].id } }
       ]
     );
@@ -99,14 +111,14 @@ async function generatePageImage(job: JobPayload): Promise<void> {
         { name: "width", value: { longValue: generated.width ?? 1536 } },
         { name: "height", value: { longValue: generated.height ?? 1024 } },
         { name: "s3", value: { stringValue: s3Url } },
-        { name: "qa", value: { stringValue: JSON.stringify(generated.qa) } },
-        { name: "status", value: { stringValue: generated.qa.passed ? "ready" : "failed" } }
+        { name: "qa", value: { stringValue: JSON.stringify(qaPayload) } },
+        { name: "status", value: { stringValue: qaPassed ? "ready" : "failed" } }
       ]
     );
   }
 
   await execute(`UPDATE pages SET status = :status WHERE id = CAST(:pageId AS uuid)`, [
-    { name: "status", value: { stringValue: generated.qa.passed ? "ready" : "failed" } },
+    { name: "status", value: { stringValue: qaPassed ? "ready" : "failed" } },
     { name: "pageId", value: { stringValue: job.pageId } }
   ]);
 }

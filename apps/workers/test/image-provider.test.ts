@@ -17,12 +17,19 @@ describe("image provider", () => {
         openaiApiKey: "oa",
         anthropicApiKey: "an",
         falKey: "fk",
-        jwtSigningSecret: "x".repeat(32)
+        jwtSigningSecret: "x".repeat(32),
+        stripeSecretKey: "sk_test_123",
+        stripeWebhookSecret: "whsec_123"
       },
       models: {
         openaiJson: "gpt-4.1-mini",
         openaiVision: "gpt-4.1-mini",
         anthropicWriter: "claude-sonnet-4-5"
+      },
+      stripe: {
+        priceId: "price_123",
+        successUrl: "https://example.com/success",
+        cancelUrl: "https://example.com/cancel"
       },
       falEndpoints: {
         base: "fal-ai/flux-2",
@@ -32,7 +39,8 @@ describe("image provider", () => {
       falStyleLoraUrl: null,
       featureFlags: {
         enableMockLlm: false,
-        enableMockImage: false
+        enableMockImage: false,
+        enableMockCheckout: false
       },
       sendgridFromEmail: "noreply@example.com",
       webBaseUrl: "https://example.com"
@@ -103,12 +111,19 @@ describe("image provider", () => {
         openaiApiKey: "oa",
         anthropicApiKey: "an",
         falKey: "fk",
-        jwtSigningSecret: "x".repeat(32)
+        jwtSigningSecret: "x".repeat(32),
+        stripeSecretKey: "sk_test_123",
+        stripeWebhookSecret: "whsec_123"
       },
       models: {
         openaiJson: "gpt-4.1-mini",
         openaiVision: "gpt-4.1-mini",
         anthropicWriter: "claude-sonnet-4-5"
+      },
+      stripe: {
+        priceId: "price_123",
+        successUrl: "https://example.com/success",
+        cancelUrl: "https://example.com/cancel"
       },
       falEndpoints: {
         base: "fal-ai/flux-2",
@@ -118,7 +133,8 @@ describe("image provider", () => {
       falStyleLoraUrl: null,
       featureFlags: {
         enableMockLlm: false,
-        enableMockImage: true
+        enableMockImage: true,
+        enableMockCheckout: false
       },
       sendgridFromEmail: "noreply@example.com",
       webBaseUrl: "https://example.com"
