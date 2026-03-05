@@ -13,6 +13,9 @@ interface JobPayload {
   text: string;
   brief: {
     illustrationBrief?: string;
+    styleAnchor?: string;
+    characterAnchor?: string;
+    characterSheetS3Url?: string | null;
   };
 }
 
@@ -22,10 +25,22 @@ interface ImageRow {
 }
 
 function imagePrompt(job: JobPayload): string {
-  return (
+  const scenePrompt =
     job.brief.illustrationBrief ??
-    `Page ${job.pageIndex + 1}: calm illustration of ${job.text.slice(0, 120)}`
-  );
+    `Page ${job.pageIndex + 1}: calm illustration of ${job.text.slice(0, 120)}`;
+  const styleAnchor =
+    job.brief.styleAnchor ??
+    "Muted watercolor palette, matte texture, soft natural lighting, and child-friendly realism.";
+  const characterAnchor =
+    job.brief.characterAnchor ??
+    "Keep the same child character appearance and clothing details as prior pages.";
+  const characterSheetReference = job.brief.characterSheetS3Url
+    ? `Reference character-sheet image: ${job.brief.characterSheetS3Url}.`
+    : "";
+
+  return [styleAnchor, characterAnchor, characterSheetReference, scenePrompt, "No style drift between pages."]
+    .filter(Boolean)
+    .join(" ");
 }
 
 async function generatePageImage(job: JobPayload): Promise<void> {

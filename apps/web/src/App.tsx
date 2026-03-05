@@ -32,6 +32,25 @@ interface BookPayload {
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
 const authTokenKey = "book-auth-token";
+const activeOrderKey = "book-active-order";
+const activeOrderStatusKey = "book-active-order-status";
+const activeCheckoutUrlKey = "book-active-checkout-url";
+const activeBookPayloadKey = "book-active-book-payload";
+const activeDownloadUrlKey = "book-active-download-url";
+
+function loadJson<T>(key: string): T | null {
+  const raw = localStorage.getItem(key);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
 
 function authHeader(token: string | null): Record<string, string> {
   if (!token) return {};
@@ -55,11 +74,15 @@ export function App() {
   const [interestTags, setInterestTags] = useState("baking,forest,bikes");
   const [readingProfileId, setReadingProfileId] = useState<ReadingProfile>("early_decoder_5_7");
 
-  const [order, setOrder] = useState<OrderResponse | null>(null);
-  const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(null);
-  const [bookPayload, setBookPayload] = useState<BookPayload | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [order, setOrder] = useState<OrderResponse | null>(() => loadJson<OrderResponse>(activeOrderKey));
+  const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(() =>
+    loadJson<OrderStatus>(activeOrderStatusKey)
+  );
+  const [bookPayload, setBookPayload] = useState<BookPayload | null>(() =>
+    loadJson<BookPayload>(activeBookPayloadKey)
+  );
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(() => localStorage.getItem(activeDownloadUrlKey));
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(() => localStorage.getItem(activeCheckoutUrlKey));
   const [privacyStatus, setPrivacyStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -108,20 +131,118 @@ export function App() {
         }
 
         const payload = (await response.json()) as { token: string };
-        localStorage.setItem(authTokenKey, payload.token);
         setToken(payload.token);
         setVerifyStatus("Email verified. You are signed in.");
-
+      } catch (err) {
+        setVerifyStatus(err instanceof Error ? err.message : "Verification failed");
+      } finally {
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete("token");
         window.history.replaceState({}, "", cleanUrl.toString());
-      } catch (err) {
-        setVerifyStatus(err instanceof Error ? err.message : "Verification failed");
       }
     };
 
     void verify();
   }, [verifyTokenFromUrl]);
+
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem(authTokenKey, token);
+      return;
+    }
+
+    localStorage.removeItem(authTokenKey);
+  }, [token]);
+
+  useEffect(() => {
+    if (order) {
+      localStorage.setItem(activeOrderKey, JSON.stringify(order));
+      return;
+    }
+    localStorage.removeItem(activeOrderKey);
+  }, [order]);
+
+  useEffect(() => {
+    if (orderStatus) {
+      localStorage.setItem(activeOrderStatusKey, JSON.stringify(orderStatus));
+      return;
+    }
+    localStorage.removeItem(activeOrderStatusKey);
+  }, [orderStatus]);
+
+  useEffect(() => {
+    if (checkoutUrl) {
+      localStorage.setItem(activeCheckoutUrlKey, checkoutUrl);
+      return;
+    }
+    localStorage.removeItem(activeCheckoutUrlKey);
+  }, [checkoutUrl]);
+
+  useEffect(() => {
+    if (bookPayload) {
+      localStorage.setItem(activeBookPayloadKey, JSON.stringify(bookPayload));
+      return;
+    }
+    localStorage.removeItem(activeBookPayloadKey);
+  }, [bookPayload]);
+
+  useEffect(() => {
+    if (downloadUrl) {
+      localStorage.setItem(activeDownloadUrlKey, downloadUrl);
+      return;
+    }
+    localStorage.removeItem(activeDownloadUrlKey);
+  }, [downloadUrl]);
+
+  useEffect(() => {
+    if (!orderStatus) {
+      return;
+    }
+
+    setOrder((current) => {
+      if (
+        current &&
+        current.orderId === orderStatus.orderId &&
+        current.bookId === orderStatus.bookId &&
+        current.childProfileId === orderStatus.childProfileId &&
+        current.status === orderStatus.status
+      ) {
+        return current;
+      }
+
+      return {
+        orderId: orderStatus.orderId,
+        bookId: orderStatus.bookId,
+        childProfileId: orderStatus.childProfileId,
+        status: orderStatus.status
+      };
+    });
+  }, [orderStatus]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+
+    const activeOrderId = orderStatus?.orderId ?? order?.orderId;
+    if (!activeOrderId) {
+      return;
+    }
+
+    const refreshOrderStatus = async () => {
+      const response = await apiFetch(`/v1/orders/${activeOrderId}`, {
+        headers: authHeader(token)
+      });
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as OrderStatus;
+      setOrderStatus(payload);
+    };
+
+    void refreshOrderStatus();
+  }, [token, orderStatus?.orderId, order?.orderId]);
 
   useEffect(() => {
     if (!orderStatus || !token) {
@@ -217,9 +338,11 @@ export function App() {
   };
 
   const startCheckout = async () => {
-    if (!token || !order) return;
+    const activeOrderId = orderStatus?.orderId ?? order?.orderId;
+    const activeBookId = orderStatus?.bookId ?? order?.bookId;
+    if (!token || !activeOrderId || !activeBookId) return;
 
-    const response = await apiFetch(`/v1/orders/${order.orderId}/checkout`, {
+    const response = await apiFetch(`/v1/orders/${activeOrderId}/checkout`, {
       method: "POST",
       headers: {
         "Idempotency-Key": crypto.randomUUID(),
@@ -240,7 +363,7 @@ export function App() {
 
     setCheckoutUrl(payload.checkoutUrl);
 
-    const statusResponse = await apiFetch(`/v1/orders/${order.orderId}`, {
+    const statusResponse = await apiFetch(`/v1/orders/${activeOrderId}`, {
       headers: authHeader(token)
     });
 
@@ -250,9 +373,10 @@ export function App() {
   };
 
   const fallbackMarkPaid = async () => {
-    if (!token || !order) return;
+    const activeOrderId = orderStatus?.orderId ?? order?.orderId;
+    if (!token || !activeOrderId) return;
 
-    const response = await apiFetch(`/v1/orders/${order.orderId}/mark-paid`, {
+    const response = await apiFetch(`/v1/orders/${activeOrderId}/mark-paid`, {
       method: "POST",
       headers: {
         "Idempotency-Key": crypto.randomUUID(),
@@ -265,7 +389,7 @@ export function App() {
       return;
     }
 
-    const statusResponse = await apiFetch(`/v1/orders/${order.orderId}`, {
+    const statusResponse = await apiFetch(`/v1/orders/${activeOrderId}`, {
       headers: authHeader(token)
     });
 
@@ -391,10 +515,10 @@ export function App() {
           </select>
 
           <button onClick={createOrder}>Create order</button>
-          <button onClick={startCheckout} disabled={!order}>
+          <button onClick={startCheckout} disabled={!orderStatus?.orderId && !order?.orderId}>
             Create checkout session
           </button>
-          <button onClick={fallbackMarkPaid} disabled={!order}>
+          <button onClick={fallbackMarkPaid} disabled={!orderStatus?.orderId && !order?.orderId}>
             Fallback mark paid
           </button>
 

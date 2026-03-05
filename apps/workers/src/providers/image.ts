@@ -121,16 +121,21 @@ class FalImageProvider implements ImageProvider {
     const seed = pageSeed(input.bookId, input.pageIndex, `v${attempt}`);
     const endpoint = this.resolveEndpoint(input.role);
     const startedAt = Date.now();
+    const loras = this.config.falStyleLoraUrl
+      ? [
+          {
+            path: this.config.falStyleLoraUrl,
+            scale: input.role === "character_sheet" ? 1 : 0.9
+          }
+        ]
+      : undefined;
 
     const requestId = await this.submit(endpoint, {
       prompt: input.prompt,
       seed,
       num_images: 1,
       image_size: "landscape_16_9",
-      loras:
-        input.role === "character_sheet" && this.config.falStyleLoraUrl
-          ? [{ path: this.config.falStyleLoraUrl, scale: 1 }]
-          : undefined
+      loras
     });
 
     await this.waitUntilComplete(endpoint, requestId);
@@ -174,6 +179,10 @@ class FalImageProvider implements ImageProvider {
   private resolveEndpoint(role: GenerateImageInput["role"]): string {
     if (role === "character_sheet") {
       return this.config.falStyleLoraUrl ? this.config.falEndpoints.lora : this.config.falEndpoints.base;
+    }
+
+    if (this.config.falStyleLoraUrl) {
+      return this.config.falEndpoints.lora;
     }
 
     return this.config.falEndpoints.general;

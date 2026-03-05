@@ -359,11 +359,38 @@ interface PageRow {
   illustration_brief_json: string;
 }
 
+interface CharacterSheetRow {
+  prompt: string | null;
+  s3_url: string | null;
+}
+
+function styleConsistencyAnchor(context: BookContextRow): string {
+  return [
+    "Children's picture-book illustration in muted watercolor with matte texture and soft natural lighting.",
+    `Keep ${context.child_first_name}'s hair, face shape, skin tone, outfit colors, and proportions identical across all pages.`,
+    "Maintain consistent line weight, brush texture, and palette from page to page."
+  ].join(" ");
+}
+
 async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
   const queueUrl = process.env.IMAGE_QUEUE_URL;
   if (!queueUrl) {
     throw new Error("IMAGE_QUEUE_URL is required");
   }
+
+  const context = await loadBookContext(bookId);
+  const characterSheetRows = await query<CharacterSheetRow>(
+    `
+      SELECT prompt, s3_url
+      FROM images
+      WHERE book_id = CAST(:bookId AS uuid) AND role = 'character_sheet'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [{ name: "bookId", value: { stringValue: bookId } }]
+  );
+  const characterSheet = characterSheetRows[0] ?? { prompt: null, s3_url: null };
+  const consistencyAnchor = styleConsistencyAnchor(context);
 
   const pages = await query<PageRow>(
     `
@@ -384,7 +411,14 @@ async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
           pageId: page.id,
           pageIndex: Number(page.page_index),
           text: page.text,
-          brief: JSON.parse(page.illustration_brief_json || "{}")
+          brief: {
+            ...JSON.parse(page.illustration_brief_json || "{}"),
+            styleAnchor: consistencyAnchor,
+            characterAnchor:
+              characterSheet.prompt ??
+              `Use the same child character model for ${context.child_first_name} with stable clothing and facial features.`,
+            characterSheetS3Url: characterSheet.s3_url
+          }
         })
       })
     );
