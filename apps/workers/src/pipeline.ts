@@ -2,7 +2,7 @@ import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import type { Handler } from "aws-lambda";
 import type { MoneyLessonKey, ReadingProfile } from "@book/domain";
 import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
-import { putJson, putBuffer } from "./lib/storage.js";
+import { putJson, putBuffer, presignGetObjectFromS3Url } from "./lib/storage.js";
 import { fileExtensionForContentType, makeId, logStructured } from "./lib/helpers.js";
 import { moderateTexts } from "./lib/content-safety.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
@@ -391,6 +391,9 @@ async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
   );
   const characterSheet = characterSheetRows[0] ?? { prompt: null, s3_url: null };
   const consistencyAnchor = styleConsistencyAnchor(context);
+  const characterSheetReferenceUrl = characterSheet.s3_url
+    ? await presignGetObjectFromS3Url(characterSheet.s3_url)
+    : null;
 
   const pages = await query<PageRow>(
     `
@@ -417,7 +420,8 @@ async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
             characterAnchor:
               characterSheet.prompt ??
               `Use the same child character model for ${context.child_first_name} with stable clothing and facial features.`,
-            characterSheetS3Url: characterSheet.s3_url
+            characterSheetS3Url: characterSheet.s3_url,
+            characterSheetReferenceUrl
           }
         })
       })

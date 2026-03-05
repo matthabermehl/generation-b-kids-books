@@ -16,6 +16,7 @@ interface JobPayload {
     styleAnchor?: string;
     characterAnchor?: string;
     characterSheetS3Url?: string | null;
+    characterSheetReferenceUrl?: string | null;
   };
 }
 
@@ -50,7 +51,8 @@ async function generatePageImage(job: JobPayload): Promise<void> {
     bookId: job.bookId,
     pageIndex: job.pageIndex,
     prompt,
-    role: "page"
+    role: "page",
+    referenceImageUrl: job.brief.characterSheetReferenceUrl ?? undefined
   });
 
   const { generated, generatedKey } = attemptResult;

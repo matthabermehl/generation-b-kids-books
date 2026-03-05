@@ -7,6 +7,7 @@ export interface GenerateImageInput {
   pageIndex: number;
   prompt: string;
   role: "page" | "character_sheet";
+  referenceImageUrl?: string;
 }
 
 export interface GeneratedImage {
@@ -119,7 +120,7 @@ class FalImageProvider implements ImageProvider {
 
   async generate(input: GenerateImageInput, attempt: number): Promise<GeneratedImage> {
     const seed = pageSeed(input.bookId, input.pageIndex, `v${attempt}`);
-    const endpoint = this.resolveEndpoint(input.role);
+    const endpoint = this.resolveEndpoint(input);
     const startedAt = Date.now();
     const loras = this.config.falStyleLoraUrl
       ? [
@@ -130,13 +131,20 @@ class FalImageProvider implements ImageProvider {
         ]
       : undefined;
 
-    const requestId = await this.submit(endpoint, {
+    const payload: Record<string, unknown> = {
       prompt: input.prompt,
       seed,
       num_images: 1,
       image_size: "landscape_16_9",
       loras
-    });
+    };
+
+    if (input.referenceImageUrl) {
+      payload.reference_image_url = input.referenceImageUrl;
+      payload.reference_strength = 0.85;
+    }
+
+    const requestId = await this.submit(endpoint, payload);
 
     await this.waitUntilComplete(endpoint, requestId);
     const output = await this.fetchResult(endpoint, requestId);
@@ -176,9 +184,13 @@ class FalImageProvider implements ImageProvider {
     };
   }
 
-  private resolveEndpoint(role: GenerateImageInput["role"]): string {
-    if (role === "character_sheet") {
+  private resolveEndpoint(input: GenerateImageInput): string {
+    if (input.role === "character_sheet") {
       return this.config.falStyleLoraUrl ? this.config.falEndpoints.lora : this.config.falEndpoints.base;
+    }
+
+    if (input.referenceImageUrl) {
+      return this.config.falEndpoints.general;
     }
 
     if (this.config.falStyleLoraUrl) {
