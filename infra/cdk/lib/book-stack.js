@@ -82,7 +82,22 @@ export class AiChildrensBookDevStack extends cdk.Stack {
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
         }
       },
-      defaultRootObject: "index.html"
+      defaultRootObject: "index.html",
+      // SPA deep links like /verify must fall back to index.html.
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: "/index.html",
+          ttl: cdk.Duration.seconds(0)
+        },
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: "/index.html",
+          ttl: cdk.Duration.seconds(0)
+        }
+      ]
     });
 
     new s3Deploy.BucketDeployment(this, "WebPlaceholderDeploy", {
