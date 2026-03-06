@@ -19,16 +19,18 @@ describe("check-images", () => {
   });
 
   it("routes failed picture-book pages to needs_review", async () => {
-    queryMock.mockResolvedValue([
-      {
-        total: 12,
-        ready: 11,
-        failed: 1,
-        safety_failed: 0,
-        order_id: "order-1",
-        product_family: "picture_book_fixed_layout"
-      }
-    ]);
+    queryMock
+      .mockResolvedValueOnce([
+        {
+          total: 12,
+          ready: 11,
+          failed: 1,
+          safety_failed: 0,
+          order_id: "order-1",
+          product_family: "picture_book_fixed_layout"
+        }
+      ])
+      .mockResolvedValueOnce([]);
 
     const result = await handler({ bookId: "book-1" } as never, {} as never, () => undefined);
 
@@ -37,7 +39,7 @@ describe("check-images", () => {
       needsReview: true,
       productFamily: "picture_book_fixed_layout"
     });
-    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(executeMock).toHaveBeenCalledTimes(3);
   });
 
   it("keeps legacy non-safety failures out of needs_review", async () => {

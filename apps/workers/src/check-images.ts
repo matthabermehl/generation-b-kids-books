@@ -1,6 +1,7 @@
 import type { Handler } from "aws-lambda";
 import type { BookProductFamily } from "@book/domain";
 import { execute, query } from "./lib/rds.js";
+import { upsertOpenReviewCase } from "./lib/review-cases.js";
 
 interface Event {
   bookId: string;
@@ -31,7 +32,7 @@ export const handler: Handler<Event> = async (event) => {
         MAX(COALESCE(b.product_family, 'picture_book_fixed_layout')) AS product_family
       FROM pages p
       INNER JOIN books b ON b.id = p.book_id
-      LEFT JOIN images i ON i.page_id = p.id AND i.role IN ('page', 'page_fill')
+      LEFT JOIN images i ON i.page_id = p.id AND i.role IN ('page', 'page_fill') AND i.is_current = TRUE
       WHERE p.book_id = CAST(:bookId AS uuid)
     `,
     [{ name: "bookId", value: { stringValue: event.bookId } }]
@@ -71,6 +72,22 @@ export const handler: Handler<Event> = async (event) => {
         productFamily
       })
     );
+    await upsertOpenReviewCase({
+      bookId: event.bookId,
+      orderId: row.order_id,
+      stage: safetyFailed > 0 ? "image_safety" : "image_qa",
+      reasonSummary:
+        safetyFailed > 0
+          ? `${safetyFailed} page images were flagged for safety review.`
+          : `${failed} page images exhausted QA retry budget.`,
+      reasonJson: {
+        failed,
+        safetyFailed,
+        total,
+        ready,
+        productFamily
+      }
+    });
   }
 
   return {

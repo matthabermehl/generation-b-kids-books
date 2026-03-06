@@ -506,7 +506,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const api = new apigwv2.HttpApi(this, "ControlPlaneApi", {
       createDefaultStage: true,
       corsPreflight: {
-        allowHeaders: ["authorization", "content-type", "idempotency-key"],
+        allowHeaders: ["authorization", "content-type", "idempotency-key", "x-mock-run-tag"],
         allowMethods: [apigwv2.CorsHttpMethod.ANY],
         allowOrigins: configuredCorsOrigins
       }
@@ -516,6 +516,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     api.addRoutes({ path: "/v1/auth/request-link", methods: [apigwv2.HttpMethod.POST], integration: apiIntegration });
     api.addRoutes({ path: "/v1/auth/verify-link", methods: [apigwv2.HttpMethod.POST], integration: apiIntegration });
+    api.addRoutes({ path: "/v1/session", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
     api.addRoutes({ path: "/v1/orders", methods: [apigwv2.HttpMethod.POST], integration: apiIntegration });
     api.addRoutes({
       path: "/v1/orders/{orderId}/checkout",
@@ -534,6 +535,23 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
     api.addRoutes({ path: "/v1/orders/{orderId}", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
     api.addRoutes({ path: "/v1/books/{bookId}", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
+    api.addRoutes({ path: "/v1/review/cases", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
+    api.addRoutes({ path: "/v1/review/cases/{caseId}", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
+    api.addRoutes({
+      path: "/v1/review/cases/{caseId}/approve",
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration
+    });
+    api.addRoutes({
+      path: "/v1/review/cases/{caseId}/reject",
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration
+    });
+    api.addRoutes({
+      path: "/v1/review/cases/{caseId}/pages/{pageId}/retry",
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration
+    });
     api.addRoutes({
       path: "/v1/books/{bookId}/download",
       methods: [apigwv2.HttpMethod.GET],
@@ -575,7 +593,54 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       resultPath: "$.enqueueImages"
     });
 
+    const enqueueSinglePageImageTask = new sfnTasks.LambdaInvoke(this, "EnqueueSinglePageImage", {
+      lambdaFunction: pipelineFunction,
+      payload: sfn.TaskInput.fromObject({
+        action: "enqueue_page_image",
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        pageId: sfn.JsonPath.stringAt("$.pageId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
+      }),
+      resultPath: "$.enqueueImages"
+    });
+
+    const generateCharacterSheetResumeTask = new sfnTasks.LambdaInvoke(this, "GenerateCharacterSheetResume", {
+      lambdaFunction: pipelineFunction,
+      payload: sfn.TaskInput.fromObject({
+        action: "generate_character_sheet",
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
+      }),
+      resultPath: "$.characterSheet"
+    });
+
+    const enqueueImagesResumeTask = new sfnTasks.LambdaInvoke(this, "EnqueuePageImagesResume", {
+      lambdaFunction: pipelineFunction,
+      payload: sfn.TaskInput.fromObject({
+        action: "enqueue_page_images",
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
+      }),
+      resultPath: "$.enqueueImages"
+    });
+
     const waitForImagesTask = new sfnTasks.LambdaInvoke(this, "CheckImageCompletion", {
+      lambdaFunction: checkImagesFunction,
+      payload: sfn.TaskInput.fromObject({
+        bookId: sfn.JsonPath.stringAt("$.bookId")
+      }),
+      resultPath: "$.imageStatus"
+    });
+
+    const waitForImagesResumeTask = new sfnTasks.LambdaInvoke(this, "CheckImageCompletionResume", {
+      lambdaFunction: checkImagesFunction,
+      payload: sfn.TaskInput.fromObject({
+        bookId: sfn.JsonPath.stringAt("$.bookId")
+      }),
+      resultPath: "$.imageStatus"
+    });
+
+    const waitForRetryPageImagesTask = new sfnTasks.LambdaInvoke(this, "CheckRetryPageImageCompletion", {
       lambdaFunction: checkImagesFunction,
       payload: sfn.TaskInput.fromObject({
         bookId: sfn.JsonPath.stringAt("$.bookId")
@@ -596,6 +661,16 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
 
     const prepareRenderInputTask = new sfnTasks.LambdaInvoke(this, "PrepareRenderInput", {
+      lambdaFunction: pipelineFunction,
+      payload: sfn.TaskInput.fromObject({
+        action: "prepare_render_input",
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
+      }),
+      resultPath: "$.prepareRender"
+    });
+
+    const prepareRenderInputResumeTask = new sfnTasks.LambdaInvoke(this, "PrepareRenderInputResume", {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
         action: "prepare_render_input",
@@ -633,11 +708,57 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       resultPath: "$.renderTask"
     });
 
+    const renderPdfResumeTask = new sfnTasks.EcsRunTask(this, "RenderPdfInFargateResume", {
+      cluster: rendererCluster,
+      taskDefinition: rendererTaskDefinition,
+      integrationPattern: sfn.IntegrationPattern.RUN_JOB,
+      launchTarget: new sfnTasks.EcsFargateLaunchTarget(),
+      containerOverrides: [
+        {
+          containerDefinition: rendererContainer,
+          command: ["node", "dist/cli/render-once.js"],
+          environment: [
+            {
+              name: "ARTIFACT_BUCKET",
+              value: artifactBucket.bucketName
+            },
+            {
+              name: "RENDER_INPUT_KEY",
+              value: sfn.JsonPath.stringAt("$.prepareRender.Payload.renderInputKey")
+            },
+            {
+              name: "OUTPUT_PDF_KEY",
+              value: sfn.JsonPath.stringAt("$.prepareRender.Payload.outputPdfKey")
+            }
+          ]
+        }
+      ],
+      resultPath: "$.renderTask"
+    });
+
     const finalizeTask = new sfnTasks.LambdaInvoke(this, "FinalizeBook", {
       lambdaFunction: finalizeFunction,
       payload: sfn.TaskInput.fromObject({
         bookId: sfn.JsonPath.stringAt("$.bookId"),
         outputPdfKey: sfn.JsonPath.stringAt("$.prepareRender.Payload.outputPdfKey")
+      }),
+      resultPath: "$.finalize"
+    });
+
+    const finalizePreparedRenderResumeTask = new sfnTasks.LambdaInvoke(this, "FinalizeBookPreparedRenderResume", {
+      lambdaFunction: finalizeFunction,
+      payload: sfn.TaskInput.fromObject({
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        outputPdfKey: sfn.JsonPath.stringAt("$.prepareRender.Payload.outputPdfKey")
+      }),
+      resultPath: "$.finalize"
+    });
+
+    const resumeFinalizeTask = new sfnTasks.LambdaInvoke(this, "FinalizeBookResume", {
+      lambdaFunction: finalizeFunction,
+      payload: sfn.TaskInput.fromObject({
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        outputPdfKey: sfn.JsonPath.format("books/{}/render/book.pdf", sfn.JsonPath.stringAt("$.bookId"))
       }),
       resultPath: "$.finalize"
     });
@@ -661,11 +782,28 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       .when(sfn.Condition.numberGreaterThan("$.imageStatus.Payload.failed", 0), imageFailure)
       .otherwise(pollWait.next(waitForImagesRetryTask).next(imageDoneChoice));
 
-    const definition = prepareStoryTask
-      .next(generateCharacterSheetTask)
-      .next(enqueueImagesTask)
-      .next(waitForImagesTask)
-      .next(imageDoneChoice);
+    const resumeChoice = new sfn.Choice(this, "ResumeOrBuild");
+    resumeChoice
+      .when(
+        sfn.Condition.stringEquals("$.resumeStage", "text_moderation"),
+        generateCharacterSheetResumeTask.next(enqueueImagesResumeTask).next(waitForImagesResumeTask).next(imageDoneChoice)
+      )
+      .when(
+        sfn.Condition.stringEquals("$.resumeStage", "retry_page"),
+        enqueueSinglePageImageTask.next(waitForRetryPageImagesTask).next(imageDoneChoice)
+      )
+      .when(
+        sfn.Condition.stringEquals("$.resumeStage", "prepare_render"),
+        prepareRenderInputResumeTask.next(renderPdfResumeTask).next(finalizePreparedRenderResumeTask)
+      )
+      .when(sfn.Condition.stringEquals("$.resumeStage", "finalize_gate"), resumeFinalizeTask)
+      .otherwise(
+        prepareStoryTask
+          .next(generateCharacterSheetTask)
+          .next(enqueueImagesTask)
+          .next(waitForImagesTask)
+          .next(imageDoneChoice)
+      );
 
     const logGroup = new logs.LogGroup(this, "StateMachineLogs", {
       retention: logs.RetentionDays.ONE_MONTH,
@@ -673,7 +811,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
 
     const stateMachine = new sfn.StateMachine(this, "BookBuildStateMachine", {
-      definitionBody: sfn.DefinitionBody.fromChainable(definition),
+      definitionBody: sfn.DefinitionBody.fromChainable(resumeChoice),
       timeout: cdk.Duration.minutes(45),
       logs: {
         destination: logGroup,
@@ -694,7 +832,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const migrationsCustomResource = new cdk.CustomResource(this, "RunMigrations", {
       serviceToken: migrationsProvider.serviceToken,
       properties: {
-        MigrationVersion: "migrations-v2"
+        MigrationVersion: "migrations-v3"
       }
     });
     migrationsCustomResource.node.addDependency(cluster);
@@ -730,7 +868,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       ENABLE_MOCK_IMAGE: process.env.ENABLE_MOCK_IMAGE ?? "false",
       ENABLE_MOCK_CHECKOUT: process.env.ENABLE_MOCK_CHECKOUT ?? "false",
       ENABLE_PICTURE_BOOK_PIPELINE: process.env.ENABLE_PICTURE_BOOK_PIPELINE ?? "false",
-      ENABLE_INDEPENDENT_8_TO_10: process.env.ENABLE_INDEPENDENT_8_TO_10 ?? "false"
+      ENABLE_INDEPENDENT_8_TO_10: process.env.ENABLE_INDEPENDENT_8_TO_10 ?? "false",
+      REVIEWER_EMAIL_ALLOWLIST: process.env.REVIEWER_EMAIL_ALLOWLIST ?? ""
     };
 
     // CloudFormation does not support SecureString for AWS::SSM::Parameter.

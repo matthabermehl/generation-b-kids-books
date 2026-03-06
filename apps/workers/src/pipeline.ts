@@ -8,6 +8,7 @@ import {
   type PageCompositionSpec,
   type PageTemplateId,
   type PictureBookReadingProfile,
+  type ReviewStage,
   type ReadingProfile
 } from "@book/domain";
 import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
@@ -17,14 +18,22 @@ import { moderateTexts } from "./lib/content-safety.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { selectPictureBookComposition } from "./lib/page-template-select.js";
 import { ensurePictureBookStyleReferenceUrls } from "./lib/style-assets.js";
+import { insertCurrentBookArtifact, insertCurrentImageRecord } from "./lib/records.js";
+import { upsertOpenReviewCase } from "./lib/review-cases.js";
 import { resolveImageProvider } from "./providers/image.js";
 import { BeatPlanningError, resolveLlmProvider } from "./providers/llm.js";
 
 const sqs = new SQSClient({});
 
 interface PipelineEvent {
-  action: "prepare_story" | "generate_character_sheet" | "enqueue_page_images" | "prepare_render_input";
+  action:
+    | "prepare_story"
+    | "generate_character_sheet"
+    | "enqueue_page_images"
+    | "enqueue_page_image"
+    | "prepare_render_input";
   bookId: string;
+  pageId?: string;
   orderId?: string;
   mockRunTag?: string | null;
 }
@@ -80,7 +89,7 @@ function isPictureBookReadingProfile(profile: ReadingProfile): profile is Pictur
 async function markBookNeedsReview(
   bookId: string,
   orderId: string,
-  stage: string,
+  stage: ReviewStage,
   notes: string[],
   score: Record<string, unknown> = {}
 ): Promise<void> {
@@ -92,6 +101,17 @@ async function markBookNeedsReview(
     `,
     [{ name: "bookId", value: { stringValue: bookId } }]
   );
+
+  await upsertOpenReviewCase({
+    bookId,
+    orderId,
+    stage,
+    reasonSummary: notes[0] ?? `Manual review required at ${stage}`,
+    reasonJson: {
+      notes,
+      score
+    }
+  });
 
   await execute(
     `
@@ -140,18 +160,11 @@ async function persistBeatPlanningFailure(
     llmMeta: error.meta,
     generatedAt: new Date().toISOString()
   });
-
-  await execute(
-    `
-      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
-      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan_failed', :s3)
-    `,
-    [
-      { name: "id", value: { stringValue: makeId() } },
-      { name: "bookId", value: { stringValue: bookId } },
-      { name: "s3", value: { stringValue: `s3://${process.env.ARTIFACT_BUCKET}/${artifactKey}` } }
-    ]
-  );
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "beat_plan_failed",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${artifactKey}`
+  });
 
   await execute(
     `
@@ -211,18 +224,11 @@ async function persistBeatPlanningReport(
     llmMeta: beatPlanning.meta,
     generatedAt: new Date().toISOString()
   });
-
-  await execute(
-    `
-      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
-      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan_report', :s3)
-    `,
-    [
-      { name: "id", value: { stringValue: makeId() } },
-      { name: "bookId", value: { stringValue: bookId } },
-      { name: "s3", value: { stringValue: `s3://${process.env.ARTIFACT_BUCKET}/${artifactKey}` } }
-    ]
-  );
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "beat_plan_report",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${artifactKey}`
+  });
 
   return { artifactKey };
 }
@@ -361,17 +367,11 @@ async function prepareStory(
     generatedAt: new Date().toISOString()
   });
 
-  await execute(
-    `
-      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
-      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan', :s3)
-    `,
-    [
-      { name: "id", value: { stringValue: makeId() } },
-      { name: "bookId", value: { stringValue: bookId } },
-      { name: "s3", value: { stringValue: `s3://${process.env.ARTIFACT_BUCKET}/${beatPlanKey}` } }
-    ]
-  );
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "beat_plan",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${beatPlanKey}`
+  });
 
   const beatPlanReport = await persistBeatPlanningReport(bookId, beatPlanning);
 
@@ -498,17 +498,11 @@ async function prepareStory(
 
   await putJson(storyKey, story);
 
-  await execute(
-    `
-      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
-      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'prompt_pack', :s3)
-    `,
-    [
-      { name: "id", value: { stringValue: makeId() } },
-      { name: "bookId", value: { stringValue: bookId } },
-      { name: "s3", value: { stringValue: `s3://${process.env.ARTIFACT_BUCKET}/${promptKey}` } }
-    ]
-  );
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "prompt_pack",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${promptKey}`
+  });
 
   return { bookId, pageCount: story.pages.length };
 }
@@ -537,36 +531,20 @@ async function generateCharacterSheet(
   const key = `books/${bookId}/images/character-sheet.${extension}`;
   const s3Url = await putBuffer(key, image.bytes, image.contentType);
 
-  await execute(
-    `
-      INSERT INTO images (
-        id, book_id, role, model_endpoint, prompt, seed, loras_json, input_assets_json, fal_request_id, width, height, s3_url, qa_json, status
-      ) VALUES (
-        CAST(:id AS uuid), CAST(:bookId AS uuid), 'character_sheet', :endpoint, :prompt, :seed, CAST(:loras AS jsonb), '{}'::jsonb, :requestId, :width, :height, :s3, CAST(:qa AS jsonb), 'ready'
-      )
-    `,
-    [
-      { name: "id", value: { stringValue: makeId() } },
-      { name: "bookId", value: { stringValue: bookId } },
-      { name: "endpoint", value: { stringValue: image.endpoint } },
-      {
-        name: "prompt",
-        value: {
-          stringValue: `Character sheet for ${context.child_first_name}. Keep outfit colors, hair, and proportions consistent.`
-        }
-      },
-      { name: "seed", value: { longValue: image.seed } },
-      {
-        name: "loras",
-        value: { stringValue: JSON.stringify({ styleLora: runtimeConfig.falStyleLoraUrl ?? null }) }
-      },
-      { name: "requestId", value: { stringValue: image.requestId ?? "" } },
-      { name: "width", value: { longValue: image.width ?? 1536 } },
-      { name: "height", value: { longValue: image.height ?? 1024 } },
-      { name: "s3", value: { stringValue: s3Url } },
-      { name: "qa", value: { stringValue: JSON.stringify(image.qa) } }
-    ]
-  );
+  await insertCurrentImageRecord({
+    bookId,
+    role: "character_sheet",
+    endpoint: image.endpoint,
+    prompt: `Character sheet for ${context.child_first_name}. Keep outfit colors, hair, and proportions consistent.`,
+    seed: image.seed,
+    requestId: image.requestId,
+    width: image.width ?? 1536,
+    height: image.height ?? 1024,
+    s3Url,
+    qaJson: image.qa,
+    status: "ready",
+    inputAssets: { styleLora: runtimeConfig.falStyleLoraUrl ?? null }
+  });
 
   return { bookId, key };
 }
@@ -603,7 +581,8 @@ function scenePrompt(sceneBrief: string): string {
 
 async function enqueuePageImages(
   bookId: string,
-  mockRunTag?: string | null
+  mockRunTag?: string | null,
+  onlyPageId?: string
 ): Promise<{ queued: number; productFamily: BookProductFamily }> {
   const queueUrl = process.env.IMAGE_QUEUE_URL;
   if (!queueUrl) {
@@ -621,7 +600,7 @@ async function enqueuePageImages(
     `
       SELECT prompt, s3_url
       FROM images
-      WHERE book_id = CAST(:bookId AS uuid) AND role = 'character_sheet'
+      WHERE book_id = CAST(:bookId AS uuid) AND role = 'character_sheet' AND is_current = TRUE
       ORDER BY created_at DESC
       LIMIT 1
     `,
@@ -637,9 +616,13 @@ async function enqueuePageImages(
       SELECT id, page_index, text, illustration_brief_json, composition_json
       FROM pages
       WHERE book_id = CAST(:bookId AS uuid)
+        ${onlyPageId ? "AND id = CAST(:pageId AS uuid)" : ""}
       ORDER BY page_index
     `,
-    [{ name: "bookId", value: { stringValue: bookId } }]
+    [
+      { name: "bookId", value: { stringValue: bookId } },
+      ...(onlyPageId ? [{ name: "pageId", value: { stringValue: onlyPageId } }] : [])
+    ]
   );
 
   const styleReferences = usePictureBookPipeline ? await ensurePictureBookStyleReferenceUrls() : null;
@@ -737,48 +720,20 @@ interface PageWithImageStatus {
 }
 
 async function upsertPagePreviewRecord(bookId: string, pageId: string, pageIndex: number, previewS3Url: string): Promise<void> {
-  const existing = await query<{ id: string }>(
-    `SELECT id::text AS id FROM images WHERE page_id = CAST(:pageId AS uuid) AND role = 'page_preview' LIMIT 1`,
-    [{ name: "pageId", value: { stringValue: pageId } }]
-  );
-
-  if (existing[0]) {
-    await execute(
-      `
-        UPDATE images
-        SET model_endpoint = 'renderer-preview',
-            prompt = 'fixed layout page preview',
-            seed = 0,
-            width = 2048,
-            height = 2048,
-            s3_url = :s3,
-            qa_json = '{}'::jsonb,
-            status = 'pending'
-        WHERE id = CAST(:id AS uuid)
-      `,
-      [
-        { name: "s3", value: { stringValue: previewS3Url } },
-        { name: "id", value: { stringValue: existing[0].id } }
-      ]
-    );
-    return;
-  }
-
-  await execute(
-    `
-      INSERT INTO images (
-        id, book_id, page_id, role, model_endpoint, prompt, seed, input_assets_json, width, height, s3_url, qa_json, status
-      ) VALUES (
-        CAST(:id AS uuid), CAST(:bookId AS uuid), CAST(:pageId AS uuid), 'page_preview', 'renderer-preview', 'fixed layout page preview', 0, '{}'::jsonb, 2048, 2048, :s3, '{}'::jsonb, 'pending'
-      )
-    `,
-    [
-      { name: "id", value: { stringValue: makeId() } },
-      { name: "bookId", value: { stringValue: bookId } },
-      { name: "pageId", value: { stringValue: pageId } },
-      { name: "s3", value: { stringValue: previewS3Url } }
-    ]
-  );
+  await insertCurrentImageRecord({
+    bookId,
+    pageId,
+    role: "page_preview",
+    endpoint: "renderer-preview",
+    prompt: `fixed layout page preview ${pageIndex + 1}`,
+    seed: 0,
+    width: 2048,
+    height: 2048,
+    s3Url: previewS3Url,
+    qaJson: {},
+    status: "pending",
+    inputAssets: { pageIndex }
+  });
 }
 
 async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: string; outputPdfKey: string }> {
@@ -794,7 +749,7 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
     `
       SELECT p.id, p.page_index, i.status as image_status
       FROM pages p
-      LEFT JOIN images i ON i.page_id = p.id AND i.role = :role
+      LEFT JOIN images i ON i.page_id = p.id AND i.role = :role AND i.is_current = TRUE
       WHERE p.book_id = CAST(:bookId AS uuid)
       ORDER BY p.page_index
     `,
@@ -814,7 +769,7 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
       SELECT
         COUNT(*) FILTER (WHERE COALESCE(qa_json::text, '') ILIKE '%safety_flagged_prompt:%')::int AS safety_flags
       FROM images
-      WHERE book_id = CAST(:bookId AS uuid) AND role = :role
+      WHERE book_id = CAST(:bookId AS uuid) AND role = :role AND is_current = TRUE
     `,
     [
       { name: "bookId", value: { stringValue: bookId } },
@@ -838,7 +793,7 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
       `
         SELECT p.page_index, p.text, i.s3_url AS image_url
         FROM pages p
-        INNER JOIN images i ON i.page_id = p.id AND i.role = 'page'
+        INNER JOIN images i ON i.page_id = p.id AND i.role = 'page' AND i.is_current = TRUE
         WHERE p.book_id = CAST(:bookId AS uuid)
         ORDER BY p.page_index
       `,
@@ -871,7 +826,7 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
     `
       SELECT p.id::text AS page_id, p.page_index, p.text, p.composition_json::text AS composition_json, i.s3_url AS image_url
       FROM pages p
-      INNER JOIN images i ON i.page_id = p.id AND i.role = 'page_fill'
+      INNER JOIN images i ON i.page_id = p.id AND i.role = 'page_fill' AND i.is_current = TRUE
       WHERE p.book_id = CAST(:bookId AS uuid)
       ORDER BY p.page_index
     `,
@@ -951,6 +906,11 @@ export const handler: Handler<PipelineEvent> = async (event) => {
       return generateCharacterSheet(event.bookId, event.mockRunTag);
     case "enqueue_page_images":
       return enqueuePageImages(event.bookId, event.mockRunTag);
+    case "enqueue_page_image":
+      if (!event.pageId) {
+        throw new Error("pageId is required for enqueue_page_image");
+      }
+      return enqueuePageImages(event.bookId, event.mockRunTag, event.pageId);
     case "prepare_render_input":
       return prepareRenderInput(event.bookId);
     default:

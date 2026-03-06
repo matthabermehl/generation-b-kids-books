@@ -18,6 +18,7 @@ export interface RuntimeConfig {
   sendgridFromEmail: string;
   authLinkTtlMinutes: number;
   webBaseUrl: string;
+  reviewerEmailAllowlist: string[];
   models: {
     openaiJson: string;
     openaiVision: string;
@@ -60,6 +61,7 @@ const runtimeConfigSchema = z.object({
   sendgridFromEmail: z.string().email(),
   authLinkTtlMinutes: z.number().int().positive(),
   webBaseUrl: z.string().url(),
+  reviewerEmailAllowlist: z.array(z.string().email()),
   models: z.object({
     openaiJson: z.string().min(1),
     openaiVision: z.string().min(1),
@@ -168,6 +170,10 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
     sendgridFromEmail: requiredParam(byName, "sendgrid_from_email"),
     authLinkTtlMinutes: Number(byName.auth_link_ttl_minutes ?? operational.AUTH_LINK_TTL_MINUTES),
     webBaseUrl: byName.web_base_url ?? operational.WEB_BASE_URL,
+    reviewerEmailAllowlist: (byName.reviewer_email_allowlist ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
     models: {
       openaiJson: byName.openai_model_json ?? "gpt-5-mini-2025-08-07",
       openaiVision: byName.openai_model_vision ?? "gpt-5-mini-2025-08-07",

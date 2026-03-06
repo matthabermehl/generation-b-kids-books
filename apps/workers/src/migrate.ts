@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS book_artifacts (
   artifact_type TEXT NOT NULL,
   s3_url TEXT NOT NULL,
   sha256 TEXT,
+  is_current BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -105,7 +106,32 @@ CREATE TABLE IF NOT EXISTS images (
   height INTEGER,
   s3_url TEXT,
   qa_json JSONB,
+  is_current BOOLEAN NOT NULL DEFAULT TRUE,
   status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS review_cases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  reason_summary TEXT NOT NULL,
+  reason_json JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS review_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  review_case_id UUID NOT NULL REFERENCES review_cases(id) ON DELETE CASCADE,
+  book_id UUID NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  page_id UUID REFERENCES pages(id) ON DELETE SET NULL,
+  reviewer_email TEXT NOT NULL,
+  action TEXT NOT NULL,
+  notes TEXT,
+  metadata_json JSONB NOT NULL DEFAULT '{}'::JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -141,7 +167,14 @@ ALTER TABLE pages
 ALTER TABLE images
   ADD COLUMN IF NOT EXISTS parent_image_id UUID REFERENCES images(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS input_assets_json JSONB NOT NULL DEFAULT '{}'::JSONB,
-  ADD COLUMN IF NOT EXISTS mask_s3_url TEXT;
+  ADD COLUMN IF NOT EXISTS mask_s3_url TEXT,
+  ADD COLUMN IF NOT EXISTS is_current BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE book_artifacts
+  ADD COLUMN IF NOT EXISTS is_current BOOLEAN NOT NULL DEFAULT TRUE;
+
+UPDATE images SET is_current = TRUE WHERE is_current IS NULL;
+UPDATE book_artifacts SET is_current = TRUE WHERE is_current IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_order ON payment_sessions(order_id);
@@ -150,6 +183,12 @@ CREATE INDEX IF NOT EXISTS idx_books_order ON books(order_id);
 CREATE INDEX IF NOT EXISTS idx_pages_book ON pages(book_id);
 CREATE INDEX IF NOT EXISTS idx_images_book ON images(book_id);
 CREATE INDEX IF NOT EXISTS idx_images_page ON images(page_id);
+CREATE INDEX IF NOT EXISTS idx_images_page_role_current ON images(page_id, role, is_current);
+CREATE INDEX IF NOT EXISTS idx_book_artifacts_book_type_current ON book_artifacts(book_id, artifact_type, is_current);
+CREATE INDEX IF NOT EXISTS idx_review_cases_book ON review_cases(book_id);
+CREATE INDEX IF NOT EXISTS idx_review_cases_status ON review_cases(status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_review_cases_book_active ON review_cases(book_id) WHERE status IN ('open', 'retrying');
+CREATE INDEX IF NOT EXISTS idx_review_events_case ON review_events(review_case_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_privacy_events_user ON privacy_events(user_id);
 `;
 
@@ -175,7 +214,7 @@ export const handler: Handler<CloudFormationCustomResourceEvent, { PhysicalResou
   }
 
   return {
-    PhysicalResourceId: "migrations-v2",
+    PhysicalResourceId: "migrations-v3",
     Data: {
       statementCount: statements.length
     }

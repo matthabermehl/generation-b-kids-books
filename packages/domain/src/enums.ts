@@ -54,3 +54,12 @@ export type PageStatus = (typeof pageStatuses)[number];
 
 export const imageStatuses = ["pending", "generated", "qa_failed", "ready", "failed"] as const;
 export type ImageStatus = (typeof imageStatuses)[number];
+
+export const reviewStages = ["text_moderation", "image_safety", "image_qa", "finalize_gate"] as const;
+export type ReviewStage = (typeof reviewStages)[number];
+
+export const reviewCaseStatuses = ["open", "resolved", "rejected", "retrying"] as const;
+export type ReviewCaseStatus = (typeof reviewCaseStatuses)[number];
+
+export const reviewActions = ["approve_continue", "reject", "retry_page"] as const;
+export type ReviewAction = (typeof reviewActions)[number];

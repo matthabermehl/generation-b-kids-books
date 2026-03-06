@@ -3,11 +3,17 @@ import { openApiSpec } from "../src/openapi/spec.js";
 
 describe("openapi spec", () => {
   it("contains required endpoints", () => {
+    expect(openApiSpec.paths["/v1/session"]).toBeDefined();
     expect(openApiSpec.paths["/v1/orders"]).toBeDefined();
     expect(openApiSpec.paths["/v1/books/{bookId}"]).toBeDefined();
     expect(openApiSpec.paths["/v1/orders/{orderId}/checkout"]).toBeDefined();
     expect(openApiSpec.paths["/v1/webhooks/stripe"]).toBeDefined();
     expect(openApiSpec.paths["/v1/child-profiles/{childProfileId}"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/review/cases"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/review/cases/{caseId}"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/review/cases/{caseId}/approve"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/review/cases/{caseId}/reject"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/review/cases/{caseId}/pages/{pageId}/retry"]).toBeDefined();
   });
 
   it("documents idempotency requirement on POST routes", () => {
@@ -29,5 +35,12 @@ describe("openapi spec", () => {
     const headerNames = parameters.map((parameter) => parameter.name);
     expect(headerNames).toContain("Idempotency-Key");
     expect(headerNames).toContain("X-Mock-Run-Tag");
+  });
+
+  it("documents reviewer session and case schemas", () => {
+    expect(openApiSpec.components.schemas.SessionResponse).toBeDefined();
+    expect(openApiSpec.components.schemas.ReviewQueueResponse).toBeDefined();
+    expect(openApiSpec.components.schemas.ReviewCaseDetailResponse).toBeDefined();
+    expect(openApiSpec.components.schemas.ReviewActionResponse).toBeDefined();
   });
 });

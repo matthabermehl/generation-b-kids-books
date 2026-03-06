@@ -170,11 +170,18 @@ describe("pipeline beat-planning failure persistence", () => {
       })
     );
 
-    const artifactInsert = executeMock.mock.calls.find((call) =>
-      String(call[0]).includes("INSERT INTO book_artifacts")
+    const artifactInsert = txExecuteMock.mock.calls.find((call) =>
+      String(call[1]).includes("INSERT INTO book_artifacts")
     );
     expect(artifactInsert).toBeDefined();
-    expect(String(artifactInsert?.[0])).toContain("beat_plan_failed");
+    expect(artifactInsert?.[2]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "artifactType",
+          value: { stringValue: "beat_plan_failed" }
+        })
+      ])
+    );
 
     const evaluationInsert = executeMock.mock.calls.find((call) =>
       String(call[0]).includes("INSERT INTO evaluations")
@@ -261,8 +268,18 @@ describe("pipeline beat-planning failure persistence", () => {
       })
     );
 
-    const artifactInsert = executeMock.mock.calls.find((call) =>
-      String(call[0]).includes("INSERT INTO book_artifacts") && String(call[0]).includes("beat_plan_report")
+    const artifactInsert = txExecuteMock.mock.calls.find((call) =>
+      String(call[1]).includes("INSERT INTO book_artifacts") &&
+      Array.isArray(call[2]) &&
+      call[2].some(
+        (parameter) =>
+          parameter &&
+          typeof parameter === "object" &&
+          "name" in parameter &&
+          parameter.name === "artifactType" &&
+          "value" in parameter &&
+          parameter.value?.stringValue === "beat_plan_report"
+      )
     );
     expect(artifactInsert).toBeDefined();
 

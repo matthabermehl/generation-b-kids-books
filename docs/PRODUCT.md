@@ -7,7 +7,7 @@ Generate personalized, visually polished children's books that teach money conce
 - Primary users:
   - Parents ordering personalized books for children aged `3-7`
 - Secondary users:
-  - Internal operators validating flagged books
+  - Internal operators adjudicating `needs_review` books
   - Future digital storefront/export consumers
 
 ## User Outcomes
@@ -21,6 +21,14 @@ Generate personalized, visually polished children's books that teach money conce
 - `picture_book_fixed_layout` pipeline for `read_aloud_3_4` and `early_decoder_5_7`
 - Layered page model with deterministic template selection
 - Live-text PDF output and preview PNG reader assets
+- Unified web app with:
+  - parent ordering/reader flow
+  - internal reviewer queue and case detail console
+- Manual review actions:
+  - approve and continue build
+  - reject book
+  - retry individual image pages
+- Review audit trail and deterministic current-asset selection across retries
 
 ### Out of scope
 - `independent_8_10` chapter-book implementation
@@ -29,6 +37,13 @@ Generate personalized, visually polished children's books that teach money conce
 
 ## Acceptance Sources
 Primary behavioral acceptance criteria must live in `.agent/feature_list.json`.
+
+## Reviewer Product Rules
+- Reviewer UI is internal-only and gated by an allowlisted email.
+- Parents never see reviewer notes or internal QA details.
+- `needs_review` means the book is paused for operator adjudication, not automatically failed.
+- `approve` resumes the build; it does not skip release gating.
+- `retry page` is limited to image-stage review in this phase.
 
 <!-- HARNESS-INFERRED:START -->
 ## Inferred Snapshot
