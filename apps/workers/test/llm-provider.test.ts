@@ -39,8 +39,8 @@ describe("llm provider routing", () => {
         stripeWebhookSecret: "whsec_123"
       },
       models: {
-        openaiJson: "gpt-4.1-mini",
-        openaiVision: "gpt-4.1-mini",
+        openaiJson: "gpt-5-mini-2025-08-07",
+        openaiVision: "gpt-5-mini-2025-08-07",
         anthropicWriter: "claude-sonnet-4-5"
       },
       stripe: {
@@ -51,13 +51,17 @@ describe("llm provider routing", () => {
       falEndpoints: {
         base: "fal-ai/flux-2",
         lora: "fal-ai/flux-lora",
-        general: "fal-ai/flux-general"
+        general: "fal-ai/flux-general",
+        scenePlate: "fal-ai/flux-pro/kontext/max/multi",
+        pageFill: "fal-ai/flux-pro/v1/fill"
       },
       falStyleLoraUrl: null,
       featureFlags: {
         enableMockLlm: false,
         enableMockImage: false,
-        enableMockCheckout: false
+        enableMockCheckout: false,
+        enablePictureBookPipeline: false,
+        enableIndependent8To10: false
       },
       sendgridFromEmail: "noreply@example.com",
       webBaseUrl: "https://example.com"
@@ -111,8 +115,8 @@ describe("llm provider routing", () => {
         stripeWebhookSecret: "whsec_123"
       },
       models: {
-        openaiJson: "gpt-4.1-mini",
-        openaiVision: "gpt-4.1-mini",
+        openaiJson: "gpt-5-mini-2025-08-07",
+        openaiVision: "gpt-5-mini-2025-08-07",
         anthropicWriter: "claude-sonnet-4-5"
       },
       stripe: {
@@ -123,13 +127,17 @@ describe("llm provider routing", () => {
       falEndpoints: {
         base: "fal-ai/flux-2",
         lora: "fal-ai/flux-lora",
-        general: "fal-ai/flux-general"
+        general: "fal-ai/flux-general",
+        scenePlate: "fal-ai/flux-pro/kontext/max/multi",
+        pageFill: "fal-ai/flux-pro/v1/fill"
       },
       falStyleLoraUrl: null,
       featureFlags: {
         enableMockLlm: true,
         enableMockImage: false,
-        enableMockCheckout: false
+        enableMockCheckout: false,
+        enablePictureBookPipeline: false,
+        enableIndependent8To10: false
       },
       sendgridFromEmail: "noreply@example.com",
       webBaseUrl: "https://example.com"

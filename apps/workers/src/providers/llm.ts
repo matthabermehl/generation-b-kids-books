@@ -103,8 +103,8 @@ function estimateCostUsd(
   completionTokens: number
 ): number {
   if (provider === "openai") {
-    // gpt-4.1-mini indicative pricing per 1M tokens.
-    return (promptTokens * 0.4 + completionTokens * 1.6) / 1_000_000;
+    // gpt-5-mini indicative pricing per 1M tokens.
+    return (promptTokens * 0.25 + completionTokens * 2) / 1_000_000;
   }
 
   // claude-sonnet indicative pricing per 1M tokens.

@@ -212,6 +212,12 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       ORDER_STUCK_MINUTES: process.env.ORDER_STUCK_MINUTES ?? "45"
     };
 
+    const workerBundlingWithSharp = {
+      externalModules: ["aws-sdk", "sharp"],
+      nodeModules: ["sharp"],
+      forceDockerBundling: true
+    };
+
     const apiFunction = new lambdaNode.NodejsFunction(this, "ApiFunction", {
       runtime: lambda.Runtime.NODEJS_22_X,
       timeout: cdk.Duration.seconds(29),
@@ -242,9 +248,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
         ...commonFunctionEnv,
         IMAGE_QUEUE_URL: imageQueue.queueUrl
       },
-      bundling: {
-        externalModules: ["aws-sdk"]
-      },
+      bundling: workerBundlingWithSharp,
       vpc,
       securityGroups: [lambdaSecurityGroup]
     });
@@ -259,9 +263,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       environment: {
         ...commonFunctionEnv
       },
-      bundling: {
-        externalModules: ["aws-sdk"]
-      },
+      bundling: workerBundlingWithSharp,
       vpc,
       securityGroups: [lambdaSecurityGroup],
       reservedConcurrentExecutions: 20
@@ -277,9 +279,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       environment: {
         ...commonFunctionEnv
       },
-      bundling: {
-        externalModules: ["aws-sdk"]
-      },
+      bundling: workerBundlingWithSharp,
       vpc,
       securityGroups: [lambdaSecurityGroup]
     });
@@ -690,7 +690,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const migrationsCustomResource = new cdk.CustomResource(this, "RunMigrations", {
       serviceToken: migrationsProvider.serviceToken,
       properties: {
-        MigrationVersion: "v3"
+        MigrationVersion: "migrations-v2"
       }
     });
     migrationsCustomResource.node.addDependency(cluster);
@@ -709,12 +709,14 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL ?? "noreply@example.com",
       AUTH_LINK_TTL_MINUTES: process.env.AUTH_LINK_TTL_MINUTES ?? "15",
       WEB_BASE_URL: process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`,
-      OPENAI_MODEL_JSON: process.env.OPENAI_MODEL_JSON ?? "gpt-4.1-mini",
-      OPENAI_MODEL_VISION: process.env.OPENAI_MODEL_VISION ?? "gpt-4.1-mini",
+      OPENAI_MODEL_JSON: process.env.OPENAI_MODEL_JSON ?? "gpt-5-mini-2025-08-07",
+      OPENAI_MODEL_VISION: process.env.OPENAI_MODEL_VISION ?? "gpt-5-mini-2025-08-07",
       ANTHROPIC_MODEL_WRITER: process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-4-5",
       FAL_ENDPOINT_BASE: process.env.FAL_ENDPOINT_BASE ?? "fal-ai/flux-2",
       FAL_ENDPOINT_LORA: process.env.FAL_ENDPOINT_LORA ?? "fal-ai/flux-lora",
       FAL_ENDPOINT_GENERAL: process.env.FAL_ENDPOINT_GENERAL ?? "fal-ai/flux-general",
+      FAL_ENDPOINT_SCENE_PLATE: process.env.FAL_ENDPOINT_SCENE_PLATE ?? "fal-ai/flux-pro/kontext/max/multi",
+      FAL_ENDPOINT_PAGE_FILL: process.env.FAL_ENDPOINT_PAGE_FILL ?? "fal-ai/flux-pro/v1/fill",
       STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID ?? "price_SET_ME",
       STRIPE_SUCCESS_URL:
         process.env.STRIPE_SUCCESS_URL ?? `https://${distribution.distributionDomainName}/?checkout=success`,
@@ -722,7 +724,9 @@ export class AiChildrensBookDevStack extends cdk.Stack {
         process.env.STRIPE_CANCEL_URL ?? `https://${distribution.distributionDomainName}/?checkout=cancel`,
       ENABLE_MOCK_LLM: process.env.ENABLE_MOCK_LLM ?? "false",
       ENABLE_MOCK_IMAGE: process.env.ENABLE_MOCK_IMAGE ?? "false",
-      ENABLE_MOCK_CHECKOUT: process.env.ENABLE_MOCK_CHECKOUT ?? "false"
+      ENABLE_MOCK_CHECKOUT: process.env.ENABLE_MOCK_CHECKOUT ?? "false",
+      ENABLE_PICTURE_BOOK_PIPELINE: process.env.ENABLE_PICTURE_BOOK_PIPELINE ?? "false",
+      ENABLE_INDEPENDENT_8_TO_10: process.env.ENABLE_INDEPENDENT_8_TO_10 ?? "false"
     };
 
     // CloudFormation does not support SecureString for AWS::SSM::Parameter.

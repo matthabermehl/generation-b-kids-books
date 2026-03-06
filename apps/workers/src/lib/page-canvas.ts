@@ -67,7 +67,16 @@ function fadeMaskSvg(composition: PageCompositionSpec): string {
 
 export async function createFadedArtBackground(artBytes: Buffer, composition: PageCompositionSpec): Promise<Buffer> {
   const mask = await sharp(Buffer.from(fadeMaskSvg(composition))).png().toBuffer();
-  const masked = await sharp(artBytes).ensureAlpha().composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
+  const normalizedArt = await sharp(artBytes)
+    .resize({
+      width: composition.canvas.width,
+      height: composition.canvas.height,
+      fit: "cover"
+    })
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+  const masked = await sharp(normalizedArt).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
 
   return sharp({
     create: {

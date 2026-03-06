@@ -153,8 +153,8 @@ async function loadRuntimeConfigFromSsm(): Promise<RuntimeConfig> {
       stripeWebhookSecret: requiredParam(byName, "stripe_webhook_secret")
     },
     models: {
-      openaiJson: byName.openai_model_json ?? "gpt-4.1-mini",
-      openaiVision: byName.openai_model_vision ?? "gpt-4.1-mini",
+      openaiJson: byName.openai_model_json ?? "gpt-5-mini-2025-08-07",
+      openaiVision: byName.openai_model_vision ?? "gpt-5-mini-2025-08-07",
       anthropicWriter: byName.anthropic_model_writer ?? "claude-sonnet-4-5"
     },
     stripe: {

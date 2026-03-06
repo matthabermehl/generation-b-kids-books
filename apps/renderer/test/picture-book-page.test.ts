@@ -38,6 +38,24 @@ describe("picture book renderer", () => {
     expect(rendered.textFit.ok).toBe(true);
   });
 
+  it("renders a preview when the art input is smaller than the page canvas", async () => {
+    const art = await sharp({
+      create: { width: 1024, height: 1024, channels: 4, background: { r: 160, g: 190, b: 220, alpha: 1 } }
+    })
+      .png()
+      .toBuffer();
+
+    const rendered = await renderPictureBookPreview({
+      artBytes: art,
+      text: "Mia waits patiently while the seeds begin to grow.",
+      composition
+    });
+
+    expect(rendered.previewPng.length).toBeGreaterThan(0);
+    expect(rendered.artBackgroundPng.length).toBeGreaterThan(0);
+    expect(rendered.textFit.ok).toBe(true);
+  });
+
   it("reports overflow for extremely long text", () => {
     const fit = fitTextToBox("word ".repeat(400), composition);
     expect(fit.ok).toBe(false);

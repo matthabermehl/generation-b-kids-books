@@ -20,8 +20,8 @@ function runtimeConfig(overrides?: Record<string, unknown>) {
       stripeWebhookSecret: "whsec_123"
     },
     models: {
-      openaiJson: "gpt-4.1-mini",
-      openaiVision: "gpt-4.1-mini",
+      openaiJson: "gpt-5-mini-2025-08-07",
+      openaiVision: "gpt-5-mini-2025-08-07",
       anthropicWriter: "claude-sonnet-4-5"
     },
     stripe: {
@@ -111,6 +111,122 @@ describe("image provider", () => {
     expect(image.bytes.length).toBeGreaterThan(0);
     expect(image.qa.passed).toBe(true);
     expect(image.endpoint).toBe("fal-ai/flux-general");
+  });
+
+  it("uses fal returned status and response urls for queue subpaths", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            request_id: "req-kontext",
+            status_url: "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext/status",
+            response_url: "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "COMPLETED" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            images: [{ url: "https://cdn.example.com/kontext.png", width: 2048, height: 2048 }]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { scenePlateProvider } = await resolvePictureBookImageProviders();
+    await scenePlateProvider.generateScenePlate(
+      {
+        bookId: "book-kontext",
+        pageIndex: 0,
+        prompt: "Watercolor reading scene.",
+        referenceImageUrls: ["https://example.com/character.png", "https://example.com/style.png"]
+      },
+      1
+    );
+
+    expect(String(fetchMock.mock.calls[1]?.[0] ?? "")).toBe(
+      "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext/status"
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0] ?? "")).toBe(
+      "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext"
+    );
+  });
+
+  it("falls back to queue model id for status and result urls when fal omits them", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ request_id: "req-fill" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "COMPLETED" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            images: [{ url: "https://cdn.example.com/fill.png", width: 2048, height: 2048 }]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { pageFillProvider } = await resolvePictureBookImageProviders();
+    await pageFillProvider.harmonizePageArt(
+      {
+        bookId: "book-fill-fallback",
+        pageIndex: 1,
+        prompt: "Blend art into the mask.",
+        canvasImageUrl: "https://example.com/canvas.png",
+        maskImageUrl: "https://example.com/mask.png"
+      },
+      1
+    );
+
+    expect(String(fetchMock.mock.calls[1]?.[0] ?? "")).toBe(
+      "https://queue.fal.run/fal-ai/flux-pro/requests/req-fill/status"
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0] ?? "")).toBe(
+      "https://queue.fal.run/fal-ai/flux-pro/requests/req-fill"
+    );
   });
 
   it("uses mock adapter when enable_mock_image is true", async () => {

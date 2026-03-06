@@ -169,8 +169,8 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
     authLinkTtlMinutes: Number(byName.auth_link_ttl_minutes ?? operational.AUTH_LINK_TTL_MINUTES),
     webBaseUrl: byName.web_base_url ?? operational.WEB_BASE_URL,
     models: {
-      openaiJson: byName.openai_model_json ?? "gpt-4.1-mini",
-      openaiVision: byName.openai_model_vision ?? "gpt-4.1-mini",
+      openaiJson: byName.openai_model_json ?? "gpt-5-mini-2025-08-07",
+      openaiVision: byName.openai_model_vision ?? "gpt-5-mini-2025-08-07",
       anthropicWriter: byName.anthropic_model_writer ?? "claude-sonnet-4-5"
     },
     stripe: {

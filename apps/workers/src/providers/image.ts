@@ -58,10 +58,16 @@ export interface PageFillProvider {
 interface FalSubmitResponse {
   request_id?: string;
   requestId?: string;
+  status_url?: string;
+  statusUrl?: string;
+  response_url?: string;
+  responseUrl?: string;
 }
 
 interface FalStatusResponse {
   status?: string;
+  response_url?: string;
+  responseUrl?: string;
 }
 
 interface FalImageResult {
@@ -76,6 +82,12 @@ interface FalResultResponse {
   data?: {
     images?: FalImageResult[];
   };
+}
+
+interface FalQueuedRequest {
+  requestId: string;
+  statusUrl: string;
+  responseUrl: string;
 }
 
 class FalRequestError extends Error {
@@ -124,12 +136,12 @@ abstract class FalTransport {
   protected async run(endpoint: string, payload: Record<string, unknown>): Promise<GeneratedImage> {
     const seed = typeof payload.seed === "number" ? payload.seed : 0;
     const startedAt = Date.now();
-    const requestId = await this.submit(endpoint, payload);
-    await this.waitUntilComplete(endpoint, requestId);
-    const output = await this.fetchResult(endpoint, requestId);
+    const queuedRequest = await this.submit(endpoint, payload);
+    await this.waitUntilComplete(queuedRequest);
+    const output = await this.fetchResult(queuedRequest);
     const image = output.images?.[0] ?? output.data?.images?.[0];
     if (!image?.url) {
-      throw new Error(`fal result missing image url for request ${requestId}`);
+      throw new Error(`fal result missing image url for request ${queuedRequest.requestId}`);
     }
 
     const imageResponse = await this.withTransportRetries(() => fetch(image.url ?? ""), "fal_image_download");
@@ -149,7 +161,7 @@ abstract class FalTransport {
       contentType,
       seed,
       endpoint,
-      requestId,
+      requestId: queuedRequest.requestId,
       width: image.width,
       height: image.height,
       latencyMs: Date.now() - startedAt,
@@ -161,7 +173,7 @@ abstract class FalTransport {
     };
   }
 
-  private async submit(endpoint: string, payload: Record<string, unknown>): Promise<string> {
+  private async submit(endpoint: string, payload: Record<string, unknown>): Promise<FalQueuedRequest> {
     const response = await this.withTransportRetries(
       () =>
         fetch(`https://queue.fal.run/${endpoint}`, {
@@ -190,15 +202,19 @@ abstract class FalTransport {
       throw new Error("fal submit response missing request id");
     }
 
-    return requestId;
+    return {
+      requestId,
+      statusUrl: data.status_url ?? data.statusUrl ?? this.defaultStatusUrl(endpoint, requestId),
+      responseUrl: data.response_url ?? data.responseUrl ?? this.defaultResponseUrl(endpoint, requestId)
+    };
   }
 
-  private async waitUntilComplete(endpoint: string, requestId: string): Promise<void> {
+  private async waitUntilComplete(queuedRequest: FalQueuedRequest): Promise<void> {
     const maxPolls = 45;
     for (let poll = 1; poll <= maxPolls; poll += 1) {
       const response = await this.withTransportRetries(
         () =>
-          fetch(`https://queue.fal.run/${endpoint}/requests/${requestId}/status`, {
+          fetch(queuedRequest.statusUrl, {
             headers: {
               Authorization: `Key ${this.config.secrets.falKey}`
             }
@@ -217,6 +233,10 @@ abstract class FalTransport {
 
       const payload = (await response.json()) as FalStatusResponse;
       const normalized = (payload.status ?? "").toLowerCase();
+      const responseUrl = payload.response_url ?? payload.responseUrl;
+      if (responseUrl) {
+        queuedRequest.responseUrl = responseUrl;
+      }
 
       if (normalized === "completed" || normalized === "succeeded" || normalized === "success") {
         return;
@@ -229,13 +249,13 @@ abstract class FalTransport {
       await sleep(1_500);
     }
 
-    throw new Error(`fal poll timed out for request ${requestId}`);
+    throw new Error(`fal poll timed out for request ${queuedRequest.requestId}`);
   }
 
-  private async fetchResult(endpoint: string, requestId: string): Promise<FalResultResponse> {
+  private async fetchResult(queuedRequest: FalQueuedRequest): Promise<FalResultResponse> {
     const response = await this.withTransportRetries(
       () =>
-        fetch(`https://queue.fal.run/${endpoint}/requests/${requestId}`, {
+        fetch(queuedRequest.responseUrl, {
           headers: {
             Authorization: `Key ${this.config.secrets.falKey}`
           }
@@ -253,6 +273,24 @@ abstract class FalTransport {
     }
 
     return (await response.json()) as FalResultResponse;
+  }
+
+  private defaultStatusUrl(endpoint: string, requestId: string): string {
+    return `${this.defaultResponseUrl(endpoint, requestId)}/status`;
+  }
+
+  private defaultResponseUrl(endpoint: string, requestId: string): string {
+    const modelId = this.queueModelId(endpoint);
+    return `https://queue.fal.run/${modelId}/requests/${requestId}`;
+  }
+
+  private queueModelId(endpoint: string): string {
+    const segments = endpoint.split("/").filter(Boolean);
+    if (segments.length < 2) {
+      return endpoint;
+    }
+
+    return `${segments[0]}/${segments[1]}`;
   }
 
   protected async withTransportRetries(
