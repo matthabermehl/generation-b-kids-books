@@ -68,3 +68,4 @@ Evidence:
 - pnpm cdk:deploy:dev => PASS (deployed merged branch before final local OpenAI empty-content retry hardening)
 Notes: live mark-paid validation on dev now reaches real story generation and then fails on Fal billing exhaustion (403 User is locked / Exhausted balance); final local provider hardening for OpenAI empty-content handling is covered by worker tests and direct API probes but was not redeployed after the last patch in this session
 Next: top up Fal balance, redeploy the final llm-provider patch, then rerun one mark-paid smoke to confirm story_critic stays on OpenAI and image generation proceeds
+Commit: f3a3252
