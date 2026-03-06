@@ -319,6 +319,10 @@ function buildRewriteInstructions(
 ): string {
   const earlyReader =
     context.profile === "early_decoder_5_7" || (context.ageYears >= 5 && context.ageYears <= 7);
+  const youngPictureBookProfile =
+    context.profile === "read_aloud_3_4" ||
+    context.profile === "early_decoder_5_7" ||
+    context.ageYears <= 7;
   const finalTwentyPercentIndex = Math.floor(context.pageCount * 0.8);
   const failingCritics = attempt.critics.filter(
     (critic) => !critic.verdict.pass || critic.verdict.issues.length > 0
@@ -351,6 +355,16 @@ function buildRewriteInstructions(
           "- Keep newWordsIntroduced length <= 2 for every beat.",
           `- Introduce taught words like Bitcoin only at index >= ${finalTwentyPercentIndex}.`,
           "- Avoid abstract economic jargon unless rewritten into concrete child-level wording."
+        ]
+      : []),
+    ...(youngPictureBookProfile
+      ? [
+          "- 3-7 profile guardrails:",
+          "- Keep the child's decisive actions physical and observable: count coins, save, wait, choose, earn, compare prices, or buy a smaller item.",
+          "- Do not use device-first or fintech-first plot mechanics such as tablet, app, digital jar, wallet, password, transfer, QR code, blockchain, or chart.",
+          "- Do not make Bitcoin the child's decoding target or a newWordsIntroduced item unless a validator explicitly requires it.",
+          "- If Bitcoin appears, keep it to one brief adult/caregiver aside in the final beats while the child-facing language stays concrete.",
+          "- Use exact, countable price-change examples instead of supply-shock, market, scarcity, or volatility explanations."
         ]
       : []),
     "Global rewrite guidance:",

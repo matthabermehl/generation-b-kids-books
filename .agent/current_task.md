@@ -32,4 +32,4 @@ Harden the fixed-layout picture-book pipeline for real-LLM dev validation and ma
 
 ## Status
 - baseline: smoke PASS on current branch head
-- work: live dev validation complete for this pass; remaining blocker is BeatPlanningError before image generation across 3-7 story profiles tested
+- work: prompt-layer guardrails are deployed; remaining blocker is the SoR critic/rewrite contract, which still pushes late taught-word Bitcoin framing at beat 9 before image generation can start

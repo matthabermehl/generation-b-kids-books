@@ -531,6 +531,9 @@ describe("llm provider routing", () => {
     expect(rewritePrompt).toContain("bitcoinRelevanceScore >= 0.65");
     expect(rewritePrompt).toContain("Only beats with index >=");
     expect(rewritePrompt).toContain("Numeric Bitcoin constraints");
+    expect(rewritePrompt).toContain("3-7 profile guardrails");
+    expect(rewritePrompt).toContain("digital jar");
+    expect(rewritePrompt).toContain("one brief adult/caregiver aside");
   });
 
   it("normalizes oversized beat sheets back to pageCount before deterministic checks", async () => {

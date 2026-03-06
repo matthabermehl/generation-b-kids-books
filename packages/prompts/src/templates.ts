@@ -16,6 +16,31 @@ export interface BeatPromptConstraints {
   allowedHighStartIndex: number;
 }
 
+function isYoungPictureBookContext(context: StoryTemplateContext): boolean {
+  return (
+    context.profile === "read_aloud_3_4" ||
+    context.profile === "early_decoder_5_7" ||
+    context.ageYears <= 7
+  );
+}
+
+function youngProfileBitcoinGuardrails(context: StoryTemplateContext): string[] {
+  if (!isYoungPictureBookContext(context)) {
+    return [];
+  }
+
+  return [
+    "3-7 late-Bitcoin guardrails:",
+    "- Keep the child's visible actions physical and observable: count coins, save, wait, choose, earn, compare what the same coins buy, or choose a smaller item.",
+    "- If Bitcoin appears at all, keep it to one brief caregiver/adult line or note in the final 1-2 beats; do not make Bitcoin the child's taught decoding word.",
+    "- Do NOT use device-first or fintech-first framing as the main plot mechanic: tablet, app, phone, digital jar, wallet, password, QR code, transfer, blockchain, chart, or market screen.",
+    "- Do NOT make the child independently move digital money or explain hidden technical mechanics.",
+    "- Price-change examples must be countable and concrete, such as 'last week 3 coins bought 2 candies; now 3 coins buy 1 candy' or 'the lamp costs 1 more coin now.'",
+    "- Avoid abstract cause language such as supplier shock, market volatility, scarcity curves, or purchasing power unless rewritten into an observable child-level event.",
+    "- A good late-resolution pattern is: the child makes a careful physical saving choice, reaches a concrete payoff, and an adult may briefly name Bitcoin as one grown-up saving idea without shifting the story into a device lesson."
+  ];
+}
+
 function jsonOnlyBlock(schemaName: string): string {
   return [
     "Return ONLY valid JSON that matches the provided schema.",
@@ -51,6 +76,8 @@ export function buildBeatPlannerSystemPrompt(): string {
     "- Science-of-Reading planning: include controlled vocabulary, repetition, and taught-word sequencing using decodabilityTags and newWordsIntroduced.",
     "- If age or profile implies early-reader constraints, keep new words sparse and intentional.",
     "- Avoid hype, guaranteed returns, and risk-free claims.",
+    "- For ages 3-7, keep any late Bitcoin framing adult-led, concrete, and secondary to the child's physical saving choices.",
+    "- For ages 3-7, avoid tablet/app/digital-jar/transfer/password/wallet plots; they trigger abstraction and realism failures.",
     "",
     "For each beat, fill:",
     "- purpose",
@@ -84,10 +111,12 @@ export function buildBeatPlannerPrompt(
     constrainedScoringLine,
     "Include canonical decodability tags in every beat: controlled_vocab, repetition, or taught_words.",
     "For early readers, keep newWordsIntroduced <= 2 per beat and schedule taught words (e.g. Bitcoin) late.",
+    "For read_aloud_3_4 and early_decoder_5_7, keep child-facing newWordsIntroduced concrete; prefer not to put Bitcoin itself in newWordsIntroduced.",
     "Avoid abstract finance jargon (e.g., inflation, purchasing power) unless translated into concrete child-level language.",
     "Include at least two beats where the child makes an explicit choice between options and the next beat shows consequences.",
     "Final beat must show concrete payoff/resolution of the child's saving decision.",
     "Use calm, concrete, child-centered settings.",
+    ...youngProfileBitcoinGuardrails(context),
     jsonOnlyBlock("BeatSheet")
   ].join("\n");
 }
@@ -106,6 +135,9 @@ export function buildMontessoriCriticPrompt(
     "3) Flag adult-imposed fantasy framing (magic systems, fantasy creatures, enchanted worlds).",
     "4) Preserve child agency and interests in proposed fixes.",
     "5) Preserve late-stage Bitcoin resolution beats required by the beat constraints; do not recommend removing Bitcoin entirely.",
+    "6) For ages 3-7, an acceptable late Bitcoin beat is concrete and caregiver-managed: the child still saves/chooses with physical coins while an adult may briefly name Bitcoin in one final aside.",
+    "7) Do not demand app, password, transfer, wallet, custody, or regulatory mechanics; those are not Montessori practical-life details for this age.",
+    "8) Treat tablet/app/digital-jar framing as riskier than a simple caregiver aside; prefer observable child actions over device workflow detail.",
     "6) Return at most 3 issues, only for objective blockers.",
     "",
     "Beat sheet JSON:",
@@ -129,6 +161,10 @@ export function buildScienceOfReadingCriticPrompt(
     "- Flag when comprehension depends entirely on pictures instead of explicit text-level meaning.",
     "- Do not flag merely for discussing price changes/scarcity if language is concrete and age-appropriate.",
     "- Preserve the required late-stage Bitcoin resolution structure; propose compatible rewrites instead of removing Bitcoin.",
+    "- For ages 3-7, it is acceptable for Bitcoin to appear only as one brief adult/caregiver label in the final 1-2 beats while child-facing vocabulary stays concrete.",
+    "- Do NOT require extra taught_words tags simply because an adult-managed Bitcoin concept exists in the background.",
+    "- Do NOT push device jargon such as tablet, app, wallet, digital jar, password, transfer, QR code, or chart as the way to satisfy specificity.",
+    "- Prefer concrete child-facing words like coin, jar, wait, count, choice, more, less, and price.",
     "- Return at most 3 issues, prioritizing the highest-severity blockers.",
     "- If no objective blockers exist, return pass=true and issues=[].",
     "",
@@ -153,6 +189,9 @@ export function buildNarrativeFreshnessCriticPrompt(
     "- Interests are integrated with plot impact, not token mentions.",
     "- Lesson is shown through consequences, not preachy moralizing.",
     "- Preserve required late-stage Bitcoin resolution beats and improve specificity around them rather than deleting them.",
+    "- For ages 3-7, good specificity comes from visible child consequences (coin counts, same coins buy less, smaller item chosen), not from tablet/app/transfer mechanics.",
+    "- Do not recommend tablet/app/wallet/digital-transfer plots unless absolutely necessary; they usually weaken realism and child agency for this age.",
+    "- Preserve child agency by keeping the decisive action the child's observable choice, even if an adult briefly names a grown-up tool near the end.",
     "- Do NOT flag minor wording/style preferences that can be handled at page-writing stage.",
     "- If the beat sheet clearly has two child-driven choices plus a concrete final payoff, return pass=true unless a major structural blocker remains.",
     "- Return at most 3 highest-severity issues.",
@@ -184,9 +223,11 @@ export function buildBeatRewritePrompt(
     "- Maintain the 80% problem / 20% Bitcoin resolution spirit.",
     "- Ensure every beat includes at least one canonical decodability tag: controlled_vocab, repetition, or taught_words.",
     "- For early-reader profiles, keep newWordsIntroduced <= 2 in every beat and introduce taught words like Bitcoin only in the final 20% of beats.",
+    "- For ages 3-7, keep child-facing new words concrete and avoid making Bitcoin itself a decoding target.",
     "- Ensure at least two explicit child choices with visible downstream consequences.",
     "- Ensure the final beat contains clear concrete payoff/resolution of the savings arc.",
     "- Keep the child hero active with meaningful choices.",
+    ...youngProfileBitcoinGuardrails(context),
     "",
     "Original beat sheet JSON:",
     originalBeatSheetJson,
@@ -212,6 +253,11 @@ export function buildPageWriterPrompt(
     "- Language must be age-appropriate, concrete, and consequence-driven.",
     "- For younger readers keep sentence complexity low and repetition intentional.",
     "- Avoid hype and investment promises.",
+    "- Keep the child's key actions physical and observable on the page: counting, saving, waiting, choosing, earning, comparing prices, or buying a smaller item.",
+    "- Show price changes with countable examples rather than abstract economic explanations.",
+    "- Do not use device or fintech jargon in page text: tablet, app, digital jar, wallet, password, transfer, QR code, blockchain, market, or volatility.",
+    "- For read_aloud_3_4 and early_decoder_5_7, if Bitcoin appears at all, limit it to one short caregiver/adult line near the end; do not teach it as the child's decoding word.",
+    "- Keep adult-managed money tools secondary; the child's visible choices and consequences must stay primary.",
     "",
     "Approved beat sheet JSON:",
     JSON.stringify(beatSheet),
@@ -228,6 +274,8 @@ export function buildCriticPrompt(context: StoryTemplateContext, storyJson: stri
     "- No banned phrases like guaranteed returns or risk-free gains.",
     "- Reading complexity matches profile.",
     "- Story remains emotionally coherent and child-led.",
+    "- For ages 3-7, page text stays concrete and observable, without tablet/app/digital-jar/transfer/password jargon.",
+    "- For ages 3-7, any explicit Bitcoin wording is limited to one brief adult/caregiver line near the end rather than repeated child-facing exposition.",
     "Story JSON:",
     storyJson,
     jsonOnlyBlock("StoryCriticVerdict")

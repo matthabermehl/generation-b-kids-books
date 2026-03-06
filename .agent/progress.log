@@ -82,3 +82,16 @@ Evidence:
 Notes: Fal balance is no longer the blocker; the pipeline never reached character-sheet or page-image generation in these runs. Next work should target the beat-plan prompt/validator contract for 3-7 profiles.
 Commit: pending
 
+2026-03-06T14:59:10-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: tightened planner, rewrite, writer, and critic prompts to force child-safe late-Bitcoin framing for ages 3-7, deployed to dev, and reran live validation
+Evidence:
+- bash scripts/agent/quality.sh => PASS
+- pnpm vitest run packages/prompts/test/prompt-principles.test.ts packages/prompts/test/beat-quality.test.ts => PASS
+- pnpm vitest run apps/workers/test/llm-provider.test.ts => PASS
+- pnpm cdk:deploy:dev => stack UPDATE_COMPLETE
+- live mark-paid run 6f4c68d4-3d9d-4c36-934f-12224ead9879 (early_decoder_5_7 + saving_later) => FAILED in PrepareStory with narrowed BeatPlanningError
+Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
+Commit: pending
+
