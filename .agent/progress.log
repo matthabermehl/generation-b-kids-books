@@ -20,3 +20,13 @@ Evidence: bash scripts/agent/smoke.sh => PASS
 Notes: smoke tail: [agent] smoke: PASS | [agent] tracker: harness-baseline-smoke-01 marked passing |  | [agent][warn] No test runner detected. Continuing because AGENT_TEST_FALLBACK=warn.
 Commit: 64739f0
 
+2026-03-05T22:00:42-05:00
+Task: wip-carryover-01
+Baseline: smoke PASS
+Change: implemented the 3-7 fixed-layout picture-book pipeline slice with layered composition metadata, picture-book image roles, preview rendering, additive API/web contract changes, and feature-flagged routing
+Evidence:
+- pnpm -r lint => PASS
+- pnpm -r test => PASS
+- bash scripts/agent/quality.sh => PASS
+Notes: renderer uses sharp+pdfkit for deterministic previews/live text instead of introducing a browser runtime in this slice; legacy page-image path remains the fallback while enable_picture_book_pipeline=false
+Commit: 6e676bb

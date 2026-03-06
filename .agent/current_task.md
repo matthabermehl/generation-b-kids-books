@@ -1,23 +1,25 @@
 # Current Task
 
-Task ID: harness-baseline-smoke-01
+Task ID: wip-carryover-01
 
 ## Goal
-Complete this task with minimal scope and explicit evidence.
+Implement the fixed-layout picture-book pipeline slice for ages 3-7 while preserving the legacy path behind flags.
 
 ## Constraints
-- One task id per implementation cycle.
-- Preserve existing task descriptions; only change pass/evidence fields after verification.
+- Keep the legacy image/render path working when `enable_picture_book_pipeline=false`.
+- Use additive schema changes only.
+- Block `independent_8_10` by default.
 
 ## Plan (short)
-1. Validate baseline via smoke.
-2. Implement smallest change that satisfies acceptance steps.
-3. Run relevant quality/e2e checks and record evidence.
+1. Add shared product/layout types and runtime flags.
+2. Rewire workers and renderer for layered picture-book pages.
+3. Expose previews through API/web and verify with tests/quality gates.
 
 ## Evidence Required
+- `pnpm -r lint`
+- `pnpm -r test`
 - `bash scripts/agent/quality.sh`
-- Optional: `bash scripts/agent/e2e.sh`
 
 ## Status
-- baseline: pending
-- work: not started
+- baseline: smoke PASS
+- work: completed

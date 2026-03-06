@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-04T23:28:29Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-06T00:42:00Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -20,8 +20,8 @@
       "Read .agent/handoff.md and active execution plan",
       "Implement next smallest verifiable slice of the pending work"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "Implemented the 3-7 fixed-layout picture-book pipeline slice with additive schema/config updates, layered image roles, preview rendering, and passing lint/test/quality checks (2026-03-06)."
   },
   {
     "id": "docs-source-of-truth-01",
