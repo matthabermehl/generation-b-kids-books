@@ -9,7 +9,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 DEFAULT_PATH = Path(".agent/feature_list.json")
-REQUIRED_KEYS = {"id", "priority", "category", "description", "steps", "passes", "evidence"}
+REQUIRED_KEYS = {
+    "id",
+    "priority",
+    "category",
+    "description",
+    "steps",
+    "passes",
+    "evidence",
+}
 TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 
 
@@ -27,7 +35,9 @@ def load(path: Path) -> List[Dict[str, Any]]:
 
 def save(path: Path, data: List[Dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def sorted_failing(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -57,7 +67,9 @@ def validate_tasks(tasks: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
 
         missing = REQUIRED_KEYS.difference(task.keys())
         if missing:
-            errors.append(f"{prefix}: missing required keys: {', '.join(sorted(missing))}")
+            errors.append(
+                f"{prefix}: missing required keys: {', '.join(sorted(missing))}"
+            )
 
         task_id = task.get("id")
         if not isinstance(task_id, str) or not task_id.strip():
@@ -91,7 +103,9 @@ def validate_tasks(tasks: List[Dict[str, Any]]) -> Tuple[List[str], List[str]]:
         else:
             for step_idx, step in enumerate(steps, start=1):
                 if not isinstance(step, str) or not step.strip():
-                    errors.append(f"{prefix}: steps[{step_idx}] must be a non-empty string")
+                    errors.append(
+                        f"{prefix}: steps[{step_idx}] must be a non-empty string"
+                    )
 
         passes = task.get("passes")
         if not isinstance(passes, bool):
@@ -132,7 +146,9 @@ def cmd_list(args: argparse.Namespace) -> None:
 
     failing = sorted_failing(tasks)
     for task in failing[: args.limit]:
-        print(f"- {task.get('id')} (p{task.get('priority')}): {task.get('description')}")
+        print(
+            f"- {task.get('id')} (p{task.get('priority')}): {task.get('description')}"
+        )
 
     if not failing:
         print("(no failing tasks)")
@@ -166,9 +182,13 @@ def cmd_set(args: argparse.Namespace, passes: bool) -> None:
 
     if passes and evidence is None:
         if args.auto_evidence:
-            evidence = f"set by feature_list.py at {datetime.now(timezone.utc).isoformat()}"
+            evidence = (
+                f"set by feature_list.py at {datetime.now(timezone.utc).isoformat()}"
+            )
         else:
-            raise SystemExit("--evidence is required for `pass` unless --auto-evidence is set")
+            raise SystemExit(
+                "--evidence is required for `pass` unless --auto-evidence is set"
+            )
 
     task["passes"] = passes
     if evidence is not None:
