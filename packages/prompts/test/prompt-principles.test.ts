@@ -89,7 +89,8 @@ describe("prompt principles", () => {
       "one brief caregiver/adult line",
       "digital jar",
       "transfer",
-      "same coins buy"
+      "same coins buy",
+      "do not add taught_words solely"
     ]);
   });
 
@@ -100,7 +101,9 @@ describe("prompt principles", () => {
       "bitcoin",
       "late-stage",
       "adult/caregiver label",
-      "do not require extra taught_words tags"
+      "do not require extra taught_words tags",
+      "must not be treated as a child taught word",
+      "at most a soft issue"
     ]);
   });
 

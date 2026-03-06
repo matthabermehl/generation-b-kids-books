@@ -95,3 +95,15 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-06T16:03:30-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: added hard-vs-soft beat critic tiers, persisted soft-only beat-plan reports, downgraded narrative freshness to advisory after bounded rewrites in code, and tightened 3-7 planner/rewrite/critic prompts so adult-only late Bitcoin labels no longer block beat planning by default
+Evidence:
+- pnpm vitest run apps/workers/test/llm-provider.test.ts apps/workers/test/pipeline.test.ts packages/prompts/test/prompt-principles.test.ts => PASS
+- bash scripts/agent/quality.sh => PASS
+- pnpm cdk:deploy:dev => PASS
+- live mark-paid run 7bebe246-8934-43ba-96ee-2fdf02db769d (early_decoder_5_7 + saving_later) => FAILED in PrepareStory, but hard blockers dropped from 3 issues to 1 issue after prompt tightening
+- live mark-paid run 4e0c70b2-ce06-4e77-aede-2b411dd588de (early_decoder_5_7 + saving_later) => PASSED PrepareStory and reached picture-book image generation; current state is RUNNING/building with book e126f740-557b-44f1-8d49-101593b12382, 1 character_sheet image, 7 scene_plate images, and 6 page_fill images persisted so far
+Notes: the critic-stage blocker is no longer preventing end-to-end progress for early_decoder_5_7; remaining validation is now downstream in image generation / page QA rather than beat planning
+Commit: pending

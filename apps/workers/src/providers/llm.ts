@@ -53,6 +53,7 @@ export interface LlmMetadata {
 }
 
 type BeatCriticName = "montessori" | "science_of_reading" | "narrative_freshness";
+type CriticIssueTier = CriticVerdict["issues"][number]["tier"];
 
 export interface BeatCriticAudit {
   critic: BeatCriticName;
@@ -71,6 +72,7 @@ export interface BeatPlanningAudit {
   rewritesApplied: number;
   passed: boolean;
   finalIssues: string[];
+  softIssues: string[];
 }
 
 export class BeatPlanningError extends Error {
@@ -130,6 +132,7 @@ const beatCriticSchema = z.object({
     z.object({
       beatIndex: z.number().int().min(0).max(40),
       problem: z.string().min(1),
+      tier: z.enum(["hard", "soft"]),
       severity: z.enum(["low", "med", "high"]),
       fix: z.string().min(1)
     })
@@ -146,10 +149,25 @@ const beatCriticLenientParser = z.preprocess((raw) => {
   const normalizedIssues = Array.isArray(record.issues) ? record.issues : [];
   const normalizedPass =
     typeof record.pass === "boolean" ? record.pass : normalizedIssues.length === 0;
+  const normalizedTier = (issue: unknown): "hard" | "soft" => {
+    if (!issue || typeof issue !== "object" || Array.isArray(issue)) {
+      return "hard";
+    }
+
+    const issueRecord = issue as Record<string, unknown>;
+    if (issueRecord.tier === "hard" || issueRecord.tier === "soft") {
+      return issueRecord.tier;
+    }
+
+    return issueRecord.severity === "high" ? "hard" : "soft";
+  };
   return {
     ...record,
     pass: normalizedPass,
-    issues: normalizedIssues,
+    issues: normalizedIssues.map((issue) => ({
+      ...(issue as Record<string, unknown>),
+      tier: normalizedTier(issue)
+    })),
     rewriteInstructions:
       typeof record.rewriteInstructions === "string" ? record.rewriteInstructions : ""
   };
@@ -267,14 +285,11 @@ function providerErrorContext(stage: string, error: ProviderRequestError): Recor
   };
 }
 
-function flattenBeatPlanningIssues(attempt: BeatPlanningAttempt): string[] {
-  const issues = attempt.deterministic.issues.map((issue) => issue.message);
-  for (const critic of attempt.critics) {
-    for (const issue of critic.verdict.issues) {
-      issues.push(`[${critic.critic}] beat ${issue.beatIndex}: ${issue.problem}`);
-    }
-  }
-  return issues;
+function formatCriticIssue(
+  critic: BeatCriticName,
+  issue: CriticVerdict["issues"][number]
+): string {
+  return `[${critic}] beat ${issue.beatIndex}: ${issue.problem}`;
 }
 
 function normalizeBeatSheetToPageCount(beatSheet: BeatSheet, pageCount: number): BeatSheet {
@@ -296,19 +311,53 @@ function normalizeBeatSheetToPageCount(beatSheet: BeatSheet, pageCount: number):
 function normalizeCriticVerdict(verdict: CriticVerdict): CriticVerdict {
   const seen = new Set<string>();
   const dedupedIssues = verdict.issues.filter((issue) => {
-    const key = `${issue.beatIndex}:${issue.problem.trim().toLowerCase()}`;
+    const key = `${issue.beatIndex}:${issue.tier}:${issue.problem.trim().toLowerCase()}`;
     if (seen.has(key)) {
       return false;
     }
     seen.add(key);
     return true;
   });
-  const cappedIssues = dedupedIssues.slice(0, 3);
+  const hardIssues = dedupedIssues.filter((issue) => issue.tier === "hard").slice(0, 2);
+  const softIssues = dedupedIssues.filter((issue) => issue.tier === "soft").slice(0, 2);
+  const cappedIssues = [...hardIssues, ...softIssues];
 
   return {
-    pass: cappedIssues.length === 0,
+    pass: hardIssues.length === 0,
     issues: cappedIssues,
     rewriteInstructions: verdict.rewriteInstructions.trim()
+  };
+}
+
+function hardCriticIssues(verdict: CriticVerdict): CriticVerdict["issues"] {
+  return verdict.issues.filter((issue) => issue.tier === "hard");
+}
+
+function collectBeatPlanningIssueSummary(
+  attempt: BeatPlanningAttempt,
+  options: { narrativeFreshnessAdvisory?: boolean } = {}
+): { hard: string[]; soft: string[] } {
+  const hard = attempt.deterministic.issues.map((issue) => issue.message);
+  const soft: string[] = [];
+
+  for (const critic of attempt.critics) {
+    for (const issue of critic.verdict.issues) {
+      const formatted = formatCriticIssue(critic.critic, issue);
+      if (
+        issue.tier === "soft" ||
+        (options.narrativeFreshnessAdvisory && critic.critic === "narrative_freshness")
+      ) {
+        soft.push(formatted);
+        continue;
+      }
+
+      hard.push(formatted);
+    }
+  }
+
+  return {
+    hard: Array.from(new Set(hard)),
+    soft: Array.from(new Set(soft))
   };
 }
 
@@ -324,15 +373,13 @@ function buildRewriteInstructions(
     context.profile === "early_decoder_5_7" ||
     context.ageYears <= 7;
   const finalTwentyPercentIndex = Math.floor(context.pageCount * 0.8);
-  const failingCritics = attempt.critics.filter(
-    (critic) => !critic.verdict.pass || critic.verdict.issues.length > 0
-  );
+  const failingCritics = attempt.critics.filter((critic) => hardCriticIssues(critic.verdict).length > 0);
   const deterministicLines = attempt.deterministic.issues.map(
     (issue) =>
       `- Deterministic (${issue.code})${issue.beatIndex !== undefined ? ` beat ${issue.beatIndex}` : ""}: ${issue.message}`
   );
   const criticLines = failingCritics.flatMap((critic) =>
-    critic.verdict.issues.map(
+    hardCriticIssues(critic.verdict).map(
       (issue) =>
         `- ${critic.critic} critic beat ${issue.beatIndex}: ${issue.problem}. Fix guidance: ${issue.fix}`
     )
@@ -417,7 +464,8 @@ class MockLlmProvider implements LlmProvider {
         ],
         rewritesApplied: 0,
         passed: deterministic.ok,
-        finalIssues: deterministic.issues.map((issue) => issue.message)
+        finalIssues: deterministic.issues.map((issue) => issue.message),
+        softIssues: []
       },
       meta: {
         provider: "mock",
@@ -537,39 +585,30 @@ class OpenAiAnthropicProvider implements LlmProvider {
 
       attempts.push({ attempt, deterministic, critics });
 
-      const criticsPass = critics.every((critic) => critic.verdict.pass);
-      const blockingCriticsPass = critics.every(
-        (critic) => critic.critic === "narrative_freshness" || critic.verdict.pass
-      );
-      if (deterministic.ok && criticsPass) {
+      const issueSummary = collectBeatPlanningIssueSummary(attempts[attempt], {
+        narrativeFreshnessAdvisory: attempt === MAX_BEAT_REWRITES
+      });
+
+      if (issueSummary.hard.length === 0) {
         return {
           beatSheet: currentBeatSheet,
           audit: {
             attempts,
             rewritesApplied: attempt,
             passed: true,
-            finalIssues: []
-          },
-          meta: latestMeta
-        };
-      }
-
-      if (deterministic.ok && blockingCriticsPass && attempt === MAX_BEAT_REWRITES) {
-        const finalIssues = flattenBeatPlanningIssues(attempts[attempt] ?? attempts[attempts.length - 1]);
-        return {
-          beatSheet: currentBeatSheet,
-          audit: {
-            attempts,
-            rewritesApplied: attempt,
-            passed: false,
-            finalIssues
+            finalIssues: [],
+            softIssues: issueSummary.soft
           },
           meta: latestMeta
         };
       }
 
       if (attempt === MAX_BEAT_REWRITES) {
-        const finalIssues = flattenBeatPlanningIssues(attempts[attempt] ?? attempts[attempts.length - 1]);
+        const latestAttempt = attempts[attempt] ?? attempts[attempts.length - 1];
+        const finalIssueSummary = collectBeatPlanningIssueSummary(latestAttempt, {
+          narrativeFreshnessAdvisory: true
+        });
+        const finalIssues = finalIssueSummary.hard;
         throw new BeatPlanningError(
           `Beat planning failed validation after rewrites: ${finalIssues.join(" | ")}`,
           currentBeatSheet,
@@ -577,7 +616,8 @@ class OpenAiAnthropicProvider implements LlmProvider {
             attempts,
             rewritesApplied: attempt,
             passed: false,
-            finalIssues
+            finalIssues,
+            softIssues: finalIssueSummary.soft
           },
           latestMeta
         );

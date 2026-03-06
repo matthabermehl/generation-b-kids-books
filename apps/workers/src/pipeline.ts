@@ -191,6 +191,42 @@ async function persistBeatPlanningFailure(
   return { artifactKey };
 }
 
+async function persistBeatPlanningReport(
+  bookId: string,
+  beatPlanning: {
+    beatSheet: unknown;
+    audit: { softIssues: string[] };
+    meta: unknown;
+  }
+): Promise<{ artifactKey: string } | null> {
+  if (beatPlanning.audit.softIssues.length === 0) {
+    return null;
+  }
+
+  const artifactKey = `books/${bookId}/beat-plan-report.json`;
+  await putJson(artifactKey, {
+    bookId,
+    softIssues: beatPlanning.audit.softIssues,
+    beatSheet: beatPlanning.beatSheet,
+    llmMeta: beatPlanning.meta,
+    generatedAt: new Date().toISOString()
+  });
+
+  await execute(
+    `
+      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
+      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan_report', :s3)
+    `,
+    [
+      { name: "id", value: { stringValue: makeId() } },
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "s3", value: { stringValue: `s3://${process.env.ARTIFACT_BUCKET}/${artifactKey}` } }
+    ]
+  );
+
+  return { artifactKey };
+}
+
 async function prepareStory(
   bookId: string,
   mockRunTag?: string | null
@@ -337,6 +373,8 @@ async function prepareStory(
     ]
   );
 
+  const beatPlanReport = await persistBeatPlanningReport(bookId, beatPlanning);
+
   await execute(
     `
       INSERT INTO evaluations (id, book_id, stage, model_used, score_json, verdict, notes)
@@ -358,15 +396,22 @@ async function prepareStory(
             rewritesApplied: beatPlanning.audit.rewritesApplied,
             attempts: beatPlanning.audit.attempts.length,
             passed: beatPlanning.audit.passed,
+            softIssueCount: beatPlanning.audit.softIssues.length,
+            reportArtifactKey: beatPlanReport?.artifactKey ?? null,
             llm: beatPlanning.meta
           })
         }
       },
-      { name: "verdict", value: { stringValue: beatPlanning.audit.passed ? "pass" : "warning" } },
+      {
+        name: "verdict",
+        value: {
+          stringValue: beatPlanning.audit.softIssues.length > 0 ? "warning" : "pass"
+        }
+      },
       {
         name: "notes",
         value: {
-          stringValue: beatPlanning.audit.finalIssues.join(" | ") || "Beat plan approved"
+          stringValue: beatPlanning.audit.softIssues.join(" | ") || "Beat plan approved"
         }
       }
     ]

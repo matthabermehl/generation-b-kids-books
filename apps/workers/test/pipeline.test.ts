@@ -51,6 +51,7 @@ vi.mock("../src/providers/llm.js", () => {
       rewritesApplied: number;
       passed: boolean;
       finalIssues: string[];
+      softIssues: string[];
     };
     readonly meta: {
       provider: "mock" | "openai" | "anthropic";
@@ -62,7 +63,13 @@ vi.mock("../src/providers/llm.js", () => {
     constructor(
       message: string,
       beatSheet: { beats: unknown[] },
-      audit: { attempts: unknown[]; rewritesApplied: number; passed: boolean; finalIssues: string[] },
+      audit: {
+        attempts: unknown[];
+        rewritesApplied: number;
+        passed: boolean;
+        finalIssues: string[];
+        softIssues: string[];
+      },
       meta: { provider: "mock" | "openai" | "anthropic"; model: string; latencyMs: number; usage: null }
     ) {
       super(message);
@@ -134,7 +141,8 @@ describe("pipeline beat-planning failure persistence", () => {
         attempts: [],
         rewritesApplied: 2,
         passed: false,
-        finalIssues: ["Bitcoin beat ratio 0.00 must be between 0.15 and 0.30."]
+        finalIssues: ["Bitcoin beat ratio 0.00 must be between 0.15 and 0.30."],
+        softIssues: []
       },
       {
         provider: "openai",
@@ -174,5 +182,103 @@ describe("pipeline beat-planning failure persistence", () => {
     expect(evaluationInsert).toBeDefined();
     expect(String(evaluationInsert?.[0])).toContain("'beat_plan'");
     expect(String(evaluationInsert?.[0])).toContain("'fail'");
+  });
+
+  it("persists a beat-plan report when only soft issues remain", async () => {
+    resolveLlmProviderMock.mockResolvedValue({
+      generateBeatSheet: vi.fn().mockResolvedValue({
+        beatSheet: {
+          beats: [
+            {
+              purpose: "Setup",
+              conflict: "Ava wants to save for later.",
+              sceneLocation: "Kitchen table",
+              emotionalTarget: "hopeful",
+              pageIndexEstimate: 0,
+              decodabilityTags: ["controlled_vocab", "repetition"],
+              newWordsIntroduced: ["save"],
+              bitcoinRelevanceScore: 0
+            }
+          ]
+        },
+        audit: {
+          attempts: [],
+          rewritesApplied: 1,
+          passed: true,
+          finalIssues: [],
+          softIssues: ["[science_of_reading] beat 3: Optional adult aside could be shorter."]
+        },
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 123,
+          usage: null
+        }
+      }),
+      draftPages: vi.fn().mockResolvedValue({
+        story: {
+          title: "Ava Saves",
+          beats: [],
+          pages: Array.from({ length: 12 }, (_, index) => ({
+            pageIndex: index,
+            pageText: `Page ${index} text.`,
+            illustrationBrief: `Illustration ${index}`,
+            newWordsIntroduced: ["save"],
+            repetitionTargets: ["save"]
+          })),
+          readingProfileId: "early_decoder_5_7",
+          moneyLessonKey: "saving_later"
+        },
+        meta: {
+          provider: "anthropic",
+          model: "claude-opus-4-6",
+          latencyMs: 234,
+          usage: null
+        }
+      }),
+      critic: vi.fn().mockResolvedValue({
+        ok: true,
+        notes: [],
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 99,
+          usage: null
+        }
+      })
+    });
+
+    await expect(handler({ action: "prepare_story", bookId: "book-1" })).resolves.toEqual({
+      bookId: "book-1",
+      pageCount: 12
+    });
+
+    expect(putJsonMock).toHaveBeenCalledWith(
+      "books/book-1/beat-plan-report.json",
+      expect.objectContaining({
+        bookId: "book-1",
+        softIssues: ["[science_of_reading] beat 3: Optional adult aside could be shorter."]
+      })
+    );
+
+    const artifactInsert = executeMock.mock.calls.find((call) =>
+      String(call[0]).includes("INSERT INTO book_artifacts") && String(call[0]).includes("beat_plan_report")
+    );
+    expect(artifactInsert).toBeDefined();
+
+    const evaluationInsert = executeMock.mock.calls.find(
+      (call) =>
+        String(call[0]).includes("INSERT INTO evaluations") &&
+        String(call[0]).includes("'beat_plan'") &&
+        String(call[0]).includes(":verdict")
+    );
+    expect(evaluationInsert?.[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "verdict",
+          value: { stringValue: "warning" }
+        })
+      ])
+    );
   });
 });

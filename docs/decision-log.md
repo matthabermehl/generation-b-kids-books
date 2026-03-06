@@ -1,5 +1,9 @@
 # Decision Log
 
+## 2026-03-06: Add hard-vs-soft beat critic tiers with report artifacts
+- Decision: beat-planning critics now classify issues as `hard` or `soft`; hard issues still drive rewrite/fail behavior, while soft-only outcomes persist `beat-plan-report.json` and allow story generation to continue.
+- Rationale: Montessori/SoR/narrative feedback includes both objective blockers and advisory cleanup. Capturing advisory notes without blocking the book reduces false-negative build failures while preserving a review trail.
+
 ## 2026-03-05: Make narrative beat critic advisory after bounded rewrites
 - Decision: keep deterministic + Montessori + SoR checks fail-closed, but treat `narrative_freshness` as advisory once max beat rewrites are exhausted (record warning in beat-plan audit instead of throwing).
 - Rationale: narrative critic wording quality can remain unstable despite structurally valid beat plans; this avoids blocking end-to-end delivery while preserving strict pedagogical and deterministic gates.

@@ -32,4 +32,4 @@ Harden the fixed-layout picture-book pipeline for real-LLM dev validation and ma
 
 ## Status
 - baseline: smoke PASS on current branch head
-- work: prompt-layer guardrails are deployed; remaining blocker is the SoR critic/rewrite contract, which still pushes late taught-word Bitcoin framing at beat 9 before image generation can start
+- work: hard-vs-soft beat critic tiers are implemented and deployed; the latest real dev run cleared beat planning, story drafting, moderation, character-sheet generation, and page-image enqueue, so the critic-stage blocker moved downstream into image generation/QA rather than PrepareStory

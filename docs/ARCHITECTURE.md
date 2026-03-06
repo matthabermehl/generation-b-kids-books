@@ -62,6 +62,7 @@ Cross-cutting:
 ### Workers (`apps/workers`)
 - `pipeline.ts`: beat-planning pipeline (planner -> deterministic checks -> critics -> rewrite) + story drafting + moderation + render preparation
   - fail-closed beat planning with persisted failure lineage (`beat-plan-failed.json`) before execution failure
+  - beat critics emit `hard` and `soft` issues; soft-only approvals persist `beat-plan-report.json` without blocking the book
   - blocking beat gates: deterministic + Montessori + Science-of-Reading
   - narrative freshness critic remains active but is advisory after max beat rewrites (captured as audit warning)
   - final story stage runs one Opus draft + one critic pass (no blind full-redraft loop)
