@@ -69,3 +69,16 @@ Evidence:
 Notes: live mark-paid validation on dev now reaches real story generation and then fails on Fal billing exhaustion (403 User is locked / Exhausted balance); final local provider hardening for OpenAI empty-content handling is covered by worker tests and direct API probes but was not redeployed after the last patch in this session
 Next: top up Fal balance, redeploy the final llm-provider patch, then rerun one mark-paid smoke to confirm story_critic stays on OpenAI and image generation proceeds
 Commit: f3a3252
+2026-03-06T14:23:30-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: validated dev after Fal top-up; confirmed provider stack is healthy with real OpenAI gpt-5-mini and Fal, and isolated the remaining blocker to beat-planning validation before image generation
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- pnpm ops:provider-smoke => PASS
+- live mark-paid run 7c321f5f-023c-4f18-9be2-83fa64250ae3 (read_aloud_3_4 + inflation_candy) => FAILED in PrepareStory with BeatPlanningError
+- live mark-paid run 73af22e7-1a8f-4e89-b514-0386f75bb6ff (early_decoder_5_7 + inflation_candy) => FAILED in PrepareStory with BeatPlanningError
+- live mark-paid run bc4d54f4-e2e3-47c6-9c71-95120678fa10 (early_decoder_5_7 + saving_later) => FAILED in PrepareStory with BeatPlanningError
+Notes: Fal balance is no longer the blocker; the pipeline never reached character-sheet or page-image generation in these runs. Next work should target the beat-plan prompt/validator contract for 3-7 profiles.
+Commit: pending
+

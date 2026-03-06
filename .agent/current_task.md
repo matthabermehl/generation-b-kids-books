@@ -1,35 +1,35 @@
 # Current Task
 
-Task ID: merge-master-picture-book-01
+Task ID: picture-book-hardening-01
 
 ## Goal
-Merge `master` into `codex/picture-book-fixed-layout` and preserve both major feature slices: the hardened story-generation pipeline from `master` and the fixed-layout picture-book pipeline on this branch.
+Harden the fixed-layout picture-book pipeline for real-LLM dev validation and manual-review fallback, then validate the live `dev` path with real providers.
 
 ## Expected User-Visible Change
-- Story generation keeps the beat-planning and critic flow from `master`.
-- Fixed-layout picture-book books keep layered composition, preview rendering, and product-family-aware API behavior.
-- Mock-run-tag protections apply consistently across legacy and picture-book execution paths.
+- Fixed-layout picture-book books render with stronger text-safe whitespace protection and smarter retry behavior.
+- Picture-book runs that exhaust QA retries land in `needs_review` rather than a hard `failed` state.
+- The `dev` environment can be validated end-to-end with real LLM and image providers using the dedicated picture-book smoke harness.
 
 ## Files Expected To Change
-- `README.md`
-- `apps/api/src/http.ts`
-- `apps/api/src/openapi/spec.ts`
-- `apps/api/test/openapi.test.ts`
-- `apps/renderer/package.json`
-- `apps/renderer/src/cli/render-once.ts`
-- `apps/renderer/src/lib/render-book.ts`
 - `apps/workers/src/image-worker.ts`
-- `apps/workers/src/pipeline.ts`
 - `apps/workers/src/providers/image.ts`
 - `apps/workers/src/providers/llm.ts`
+- `apps/workers/src/lib/page-mask.ts`
+- `apps/workers/src/lib/page-canvas.ts`
+- `apps/workers/src/lib/page-qa.ts`
+- `apps/workers/src/lib/page-template-select.ts`
+- `apps/workers/src/check-images.ts`
+- `scripts/ops/picture-book-smoke.mjs`
 - `infra/cdk/lib/book-stack.js`
-- supporting tests, docs, prompts, and harness metadata
+- related tests, docs, and harness metadata
 
 ## Tests / Verification
-- `pnpm -r test`
-- `pnpm -r lint`
+- `bash scripts/agent/smoke.sh`
 - `bash scripts/agent/quality.sh`
+- `pnpm ops:provider-smoke`
+- `pnpm ops:picture-book-smoke`
+- live dev mark-paid validation
 
 ## Status
-- baseline: smoke PASS on current branch head before merge
-- work: merge in progress; conflict resolution and verification underway
+- baseline: smoke PASS on current branch head
+- work: live dev validation complete for this pass; remaining blocker is BeatPlanningError before image generation across 3-7 story profiles tested
