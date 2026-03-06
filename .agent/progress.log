@@ -43,3 +43,17 @@ Evidence:
 Notes: live dev run reached real Kontext scene generation and page-fill QA with no Fal 405 or sharp size-composite crash on the new book; remaining live blocker is QA/retry tuning (text_zone_spill/low_luminance) plus occasional Fal poll timeout during retries
 Commit: e73968e
 
+
+2026-03-06T09:08:27-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: hardened the fixed-layout picture-book pipeline with deterministic text-safe masking/knockout, alternate-template QA retries, picture-book needs_review routing, Fal timeout classification, and a dedicated picture-book smoke harness with RDS-backed QA artifacts
+Evidence:
+- bash scripts/agent/quality.sh => PASS
+- bash scripts/agent/smoke.sh => PASS
+- pnpm cdk:deploy:dev => PASS
+- pnpm ops:provider-smoke => FAIL (openai 401 archived project from dev SSM)
+- API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke => FAIL fast because enable_mock_llm=true
+Notes: dev stack is deployed and stable; provider smoke uses the decrypted SSM openai_api_key directly with no project header; /ai-childrens-book/dev/openai_api_key metadata shows last modified 2026-03-04T21:30:35-05:00, so the remaining blocker is stale dev OpenAI credential/config rather than picture-book pipeline code
+Next: rotate /ai-childrens-book/dev/openai_api_key to a live project key, set enable_mock_llm=false, then run both read_aloud_3_4 and early_decoder_5_7 picture-book smokes
+Commit: f300ef0
