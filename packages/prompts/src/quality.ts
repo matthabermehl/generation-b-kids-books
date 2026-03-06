@@ -2,6 +2,7 @@ import {
   validateBannedPhrases,
   validateMontessoriRealism,
   validateNarrativeRatio,
+  validatePageVariation,
   validateReadingProfile,
   type StoryPage,
   type ReadingProfile
@@ -27,6 +28,11 @@ export function runDeterministicStoryChecks(
   const banned = validateBannedPhrases(pages);
   if (!banned.ok) {
     issues.push(...banned.issues.map((issue) => issue.message));
+  }
+
+  const variation = validatePageVariation(pages);
+  if (!variation.ok) {
+    issues.push(...variation.issues.map((issue) => issue.message));
   }
 
   if (enableStrictDecodableChecks) {

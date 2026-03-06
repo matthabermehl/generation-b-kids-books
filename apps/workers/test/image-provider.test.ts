@@ -140,7 +140,9 @@ describe("image provider", () => {
       webBaseUrl: "https://example.com"
     });
 
-    const provider = await resolveImageProvider();
+    await expect(resolveImageProvider()).rejects.toThrow("X-Mock-Run-Tag");
+
+    const provider = await resolveImageProvider({ mockRunTag: "test-run", source: "unit-test" });
     const image = await provider.generate(
       {
         bookId: "book-1",

@@ -1,4 +1,4 @@
-import type { CreateOrderInput, StoryPackage } from "./types.js";
+import type { BeatSheet, CreateOrderInput, StoryPackage } from "./types.js";
 import type { MoneyLessonKey, ReadingProfile } from "./enums.js";
 
 export interface ProviderUsage {
@@ -27,6 +27,7 @@ export interface ImageCallMetadata {
 export interface StoryGenerationContext {
   bookId: string;
   childFirstName: string;
+  pronouns: string;
   ageYears: number;
   lesson: MoneyLessonKey;
   interests: string[];
@@ -35,8 +36,11 @@ export interface StoryGenerationContext {
 }
 
 export interface LlmProviderContract {
-  generateBeatSheet(context: StoryGenerationContext): Promise<{ beats: string[]; meta: LlmCallMetadata }>;
-  draftPages(context: StoryGenerationContext, beats: string[]): Promise<{ story: StoryPackage; meta: LlmCallMetadata }>;
+  generateBeatSheet(context: StoryGenerationContext): Promise<{ beatSheet: BeatSheet; meta: LlmCallMetadata }>;
+  draftPages(
+    context: StoryGenerationContext,
+    beatSheet: BeatSheet
+  ): Promise<{ story: StoryPackage; meta: LlmCallMetadata }>;
   critic(
     context: StoryGenerationContext,
     story: StoryPackage

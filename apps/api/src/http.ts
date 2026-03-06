@@ -325,7 +325,8 @@ async function startBookBuild(
   requestId: string,
   orderId: string,
   bookId: string,
-  source: string
+  source: string,
+  mockRunTag?: string
 ): Promise<{ started: boolean; executionArn: string | null }> {
   const context = await loadOrderContext(orderId);
   if (!context) {
@@ -348,7 +349,7 @@ async function startBookBuild(
     new StartExecutionCommand({
       stateMachineArn,
       name: executionName(orderId, source),
-      input: JSON.stringify({ orderId, bookId })
+      input: JSON.stringify({ orderId, bookId, mockRunTag: mockRunTag ?? null })
     })
   );
 
@@ -736,6 +737,14 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       if (!runtimeConfig.featureFlags.enableMockCheckout) {
         return json(403, { error: "Mock checkout disabled" });
       }
+      const mockRunTag = (readHeader(event, "x-mock-run-tag") ?? "").trim();
+      const requiresMockRunTag =
+        runtimeConfig.featureFlags.enableMockLlm || runtimeConfig.featureFlags.enableMockImage;
+      if (requiresMockRunTag && mockRunTag.length === 0) {
+        return json(400, {
+          error: "X-Mock-Run-Tag header is required when mock LLM or image providers are enabled"
+        });
+      }
 
       const orderId = paidMatch[1];
       const idempotencyKey = readIdempotencyKey(event);
@@ -754,7 +763,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         }
 
         const mockCheckoutSource: string = "mock-checkout";
-        const started = await startBookBuild(requestId, orderId, order.book_id, mockCheckoutSource);
+        const started = await startBookBuild(
+          requestId,
+          orderId,
+          order.book_id,
+          mockCheckoutSource,
+          mockRunTag
+        );
         return {
           ok: true,
           orderId,
