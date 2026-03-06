@@ -32,4 +32,4 @@ Revitalize the web frontend and add an internal review console plus reviewer wor
 
 ## Status
 - baseline: smoke PASS on branch `codex/frontend-review-console`
-- current state: `apps/web` still builds but is a single-file parent app; backend has `needs_review` lifecycle and raw QA data, but no explicit review-case model, no reviewer routes/actions, and no current-attempt semantics for page retries
+- current state: implemented and validated. The web app now has separate parent and reviewer areas, reviewer APIs/actions exist, review cases/audit rows are persisted, current-attempt asset selection is deterministic, and resume/retry flows pass the harness quality gates.

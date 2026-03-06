@@ -107,3 +107,16 @@ Evidence:
 - live mark-paid run 4e0c70b2-ce06-4e77-aede-2b411dd588de (early_decoder_5_7 + saving_later) => PASSED PrepareStory and reached picture-book image generation; current state is RUNNING/building with book e126f740-557b-44f1-8d49-101593b12382, 1 character_sheet image, 7 scene_plate images, and 6 page_fill images persisted so far
 Notes: the critic-stage blocker is no longer preventing end-to-end progress for early_decoder_5_7; remaining validation is now downstream in image generation / page QA rather than beat planning
 Commit: pending
+
+2026-03-06T17:31:31-0500
+Task: review-console-01
+Baseline: smoke PASS
+Change: replaced the single-file web app with route-based parent/reviewer shells, added typed API client generation from OpenAPI, introduced reviewer-gated session bootstrap plus `/v1/review/*` routes/actions, added `review_cases`/`review_events` and current-attempt image/artifact semantics, wired review resume/retry behavior into workers and Step Functions, and documented the operator runbook.
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- bash scripts/agent/quality.sh => PASS
+- pnpm --filter @book/web build => PASS
+- pnpm --filter @book/api test => PASS
+- pnpm --filter @book/cdk test => PASS
+Notes: reviewer route gating now waits for session bootstrap instead of redirecting early; OpenAPI/type generation is wired into the web package scripts so review-console DTOs stay in sync with API changes.
+Commit: b93c31a

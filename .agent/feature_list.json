@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-06T21:50:24Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-06T22:30:37Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -44,8 +44,8 @@
       "Refactor the web app into parent and reviewer areas with typed API access and reviewer route gating",
       "Add review-case persistence, reviewer APIs/actions, current-attempt asset selection, and resume/retry workflow so manual review is operational"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "Implemented route-based parent/reviewer web flows, GET /v1/session and /v1/review/* APIs, review_cases/review_events persistence, current-attempt image/artifact semantics, resume/retry workflow, and reviewer docs. Verification: bash scripts/agent/smoke.sh => PASS; bash scripts/agent/quality.sh => PASS; pnpm --filter @book/web build => PASS; pnpm --filter @book/api test => PASS; pnpm --filter @book/cdk test => PASS (2026-03-06)."
   },
   {
     "id": "merge-master-picture-book-01",
