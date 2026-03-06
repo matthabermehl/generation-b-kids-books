@@ -159,7 +159,7 @@ async function loadDatabaseTargets() {
 
   const resourceArn = outputValue("DbClusterArn");
   const secretArn = outputValue("DbSecretArn");
-  const database = process.env.DB_NAME ?? "postgres";
+  const database = process.env.DB_NAME ?? "bookapp";
 
   if (!resourceArn || !secretArn) {
     throw new Error(`Missing DbClusterArn/DbSecretArn outputs on stack ${stackName}`);
