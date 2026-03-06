@@ -41,5 +41,5 @@ Evidence:
 - bash scripts/agent/quality.sh => PASS
 - live smoke artifact: .agent/artifacts/picture-book-smoke-2026-03-06T05-16-49-375Z.json
 Notes: live dev run reached real Kontext scene generation and page-fill QA with no Fal 405 or sharp size-composite crash on the new book; remaining live blocker is QA/retry tuning (text_zone_spill/low_luminance) plus occasional Fal poll timeout during retries
-Commit: pending
+Commit: e73968e
 
