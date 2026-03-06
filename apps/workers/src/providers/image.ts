@@ -1,4 +1,5 @@
 import { pageSeed } from "@book/domain";
+import { assertMockRunAuthorized, type MockRunContext } from "../lib/mock-guard.js";
 import { getRuntimeConfig, type RuntimeConfig } from "../lib/ssm-config.js";
 import { sleep } from "../lib/helpers.js";
 
@@ -329,8 +330,12 @@ class FalImageProvider implements ImageProvider {
   }
 }
 
-export async function resolveImageProvider(): Promise<ImageProvider> {
+export async function resolveImageProvider(context: MockRunContext = {}): Promise<ImageProvider> {
   const config = await getRuntimeConfig();
+  assertMockRunAuthorized(config, {
+    ...context,
+    source: context.source ?? "resolve_image_provider"
+  });
   if (config.featureFlags.enableMockImage) {
     return new MockImageProvider();
   }

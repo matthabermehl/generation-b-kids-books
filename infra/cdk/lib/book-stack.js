@@ -233,7 +233,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     const pipelineFunction = new lambdaNode.NodejsFunction(this, "PipelineFunction", {
       runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.minutes(2),
+      timeout: cdk.Duration.minutes(5),
       memorySize: 1024,
       entry: path.resolve(repoRoot, "apps/workers/src/pipeline.ts"),
       projectRoot: repoRoot,
@@ -549,7 +549,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
         action: "prepare_story",
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
       }),
       resultPath: "$.prepareStory"
     });
@@ -558,7 +559,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
         action: "generate_character_sheet",
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
       }),
       resultPath: "$.characterSheet"
     });
@@ -567,7 +569,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
         action: "enqueue_page_images",
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
       }),
       resultPath: "$.enqueueImages"
     });
@@ -596,7 +599,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
         action: "prepare_render_input",
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
       }),
       resultPath: "$.prepareRender"
     });

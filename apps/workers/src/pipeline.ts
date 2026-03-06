@@ -7,7 +7,7 @@ import { fileExtensionForContentType, makeId, logStructured } from "./lib/helper
 import { moderateTexts } from "./lib/content-safety.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { resolveImageProvider } from "./providers/image.js";
-import { resolveLlmProvider } from "./providers/llm.js";
+import { BeatPlanningError, resolveLlmProvider } from "./providers/llm.js";
 
 const sqs = new SQSClient({});
 
@@ -19,6 +19,7 @@ interface PipelineEvent {
     | "prepare_render_input";
   bookId: string;
   orderId?: string;
+  mockRunTag?: string | null;
 }
 
 interface BookContextRow {
@@ -112,98 +113,249 @@ async function markBookNeedsReview(
   );
 }
 
-async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount: number }> {
+async function persistBeatPlanningFailure(
+  bookId: string,
+  error: BeatPlanningError
+): Promise<{ artifactKey: string }> {
+  const artifactKey = `books/${bookId}/beat-plan-failed.json`;
+  await putJson(artifactKey, {
+    bookId,
+    beatSheet: error.beatSheet,
+    audit: error.audit,
+    llmMeta: error.meta,
+    generatedAt: new Date().toISOString()
+  });
+
+  await execute(
+    `
+      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
+      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan_failed', :s3)
+    `,
+    [
+      { name: "id", value: { stringValue: makeId() } },
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "s3", value: { stringValue: `s3://${process.env.ARTIFACT_BUCKET}/${artifactKey}` } }
+    ]
+  );
+
+  await execute(
+    `
+      INSERT INTO evaluations (id, book_id, stage, model_used, score_json, verdict, notes)
+      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan', :modelUsed, CAST(:score AS jsonb), 'fail', :notes)
+    `,
+    [
+      { name: "id", value: { stringValue: makeId() } },
+      { name: "bookId", value: { stringValue: bookId } },
+      {
+        name: "modelUsed",
+        value: {
+          stringValue: `${error.meta.provider}:${error.meta.model}`
+        }
+      },
+      {
+        name: "score",
+        value: {
+          stringValue: JSON.stringify({
+            rewritesApplied: error.audit.rewritesApplied,
+            attempts: error.audit.attempts.length,
+            passed: false,
+            artifactKey,
+            llm: error.meta
+          })
+        }
+      },
+      {
+        name: "notes",
+        value: {
+          stringValue: error.audit.finalIssues.join(" | ").slice(0, 4096)
+        }
+      }
+    ]
+  );
+
+  return { artifactKey };
+}
+
+async function prepareStory(
+  bookId: string,
+  mockRunTag?: string | null
+): Promise<{ bookId: string; pageCount: number }> {
   const context = await loadBookContext(bookId);
-  const llm = await resolveLlmProvider();
+  const llm = await resolveLlmProvider({ mockRunTag, source: "prepare_story" });
   const pageCount = Number(process.env.BOOK_DEFAULT_PAGE_COUNT ?? "12");
   const interests = (context.interest_tags ?? "").split(",").filter(Boolean);
-
-  const beatSheet = await llm.generateBeatSheet({
+  const storyContext = {
     bookId,
     childFirstName: context.child_first_name,
+    pronouns: context.pronouns,
     ageYears: Number(context.age_years),
     lesson: context.money_lesson_key,
     interests,
     profile: context.reading_profile_id,
-    pageCount
+    pageCount,
+    mockRunTag
+  } as const;
+
+  logStructured("BeatPlanningStart", {
+    bookId,
+    pageCount,
+    profile: context.reading_profile_id
+  });
+  const beatPlanningStartedAt = Date.now();
+  let beatPlanning: Awaited<ReturnType<typeof llm.generateBeatSheet>>;
+  try {
+    beatPlanning = await llm.generateBeatSheet(storyContext);
+  } catch (error) {
+    if (error instanceof BeatPlanningError) {
+      try {
+        const persisted = await persistBeatPlanningFailure(bookId, error);
+        console.error(
+          JSON.stringify({
+            event: "BEAT_PLAN_FAILED",
+            bookId,
+            artifactKey: persisted.artifactKey,
+            issues: error.audit.finalIssues
+          })
+        );
+      } catch (persistError) {
+        console.error(
+          JSON.stringify({
+            event: "BEAT_PLAN_FAILURE_PERSIST_ERROR",
+            bookId,
+            message: persistError instanceof Error ? persistError.message : String(persistError)
+          })
+        );
+      }
+    }
+
+    throw error;
+  }
+  logStructured("BeatPlanningComplete", {
+    bookId,
+    durationMs: Date.now() - beatPlanningStartedAt,
+    attempts: beatPlanning.audit.attempts.length,
+    rewritesApplied: beatPlanning.audit.rewritesApplied,
+    provider: beatPlanning.meta.provider,
+    model: beatPlanning.meta.model
   });
 
-  let drafted = await llm.draftPages(
-    {
-      bookId,
-      childFirstName: context.child_first_name,
-      ageYears: Number(context.age_years),
-      lesson: context.money_lesson_key,
-      interests,
-      profile: context.reading_profile_id,
-      pageCount
-    },
-    beatSheet.beats
-  );
+  logStructured("StoryDraftStart", { bookId, attempt: 0 });
+  const initialDraftStartedAt = Date.now();
+  let drafted = await llm.draftPages(storyContext, beatPlanning.beatSheet);
+  logStructured("StoryDraftComplete", {
+    bookId,
+    attempt: 0,
+    durationMs: Date.now() - initialDraftStartedAt,
+    provider: drafted.meta.provider,
+    model: drafted.meta.model
+  });
   let story = drafted.story;
 
   const critiques: string[] = [];
   const providerMeta = {
-    beatSheet: beatSheet.meta,
+    beatPlan: {
+      planner: beatPlanning.meta,
+      audit: beatPlanning.audit
+    },
     drafts: [drafted.meta],
     critics: [] as Array<{ provider: string; model: string; latencyMs: number }>
   };
 
-  const maxRewrites = 2;
-  for (let rewriteAttempt = 0; rewriteAttempt <= maxRewrites; rewriteAttempt += 1) {
-    const verdict = await llm.critic(
-      {
-        bookId,
-        childFirstName: context.child_first_name,
-        ageYears: Number(context.age_years),
-        lesson: context.money_lesson_key,
-        interests,
-        profile: context.reading_profile_id,
-        pageCount
-      },
-      story
-    );
+  logStructured("StoryCriticStart", { bookId, rewriteAttempt: 0 });
+  const criticStartedAt = Date.now();
+  const verdict = await llm.critic(storyContext, story);
+  logStructured("StoryCriticComplete", {
+    bookId,
+    rewriteAttempt: 0,
+    durationMs: Date.now() - criticStartedAt,
+    ok: verdict.ok,
+    noteCount: verdict.notes.length,
+    provider: verdict.meta.provider,
+    model: verdict.meta.model
+  });
 
-    providerMeta.critics.push({
-      provider: verdict.meta.provider,
-      model: verdict.meta.model,
-      latencyMs: verdict.meta.latencyMs
-    });
-    critiques.push(...verdict.notes);
-    if (verdict.ok) {
-      break;
-    }
+  providerMeta.critics.push({
+    provider: verdict.meta.provider,
+    model: verdict.meta.model,
+    latencyMs: verdict.meta.latencyMs
+  });
+  critiques.push(...verdict.notes);
 
-    if (rewriteAttempt === maxRewrites) {
-      break;
-    }
-
-    drafted = await llm.draftPages(
-      {
-        bookId,
-        childFirstName: context.child_first_name,
-        ageYears: Number(context.age_years),
-        lesson: context.money_lesson_key,
-        interests,
-        profile: context.reading_profile_id,
-        pageCount
-      },
-      beatSheet.beats
-    );
-    providerMeta.drafts.push(drafted.meta);
-    story = drafted.story;
-  }
-
+  logStructured("StoryModerationStart", { bookId, pageCount: story.pages.length });
+  const moderationStartedAt = Date.now();
   const moderation = await moderateTexts(
     (await getRuntimeConfig()).secrets.openaiApiKey,
     story.pages.flatMap((page) => [page.pageText, page.illustrationBrief])
   );
+  logStructured("StoryModerationComplete", {
+    bookId,
+    durationMs: Date.now() - moderationStartedAt,
+    ok: moderation.ok,
+    reasonCount: moderation.reasons.length,
+    mode: moderation.mode
+  });
   if (!moderation.ok) {
     await markBookNeedsReview(bookId, context.order_id, "text_moderation", moderation.reasons, {
       mode: moderation.mode
     });
     throw new Error(`BOOK_NEEDS_REVIEW:text_moderation:${moderation.reasons[0] ?? "policy_violation"}`);
   }
+
+  const beatPlanKey = `books/${bookId}/beat-plan.json`;
+  await putJson(beatPlanKey, {
+    bookId,
+    beatSheet: beatPlanning.beatSheet,
+    audit: beatPlanning.audit,
+    llmMeta: beatPlanning.meta,
+    generatedAt: new Date().toISOString()
+  });
+
+  await execute(
+    `
+      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
+      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan', :s3)
+    `,
+    [
+      { name: "id", value: { stringValue: makeId() } },
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "s3", value: { stringValue: `s3://${process.env.ARTIFACT_BUCKET}/${beatPlanKey}` } }
+    ]
+  );
+
+  await execute(
+    `
+      INSERT INTO evaluations (id, book_id, stage, model_used, score_json, verdict, notes)
+      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'beat_plan', :modelUsed, CAST(:score AS jsonb), :verdict, :notes)
+    `,
+    [
+      { name: "id", value: { stringValue: makeId() } },
+      { name: "bookId", value: { stringValue: bookId } },
+      {
+        name: "modelUsed",
+        value: {
+          stringValue: `${beatPlanning.meta.provider}:${beatPlanning.meta.model}`
+        }
+      },
+      {
+        name: "score",
+        value: {
+          stringValue: JSON.stringify({
+            rewritesApplied: beatPlanning.audit.rewritesApplied,
+            attempts: beatPlanning.audit.attempts.length,
+            passed: beatPlanning.audit.passed,
+            llm: beatPlanning.meta
+          })
+        }
+      },
+      { name: "verdict", value: { stringValue: beatPlanning.audit.passed ? "pass" : "warning" } },
+      {
+        name: "notes",
+        value: {
+          stringValue: beatPlanning.audit.finalIssues.join(" | ") || "Beat plan approved"
+        }
+      }
+    ]
+  );
 
   await withTransaction(async (tx) => {
     await txExecute(tx, `DELETE FROM pages WHERE book_id = CAST(:bookId AS uuid)`, [
@@ -254,6 +406,7 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
           value: {
             stringValue: JSON.stringify({
               critiqueCount: critiques.length,
+              beatPlanArtifactKey: beatPlanKey,
               llm: providerMeta
             })
           }
@@ -279,7 +432,7 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
   await putJson(promptKey, {
     bookId,
     stylePrefix: "Muted watercolor palette, matte texture, calm composition.",
-    beats: beatSheet.beats,
+    beats: beatPlanning.beatSheet.beats,
     generatedAt: new Date().toISOString()
   });
 
@@ -300,10 +453,16 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
   return { bookId, pageCount: story.pages.length };
 }
 
-async function generateCharacterSheet(bookId: string): Promise<{ bookId: string; key: string }> {
+async function generateCharacterSheet(
+  bookId: string,
+  mockRunTag?: string | null
+): Promise<{ bookId: string; key: string }> {
   const context = await loadBookContext(bookId);
   const runtimeConfig = await getRuntimeConfig();
-  const imageProvider = await resolveImageProvider();
+  const imageProvider = await resolveImageProvider({
+    mockRunTag,
+    source: "generate_character_sheet"
+  });
   const image = await imageProvider.generate(
     {
       bookId,
@@ -372,7 +531,7 @@ function styleConsistencyAnchor(context: BookContextRow): string {
   ].join(" ");
 }
 
-async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
+async function enqueuePageImages(bookId: string, mockRunTag?: string | null): Promise<{ queued: number }> {
   const queueUrl = process.env.IMAGE_QUEUE_URL;
   if (!queueUrl) {
     throw new Error("IMAGE_QUEUE_URL is required");
@@ -411,6 +570,7 @@ async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify({
           bookId,
+          mockRunTag: mockRunTag ?? null,
           pageId: page.id,
           pageIndex: Number(page.page_index),
           text: page.text,
@@ -511,16 +671,17 @@ export const handler: Handler<PipelineEvent> = async (event) => {
   logStructured("PipelineActionStart", {
     action: event.action,
     bookId: event.bookId,
-    orderId: event.orderId ?? null
+    orderId: event.orderId ?? null,
+    mockRunTagPresent: Boolean(event.mockRunTag && event.mockRunTag.trim().length > 0)
   });
 
   switch (event.action) {
     case "prepare_story":
-      return prepareStory(event.bookId);
+      return prepareStory(event.bookId, event.mockRunTag);
     case "generate_character_sheet":
-      return generateCharacterSheet(event.bookId);
+      return generateCharacterSheet(event.bookId, event.mockRunTag);
     case "enqueue_page_images":
-      return enqueuePageImages(event.bookId);
+      return enqueuePageImages(event.bookId, event.mockRunTag);
     case "prepare_render_input":
       return prepareRenderInput(event.bookId);
     default:

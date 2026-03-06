@@ -8,6 +8,7 @@ import { resolveImageProvider } from "./providers/image.js";
 
 interface JobPayload {
   bookId: string;
+  mockRunTag?: string | null;
   pageId: string;
   pageIndex: number;
   text: string;
@@ -45,7 +46,10 @@ function imagePrompt(job: JobPayload): string {
 }
 
 async function generatePageImage(job: JobPayload): Promise<void> {
-  const provider = await resolveImageProvider();
+  const provider = await resolveImageProvider({
+    mockRunTag: job.mockRunTag,
+    source: "image_worker"
+  });
   const prompt = imagePrompt(job);
   const attemptResult = await runImageGenerationAttempts(provider, {
     bookId: job.bookId,
