@@ -6,45 +6,54 @@ vi.mock("../src/lib/ssm-config.js", () => ({
   getRuntimeConfig: getRuntimeConfigMock
 }));
 
-import { resolveImageProvider } from "../src/providers/image.js";
+import { resolveImageProvider, resolvePictureBookImageProviders } from "../src/providers/image.js";
+
+function runtimeConfig(overrides?: Record<string, unknown>) {
+  return {
+    secrets: {
+      sendgridApiKey: "sg",
+      openaiApiKey: "oa",
+      anthropicApiKey: "an",
+      falKey: "fk",
+      jwtSigningSecret: "x".repeat(32),
+      stripeSecretKey: "sk_test_123",
+      stripeWebhookSecret: "whsec_123"
+    },
+    models: {
+      openaiJson: "gpt-4.1-mini",
+      openaiVision: "gpt-4.1-mini",
+      anthropicWriter: "claude-sonnet-4-5"
+    },
+    stripe: {
+      priceId: "price_123",
+      successUrl: "https://example.com/success",
+      cancelUrl: "https://example.com/cancel"
+    },
+    falEndpoints: {
+      base: "fal-ai/flux-2",
+      lora: "fal-ai/flux-lora",
+      general: "fal-ai/flux-general",
+      scenePlate: "fal-ai/flux-pro/kontext/max/multi",
+      pageFill: "fal-ai/flux-pro/v1/fill"
+    },
+    falStyleLoraUrl: null,
+    featureFlags: {
+      enableMockLlm: false,
+      enableMockImage: false,
+      enableMockCheckout: false,
+      enablePictureBookPipeline: false,
+      enableIndependent8To10: false
+    },
+    sendgridFromEmail: "noreply@example.com",
+    webBaseUrl: "https://example.com",
+    ...overrides
+  };
+}
 
 describe("image provider", () => {
   beforeEach(() => {
     getRuntimeConfigMock.mockReset();
-    getRuntimeConfigMock.mockResolvedValue({
-      secrets: {
-        sendgridApiKey: "sg",
-        openaiApiKey: "oa",
-        anthropicApiKey: "an",
-        falKey: "fk",
-        jwtSigningSecret: "x".repeat(32),
-        stripeSecretKey: "sk_test_123",
-        stripeWebhookSecret: "whsec_123"
-      },
-      models: {
-        openaiJson: "gpt-4.1-mini",
-        openaiVision: "gpt-4.1-mini",
-        anthropicWriter: "claude-sonnet-4-5"
-      },
-      stripe: {
-        priceId: "price_123",
-        successUrl: "https://example.com/success",
-        cancelUrl: "https://example.com/cancel"
-      },
-      falEndpoints: {
-        base: "fal-ai/flux-2",
-        lora: "fal-ai/flux-lora",
-        general: "fal-ai/flux-general"
-      },
-      falStyleLoraUrl: null,
-      featureFlags: {
-        enableMockLlm: false,
-        enableMockImage: false,
-        enableMockCheckout: false
-      },
-      sendgridFromEmail: "noreply@example.com",
-      webBaseUrl: "https://example.com"
-    });
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig());
   });
 
   afterEach(() => {
@@ -105,40 +114,17 @@ describe("image provider", () => {
   });
 
   it("uses mock adapter when enable_mock_image is true", async () => {
-    getRuntimeConfigMock.mockResolvedValue({
-      secrets: {
-        sendgridApiKey: "sg",
-        openaiApiKey: "oa",
-        anthropicApiKey: "an",
-        falKey: "fk",
-        jwtSigningSecret: "x".repeat(32),
-        stripeSecretKey: "sk_test_123",
-        stripeWebhookSecret: "whsec_123"
-      },
-      models: {
-        openaiJson: "gpt-4.1-mini",
-        openaiVision: "gpt-4.1-mini",
-        anthropicWriter: "claude-sonnet-4-5"
-      },
-      stripe: {
-        priceId: "price_123",
-        successUrl: "https://example.com/success",
-        cancelUrl: "https://example.com/cancel"
-      },
-      falEndpoints: {
-        base: "fal-ai/flux-2",
-        lora: "fal-ai/flux-lora",
-        general: "fal-ai/flux-general"
-      },
-      falStyleLoraUrl: null,
-      featureFlags: {
-        enableMockLlm: false,
-        enableMockImage: true,
-        enableMockCheckout: false
-      },
-      sendgridFromEmail: "noreply@example.com",
-      webBaseUrl: "https://example.com"
-    });
+    getRuntimeConfigMock.mockResolvedValue(
+      runtimeConfig({
+        featureFlags: {
+          enableMockLlm: false,
+          enableMockImage: true,
+          enableMockCheckout: false,
+          enablePictureBookPipeline: false,
+          enableIndependent8To10: false
+        }
+      })
+    );
 
     const provider = await resolveImageProvider();
     const image = await provider.generate(
@@ -156,40 +142,11 @@ describe("image provider", () => {
   });
 
   it("routes page renders to LoRA endpoint when style LoRA is configured", async () => {
-    getRuntimeConfigMock.mockResolvedValue({
-      secrets: {
-        sendgridApiKey: "sg",
-        openaiApiKey: "oa",
-        anthropicApiKey: "an",
-        falKey: "fk",
-        jwtSigningSecret: "x".repeat(32),
-        stripeSecretKey: "sk_test_123",
-        stripeWebhookSecret: "whsec_123"
-      },
-      models: {
-        openaiJson: "gpt-4.1-mini",
-        openaiVision: "gpt-4.1-mini",
-        anthropicWriter: "claude-sonnet-4-5"
-      },
-      stripe: {
-        priceId: "price_123",
-        successUrl: "https://example.com/success",
-        cancelUrl: "https://example.com/cancel"
-      },
-      falEndpoints: {
-        base: "fal-ai/flux-2",
-        lora: "fal-ai/flux-lora",
-        general: "fal-ai/flux-general"
-      },
-      falStyleLoraUrl: "https://example.com/style.safetensors",
-      featureFlags: {
-        enableMockLlm: false,
-        enableMockImage: false,
-        enableMockCheckout: false
-      },
-      sendgridFromEmail: "noreply@example.com",
-      webBaseUrl: "https://example.com"
-    });
+    getRuntimeConfigMock.mockResolvedValue(
+      runtimeConfig({
+        falStyleLoraUrl: "https://example.com/style.safetensors"
+      })
+    );
 
     const fetchMock = vi
       .fn()
@@ -242,40 +199,11 @@ describe("image provider", () => {
   });
 
   it("uses reference-image conditioning on fal payload when a reference URL is provided", async () => {
-    getRuntimeConfigMock.mockResolvedValue({
-      secrets: {
-        sendgridApiKey: "sg",
-        openaiApiKey: "oa",
-        anthropicApiKey: "an",
-        falKey: "fk",
-        jwtSigningSecret: "x".repeat(32),
-        stripeSecretKey: "sk_test_123",
-        stripeWebhookSecret: "whsec_123"
-      },
-      models: {
-        openaiJson: "gpt-4.1-mini",
-        openaiVision: "gpt-4.1-mini",
-        anthropicWriter: "claude-sonnet-4-5"
-      },
-      stripe: {
-        priceId: "price_123",
-        successUrl: "https://example.com/success",
-        cancelUrl: "https://example.com/cancel"
-      },
-      falEndpoints: {
-        base: "fal-ai/flux-2",
-        lora: "fal-ai/flux-lora",
-        general: "fal-ai/flux-general"
-      },
-      falStyleLoraUrl: "https://example.com/style.safetensors",
-      featureFlags: {
-        enableMockLlm: false,
-        enableMockImage: false,
-        enableMockCheckout: false
-      },
-      sendgridFromEmail: "noreply@example.com",
-      webBaseUrl: "https://example.com"
-    });
+    getRuntimeConfigMock.mockResolvedValue(
+      runtimeConfig({
+        falStyleLoraUrl: "https://example.com/style.safetensors"
+      })
+    );
 
     const fetchMock = vi
       .fn()
@@ -336,5 +264,115 @@ describe("image provider", () => {
     expect(requestBody.reference_image_url).toBe("https://example.com/character-sheet.png");
     expect(requestBody.reference_strength).toBe(0.85);
     expect(requestBody.loras?.[0]?.path).toBe("https://example.com/style.safetensors");
+  });
+
+  it("sends explicit reference urls to the scene-plate provider", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ request_id: "req-scene" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "COMPLETED" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            images: [{ url: "https://cdn.example.com/scene.png", width: 2048, height: 2048 }]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+    const { scenePlateProvider } = await resolvePictureBookImageProviders();
+    await scenePlateProvider.generateScenePlate(
+      {
+        bookId: "book-scene",
+        pageIndex: 0,
+        prompt: "Watercolor playground scene.",
+        referenceImageUrls: ["https://example.com/character.png", "https://example.com/style.png"]
+      },
+      1
+    );
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body ?? "{}")) as {
+      image_urls?: string[];
+      aspect_ratio?: string;
+    };
+    expect(requestBody.image_urls).toEqual([
+      "https://example.com/character.png",
+      "https://example.com/style.png"
+    ]);
+    expect(requestBody.aspect_ratio).toBe("1:1");
+  });
+
+  it("sends image and mask urls to the fill provider", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ request_id: "req-fill" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "COMPLETED" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            images: [{ url: "https://cdn.example.com/fill.png", width: 2048, height: 2048 }]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(Buffer.from([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/png" }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+    const { pageFillProvider } = await resolvePictureBookImageProviders();
+    await pageFillProvider.harmonizePageArt(
+      {
+        bookId: "book-fill",
+        pageIndex: 1,
+        prompt: "Blend art into the mask.",
+        canvasImageUrl: "https://example.com/canvas.png",
+        maskImageUrl: "https://example.com/mask.png"
+      },
+      1
+    );
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body ?? "{}")) as {
+      image_url?: string;
+      mask_url?: string;
+    };
+    expect(requestBody.image_url).toBe("https://example.com/canvas.png");
+    expect(requestBody.mask_url).toBe("https://example.com/mask.png");
   });
 });

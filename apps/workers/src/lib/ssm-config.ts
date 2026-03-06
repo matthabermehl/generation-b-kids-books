@@ -28,12 +28,16 @@ export interface RuntimeConfig {
     base: string;
     lora: string;
     general: string;
+    scenePlate: string;
+    pageFill: string;
   };
   falStyleLoraUrl: string | null;
   featureFlags: {
     enableMockLlm: boolean;
     enableMockImage: boolean;
     enableMockCheckout: boolean;
+    enablePictureBookPipeline: boolean;
+    enableIndependent8To10: boolean;
   };
   sendgridFromEmail: string;
   webBaseUrl: string;
@@ -70,13 +74,17 @@ const runtimeConfigSchema = z.object({
   falEndpoints: z.object({
     base: z.string().min(1),
     lora: z.string().min(1),
-    general: z.string().min(1)
+    general: z.string().min(1),
+    scenePlate: z.string().min(1),
+    pageFill: z.string().min(1)
   }),
   falStyleLoraUrl: z.string().url().nullable(),
   featureFlags: z.object({
     enableMockLlm: z.boolean(),
     enableMockImage: z.boolean(),
-    enableMockCheckout: z.boolean()
+    enableMockCheckout: z.boolean(),
+    enablePictureBookPipeline: z.boolean(),
+    enableIndependent8To10: z.boolean()
   }),
   sendgridFromEmail: z.string().email(),
   webBaseUrl: z.string().url()
@@ -157,13 +165,17 @@ async function loadRuntimeConfigFromSsm(): Promise<RuntimeConfig> {
     falEndpoints: {
       base: byName.fal_endpoint_base ?? "fal-ai/flux-2",
       lora: byName.fal_endpoint_lora ?? "fal-ai/flux-lora",
-      general: byName.fal_endpoint_general ?? "fal-ai/flux-general"
+      general: byName.fal_endpoint_general ?? "fal-ai/flux-general",
+      scenePlate: byName.fal_endpoint_scene_plate ?? "fal-ai/flux-pro/kontext/max/multi",
+      pageFill: byName.fal_endpoint_page_fill ?? "fal-ai/flux-pro/v1/fill"
     },
     falStyleLoraUrl: byName.fal_style_lora_url ? byName.fal_style_lora_url : null,
     featureFlags: {
       enableMockLlm: parseBoolean(byName.enable_mock_llm, false),
       enableMockImage: parseBoolean(byName.enable_mock_image, false),
-      enableMockCheckout: parseBoolean(byName.enable_mock_checkout, false)
+      enableMockCheckout: parseBoolean(byName.enable_mock_checkout, false),
+      enablePictureBookPipeline: parseBoolean(byName.enable_picture_book_pipeline, false),
+      enableIndependent8To10: parseBoolean(byName.enable_independent_8_to_10, false)
     },
     sendgridFromEmail: requiredParam(byName, "sendgrid_from_email"),
     webBaseUrl: requiredParam(byName, "web_base_url")

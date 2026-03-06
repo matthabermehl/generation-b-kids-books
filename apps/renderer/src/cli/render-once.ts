@@ -1,17 +1,5 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import PDFDocument from "pdfkit";
-
-interface RenderPage {
-  index: number;
-  text: string;
-  imageS3Url: string;
-}
-
-interface RenderInput {
-  bookId: string;
-  title: string;
-  pages: RenderPage[];
-}
+import { renderBook, type RenderInput } from "../lib/render-book.js";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -20,49 +8,6 @@ function required(name: string): string {
   }
 
   return value;
-}
-
-function parseS3Url(url: string): { bucket: string; key: string } {
-  if (!url.startsWith("s3://")) {
-    throw new Error(`Invalid s3 url: ${url}`);
-  }
-
-  const withoutPrefix = url.slice("s3://".length);
-  const slash = withoutPrefix.indexOf("/");
-  return {
-    bucket: withoutPrefix.slice(0, slash),
-    key: withoutPrefix.slice(slash + 1)
-  };
-}
-
-async function renderPdf(input: RenderInput): Promise<Buffer> {
-  const doc = new PDFDocument({ size: "LETTER", margin: 48 });
-  const chunks: Buffer[] = [];
-
-  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-
-  const done = new Promise<Buffer>((resolve) => {
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-  });
-
-  doc.fontSize(24).text(input.title);
-  doc.moveDown();
-  doc.fontSize(12).text(`Book ID: ${input.bookId}`);
-  doc.moveDown();
-
-  for (const page of input.pages) {
-    doc.addPage();
-    doc.fontSize(18).text(`Page ${page.index + 1}`);
-    doc.moveDown();
-    doc.fontSize(12).text(page.text);
-    doc.moveDown();
-    doc.fontSize(10).fillColor("#64748b").text(`Illustration source: ${page.imageS3Url}`);
-    doc.fillColor("#111827");
-  }
-
-  doc.end();
-
-  return done;
 }
 
 async function main(): Promise<void> {
@@ -84,7 +29,7 @@ async function main(): Promise<void> {
   }
 
   const input = JSON.parse(payload) as RenderInput;
-  const pdf = await renderPdf(input);
+  const pdf = await renderBook(input);
 
   await s3.send(
     new PutObjectCommand({

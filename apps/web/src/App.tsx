@@ -22,15 +22,20 @@ interface BookPayload {
   bookId: string;
   status: string;
   childFirstName: string;
+  productFamily?: "picture_book_fixed_layout" | "chapter_book_reflowable";
   pages: Array<{
     pageIndex: number;
     text: string;
     status: string;
     imageUrl: string | null;
+    previewImageUrl?: string | null;
+    templateId?: string;
+    productFamily?: "picture_book_fixed_layout" | "chapter_book_reflowable";
   }>;
 }
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "";
+const enableIndependent8To10 = false;
 const authTokenKey = "book-auth-token";
 const activeOrderKey = "book-active-order";
 const activeOrderStatusKey = "book-active-order-status";
@@ -85,6 +90,7 @@ export function App() {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(() => localStorage.getItem(activeCheckoutUrlKey));
   const [privacyStatus, setPrivacyStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
 
   const verifyTokenFromUrl = useMemo(() => {
     const url = new URL(window.location.href);
@@ -511,7 +517,7 @@ export function App() {
           >
             <option value="read_aloud_3_4">Read-aloud (3-4)</option>
             <option value="early_decoder_5_7">Early decoder (5-7)</option>
-            <option value="independent_8_10">Independent (8-10)</option>
+            {enableIndependent8To10 ? <option value="independent_8_10">Independent (8-10)</option> : null}
           </select>
 
           <button onClick={createOrder}>Create order</button>
@@ -563,15 +569,25 @@ export function App() {
           {privacyStatus && <p className="hint">{privacyStatus}</p>}
 
           {bookPayload && (
-            <div className="pages">
-              {bookPayload.pages.map((page) => (
-                <article key={page.pageIndex} className="page-card">
-                  <h3>Page {page.pageIndex + 1}</h3>
-                  <p>{page.text}</p>
-                  {page.imageUrl ? <img src={page.imageUrl} alt={`Page ${page.pageIndex + 1}`} /> : <p>No image yet</p>}
-                </article>
-              ))}
-            </div>
+            <>
+              <div className="button-row">
+                <button onClick={() => setShowTranscript((current) => !current)}>
+                  {showTranscript ? "Hide text" : "Show text"}
+                </button>
+              </div>
+              <div className="pages">
+                {bookPayload.pages.map((page) => {
+                  const previewUrl = page.previewImageUrl ?? page.imageUrl;
+                  return (
+                    <article key={page.pageIndex} className="page-card">
+                      <h3>Page {page.pageIndex + 1}</h3>
+                      {previewUrl ? <img src={previewUrl} alt={`Page ${page.pageIndex + 1}`} /> : <p>No page preview yet</p>}
+                      {showTranscript ? <p>{page.text}</p> : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </>
           )}
 
           {downloadUrl && (

@@ -1,4 +1,11 @@
-import type { MoneyLessonKey, ReadingProfile } from "./enums.js";
+import type {
+  BookProductFamily,
+  LayoutProfileId,
+  MoneyLessonKey,
+  PageTemplateId,
+  PictureBookReadingProfile,
+  ReadingProfile
+} from "./enums.js";
 
 export interface CreateOrderInput {
   childFirstName: string;
@@ -31,4 +38,43 @@ export interface StoryPackage {
   pages: StoryPage[];
   readingProfileId: ReadingProfile;
   moneyLessonKey: MoneyLessonKey;
+}
+
+export interface NormalizedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PageFadeSpec {
+  shape: "ellipse" | "soft_band";
+  featherPx: number;
+}
+
+export interface PageTextStyleSpec {
+  readingProfileId: PictureBookReadingProfile;
+  preferredFontPx: number;
+  minFontPx: number;
+  lineHeight: number;
+  align: "left";
+}
+
+export interface PageCompositionSpec {
+  layoutProfileId: LayoutProfileId;
+  templateId: PageTemplateId;
+  canvas: {
+    width: number;
+    height: number;
+  };
+  textBox: NormalizedRect;
+  artBox: NormalizedRect;
+  maskBox: NormalizedRect;
+  fade: PageFadeSpec;
+  textStyle: PageTextStyleSpec;
+}
+
+export interface BookProductConfig {
+  productFamily: BookProductFamily;
+  layoutProfileId: LayoutProfileId | null;
 }

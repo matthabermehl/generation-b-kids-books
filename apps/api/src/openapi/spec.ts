@@ -184,6 +184,10 @@ export const openApiSpec = {
             type: "string",
             enum: ["inflation_candy", "saving_later", "delayed_gratification"]
           },
+          productFamily: {
+            type: "string",
+            enum: ["picture_book_fixed_layout", "chapter_book_reflowable"]
+          },
           pages: {
             type: "array",
             items: {
@@ -193,7 +197,13 @@ export const openApiSpec = {
                 pageIndex: { type: "integer", minimum: 0 },
                 text: { type: "string" },
                 status: { type: "string", enum: ["pending", "ready", "failed"] },
-                imageUrl: { type: ["string", "null"] }
+                imageUrl: { type: ["string", "null"] },
+                previewImageUrl: { type: ["string", "null"] },
+                templateId: { type: "string", nullable: true },
+                productFamily: {
+                  type: "string",
+                  enum: ["picture_book_fixed_layout", "chapter_book_reflowable"]
+                }
               }
             }
           }
@@ -316,6 +326,14 @@ export const openApiSpec = {
           },
           "401": {
             description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "422": {
+            description: "Reading profile not enabled",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" }

@@ -127,6 +127,18 @@ CREATE TABLE IF NOT EXISTS privacy_events (
   completed_at TIMESTAMPTZ
 );
 
+ALTER TABLE books
+  ADD COLUMN IF NOT EXISTS product_family TEXT NOT NULL DEFAULT 'picture_book_fixed_layout',
+  ADD COLUMN IF NOT EXISTS layout_profile_id TEXT NOT NULL DEFAULT 'pb_square_8_5_v1';
+
+ALTER TABLE pages
+  ADD COLUMN IF NOT EXISTS composition_json JSONB NOT NULL DEFAULT '{}'::JSONB;
+
+ALTER TABLE images
+  ADD COLUMN IF NOT EXISTS parent_image_id UUID REFERENCES images(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS input_assets_json JSONB NOT NULL DEFAULT '{}'::JSONB,
+  ADD COLUMN IF NOT EXISTS mask_s3_url TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_order ON payment_sessions(order_id);
 CREATE INDEX IF NOT EXISTS idx_payment_events_order ON payment_events(order_id);

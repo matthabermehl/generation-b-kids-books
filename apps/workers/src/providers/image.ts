@@ -10,6 +10,23 @@ export interface GenerateImageInput {
   referenceImageUrl?: string;
 }
 
+export interface GenerateScenePlateInput {
+  bookId: string;
+  pageIndex: number;
+  prompt: string;
+  referenceImageUrls: string[];
+  seed?: number;
+}
+
+export interface GeneratePageFillInput {
+  bookId: string;
+  pageIndex: number;
+  prompt: string;
+  canvasImageUrl: string;
+  maskImageUrl: string;
+  seed?: number;
+}
+
 export interface GeneratedImage {
   bytes: Buffer;
   contentType: string;
@@ -30,6 +47,14 @@ export interface ImageProvider {
   generate(input: GenerateImageInput, attempt: number): Promise<GeneratedImage>;
 }
 
+export interface ScenePlateProvider {
+  generateScenePlate(input: GenerateScenePlateInput, attempt: number): Promise<GeneratedImage>;
+}
+
+export interface PageFillProvider {
+  harmonizePageArt(input: GeneratePageFillInput, attempt: number): Promise<GeneratedImage>;
+}
+
 interface FalSubmitResponse {
   request_id?: string;
   requestId?: string;
@@ -43,6 +68,7 @@ interface FalImageResult {
   url?: string;
   width?: number;
   height?: number;
+  content_type?: string;
 }
 
 interface FalResultResponse {
@@ -64,17 +90,15 @@ class FalRequestError extends Error {
   }
 }
 
-function makeSvg(input: GenerateImageInput, attempt: number): Buffer {
-  const seed = pageSeed(input.bookId, input.pageIndex, `v${attempt}`);
+function makeSvg(label: string, prompt: string, width: number, height: number, seed: number): Buffer {
   const color = `hsl(${seed % 360}, 30%, 75%)`;
-  const text = `${input.role.toUpperCase()} • PAGE ${input.pageIndex + 1} • ATTEMPT ${attempt}`;
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024" viewBox="0 0 1536 1024">
-  <rect width="1536" height="1024" fill="${color}" />
-  <text x="60" y="120" font-size="56" font-family="Verdana" fill="#1f2937">${text}</text>
-  <foreignObject x="60" y="180" width="1400" height="760">
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="${color}" />
+  <text x="60" y="120" font-size="56" font-family="Verdana" fill="#1f2937">${label}</text>
+  <foreignObject x="60" y="180" width="${Math.max(width - 120, 200)}" height="${Math.max(height - 240, 200)}">
     <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Verdana;font-size:34px;color:#334155;line-height:1.3;">
-      ${input.prompt.replace(/</g, "&lt;")}
+      ${prompt.replace(/</g, "&lt;")}
     </div>
   </foreignObject>
 </svg>`;
@@ -90,72 +114,25 @@ function responseStatus(response: Response): string {
   return String(response.status);
 }
 
-class MockImageProvider implements ImageProvider {
-  async generate(input: GenerateImageInput, attempt: number): Promise<GeneratedImage> {
-    const seed = pageSeed(input.bookId, input.pageIndex, `v${attempt}`);
-    return {
-      bytes: makeSvg(input, attempt),
-      contentType: "image/svg+xml",
-      seed,
-      endpoint: "mock-fal",
-      requestId: `mock-${seed}`,
-      width: 1536,
-      height: 1024,
-      latencyMs: 0,
-      qa: {
-        passed: true,
-        issues: [],
-        attempts: attempt
-      }
-    };
-  }
-}
-
-class FalImageProvider implements ImageProvider {
-  private readonly config: RuntimeConfig;
+abstract class FalTransport {
+  protected readonly config: RuntimeConfig;
 
   constructor(config: RuntimeConfig) {
     this.config = config;
   }
 
-  async generate(input: GenerateImageInput, attempt: number): Promise<GeneratedImage> {
-    const seed = pageSeed(input.bookId, input.pageIndex, `v${attempt}`);
-    const endpoint = this.resolveEndpoint(input);
+  protected async run(endpoint: string, payload: Record<string, unknown>): Promise<GeneratedImage> {
+    const seed = typeof payload.seed === "number" ? payload.seed : 0;
     const startedAt = Date.now();
-    const loras = this.config.falStyleLoraUrl
-      ? [
-          {
-            path: this.config.falStyleLoraUrl,
-            scale: input.role === "character_sheet" ? 1 : 0.9
-          }
-        ]
-      : undefined;
-
-    const payload: Record<string, unknown> = {
-      prompt: input.prompt,
-      seed,
-      num_images: 1,
-      image_size: "landscape_16_9",
-      loras
-    };
-
-    if (input.referenceImageUrl) {
-      payload.reference_image_url = input.referenceImageUrl;
-      payload.reference_strength = 0.85;
-    }
-
     const requestId = await this.submit(endpoint, payload);
-
     await this.waitUntilComplete(endpoint, requestId);
     const output = await this.fetchResult(endpoint, requestId);
-
     const image = output.images?.[0] ?? output.data?.images?.[0];
     if (!image?.url) {
       throw new Error(`fal result missing image url for request ${requestId}`);
     }
-    const imageUrl = image.url;
 
-    const imageResponse = await this.withTransportRetries(() => fetch(imageUrl), "fal_image_download");
+    const imageResponse = await this.withTransportRetries(() => fetch(image.url ?? ""), "fal_image_download");
     if (!imageResponse.ok) {
       throw new FalRequestError(
         `fal image download failed: ${responseStatus(imageResponse)}`,
@@ -164,7 +141,7 @@ class FalImageProvider implements ImageProvider {
       );
     }
 
-    const contentType = imageResponse.headers.get("content-type") ?? "image/png";
+    const contentType = imageResponse.headers.get("content-type") ?? image.content_type ?? "image/png";
     const bytes = Buffer.from(await imageResponse.arrayBuffer());
 
     return {
@@ -179,25 +156,9 @@ class FalImageProvider implements ImageProvider {
       qa: {
         passed: bytes.length > 0,
         issues: bytes.length > 0 ? [] : ["empty_image_payload"],
-        attempts: attempt
+        attempts: 1
       }
     };
-  }
-
-  private resolveEndpoint(input: GenerateImageInput): string {
-    if (input.role === "character_sheet") {
-      return this.config.falStyleLoraUrl ? this.config.falEndpoints.lora : this.config.falEndpoints.base;
-    }
-
-    if (input.referenceImageUrl) {
-      return this.config.falEndpoints.general;
-    }
-
-    if (this.config.falStyleLoraUrl) {
-      return this.config.falEndpoints.lora;
-    }
-
-    return this.config.falEndpoints.general;
   }
 
   private async submit(endpoint: string, payload: Record<string, unknown>): Promise<string> {
@@ -294,7 +255,7 @@ class FalImageProvider implements ImageProvider {
     return (await response.json()) as FalResultResponse;
   }
 
-  private async withTransportRetries(
+  protected async withTransportRetries(
     fn: () => Promise<Response>,
     stage: string,
     maxAttempts = 3
@@ -329,6 +290,172 @@ class FalImageProvider implements ImageProvider {
   }
 }
 
+class MockImageProvider implements ImageProvider {
+  async generate(input: GenerateImageInput, attempt: number): Promise<GeneratedImage> {
+    const seed = pageSeed(input.bookId, input.pageIndex, `v${attempt}`);
+    return {
+      bytes: makeSvg(`${input.role.toUpperCase()} • PAGE ${input.pageIndex + 1} • ATTEMPT ${attempt}`, input.prompt, 1536, 1024, seed),
+      contentType: "image/svg+xml",
+      seed,
+      endpoint: "mock-fal",
+      requestId: `mock-${seed}`,
+      width: 1536,
+      height: 1024,
+      latencyMs: 0,
+      qa: {
+        passed: true,
+        issues: [],
+        attempts: attempt
+      }
+    };
+  }
+}
+
+class MockScenePlateProvider implements ScenePlateProvider {
+  async generateScenePlate(input: GenerateScenePlateInput, attempt: number): Promise<GeneratedImage> {
+    const seed = input.seed ?? pageSeed(input.bookId, input.pageIndex, `scene-${attempt}`);
+    return {
+      bytes: makeSvg(`SCENE • PAGE ${input.pageIndex + 1} • ATTEMPT ${attempt}`, input.prompt, 2048, 2048, seed),
+      contentType: "image/svg+xml",
+      seed,
+      endpoint: "mock-kontext",
+      requestId: `scene-${seed}`,
+      width: 2048,
+      height: 2048,
+      latencyMs: 0,
+      qa: {
+        passed: true,
+        issues: [],
+        attempts: attempt
+      }
+    };
+  }
+}
+
+class MockFillProvider implements PageFillProvider {
+  async harmonizePageArt(input: GeneratePageFillInput, attempt: number): Promise<GeneratedImage> {
+    const seed = input.seed ?? pageSeed(input.bookId, input.pageIndex, `fill-${attempt}`);
+    return {
+      bytes: makeSvg(`FILL • PAGE ${input.pageIndex + 1} • ATTEMPT ${attempt}`, input.prompt, 2048, 2048, seed),
+      contentType: "image/svg+xml",
+      seed,
+      endpoint: "mock-fill",
+      requestId: `fill-${seed}`,
+      width: 2048,
+      height: 2048,
+      latencyMs: 0,
+      qa: {
+        passed: true,
+        issues: [],
+        attempts: attempt
+      }
+    };
+  }
+}
+
+class FalImageProvider extends FalTransport implements ImageProvider {
+  async generate(input: GenerateImageInput, attempt: number): Promise<GeneratedImage> {
+    const seed = pageSeed(input.bookId, input.pageIndex, `v${attempt}`);
+    const endpoint = this.resolveEndpoint(input);
+    const loras = this.config.falStyleLoraUrl
+      ? [
+          {
+            path: this.config.falStyleLoraUrl,
+            scale: input.role === "character_sheet" ? 1 : 0.9
+          }
+        ]
+      : undefined;
+
+    const payload: Record<string, unknown> = {
+      prompt: input.prompt,
+      seed,
+      num_images: 1,
+      image_size: "landscape_16_9",
+      loras,
+      output_format: "png"
+    };
+
+    if (input.referenceImageUrl) {
+      payload.reference_image_url = input.referenceImageUrl;
+      payload.reference_strength = 0.85;
+    }
+
+    const generated = await this.run(endpoint, payload);
+    return {
+      ...generated,
+      seed,
+      qa: {
+        ...generated.qa,
+        attempts: attempt
+      }
+    };
+  }
+
+  private resolveEndpoint(input: GenerateImageInput): string {
+    if (input.role === "character_sheet") {
+      return this.config.falStyleLoraUrl ? this.config.falEndpoints.lora : this.config.falEndpoints.base;
+    }
+
+    if (input.referenceImageUrl) {
+      return this.config.falEndpoints.general;
+    }
+
+    if (this.config.falStyleLoraUrl) {
+      return this.config.falEndpoints.lora;
+    }
+
+    return this.config.falEndpoints.general;
+  }
+}
+
+class KontextScenePlateProvider extends FalTransport implements ScenePlateProvider {
+  async generateScenePlate(input: GenerateScenePlateInput, attempt: number): Promise<GeneratedImage> {
+    const seed = input.seed ?? pageSeed(input.bookId, input.pageIndex, `scene-${attempt}`);
+    const generated = await this.run(this.config.falEndpoints.scenePlate, {
+      prompt: input.prompt,
+      seed,
+      num_images: 1,
+      output_format: "png",
+      safety_tolerance: "2",
+      aspect_ratio: "1:1",
+      image_urls: input.referenceImageUrls
+    });
+
+    return {
+      ...generated,
+      seed,
+      qa: {
+        ...generated.qa,
+        attempts: attempt
+      }
+    };
+  }
+}
+
+class FluxFillProvider extends FalTransport implements PageFillProvider {
+  async harmonizePageArt(input: GeneratePageFillInput, attempt: number): Promise<GeneratedImage> {
+    const seed = input.seed ?? pageSeed(input.bookId, input.pageIndex, `fill-${attempt}`);
+    const generated = await this.run(this.config.falEndpoints.pageFill, {
+      prompt: input.prompt,
+      seed,
+      num_images: 1,
+      output_format: "png",
+      safety_tolerance: "2",
+      image_url: input.canvasImageUrl,
+      mask_url: input.maskImageUrl
+    });
+
+    return {
+      ...generated,
+      seed,
+      qa: {
+        ...generated.qa,
+        attempts: attempt
+      }
+    };
+  }
+}
+
 export async function resolveImageProvider(): Promise<ImageProvider> {
   const config = await getRuntimeConfig();
   if (config.featureFlags.enableMockImage) {
@@ -336,4 +463,22 @@ export async function resolveImageProvider(): Promise<ImageProvider> {
   }
 
   return new FalImageProvider(config);
+}
+
+export async function resolvePictureBookImageProviders(): Promise<{
+  scenePlateProvider: ScenePlateProvider;
+  pageFillProvider: PageFillProvider;
+}> {
+  const config = await getRuntimeConfig();
+  if (config.featureFlags.enableMockImage) {
+    return {
+      scenePlateProvider: new MockScenePlateProvider(),
+      pageFillProvider: new MockFillProvider()
+    };
+  }
+
+  return {
+    scenePlateProvider: new KontextScenePlateProvider(config),
+    pageFillProvider: new FluxFillProvider(config)
+  };
 }

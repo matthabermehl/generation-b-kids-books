@@ -60,7 +60,11 @@ describe("worker runtime ssm config", () => {
         parameter("web_base_url", "https://example.com"),
         parameter("enable_mock_llm", "false"),
         parameter("enable_mock_image", "false"),
-        parameter("enable_mock_checkout", "false")
+        parameter("enable_mock_checkout", "false"),
+        parameter("enable_picture_book_pipeline", "true"),
+        parameter("enable_independent_8_to_10", "false"),
+        parameter("fal_endpoint_scene_plate", "fal-ai/flux-pro/kontext/max/multi"),
+        parameter("fal_endpoint_page_fill", "fal-ai/flux-pro/v1/fill")
       ]
     };
 
@@ -73,6 +77,10 @@ describe("worker runtime ssm config", () => {
     expect(first.featureFlags.enableMockLlm).toBe(false);
     expect(second.featureFlags.enableMockImage).toBe(false);
     expect(second.featureFlags.enableMockCheckout).toBe(false);
+    expect(second.featureFlags.enablePictureBookPipeline).toBe(true);
+    expect(second.featureFlags.enableIndependent8To10).toBe(false);
+    expect(first.falEndpoints.scenePlate).toBe("fal-ai/flux-pro/kontext/max/multi");
+    expect(first.falEndpoints.pageFill).toBe("fal-ai/flux-pro/v1/fill");
     expect(first.stripe.priceId).toBe("price_123");
     expect(sendMock).toHaveBeenCalledTimes(1);
 

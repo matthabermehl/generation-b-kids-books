@@ -59,3 +59,15 @@
 ## 2026-03-04: Dev-only private beta scope
 - Decision: keep rollout in `dev` only for this phase.
 - Rationale: faster iteration with lower operational overhead before staging/prod promotion.
+
+## 2026-03-06: Fixed-layout picture-book product family
+- Decision: introduce `picture_book_fixed_layout` as the primary product family for ages `3-7`.
+- Rationale: `3-7` books share an illustration-heavy page model, while `8-10` needs a later chapter-book pipeline.
+
+## 2026-03-06: Keep canonical pages layered
+- Decision: persist page composition metadata, layered image assets, and live text instead of flattening page text into image generation.
+- Rationale: deterministic text placement is easier to guarantee in code, and the layered model is reusable for future ebook/app outputs.
+
+## 2026-03-06: Split fixed-layout image generation into scene and fill stages
+- Decision: use `Kontext` for square scene plates and `FLUX Fill` for masked page harmonization.
+- Rationale: the model handles subject/style generation, while deterministic whitespace, fade behavior, and QA remain under system control.

@@ -1,22 +1,29 @@
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import type { Handler } from "aws-lambda";
-import type { MoneyLessonKey, ReadingProfile } from "@book/domain";
+import {
+  pictureBookLayoutProfileId,
+  pictureBookReadingProfiles,
+  type BookProductFamily,
+  type MoneyLessonKey,
+  type PageCompositionSpec,
+  type PageTemplateId,
+  type PictureBookReadingProfile,
+  type ReadingProfile
+} from "@book/domain";
 import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
 import { putJson, putBuffer, presignGetObjectFromS3Url } from "./lib/storage.js";
-import { fileExtensionForContentType, makeId, logStructured } from "./lib/helpers.js";
+import { fileExtensionForContentType, logStructured, makeId, safeJsonParse } from "./lib/helpers.js";
 import { moderateTexts } from "./lib/content-safety.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
+import { selectPictureBookComposition } from "./lib/page-template-select.js";
+import { ensurePictureBookStyleReferenceUrls } from "./lib/style-assets.js";
 import { resolveImageProvider } from "./providers/image.js";
 import { resolveLlmProvider } from "./providers/llm.js";
 
 const sqs = new SQSClient({});
 
 interface PipelineEvent {
-  action:
-    | "prepare_story"
-    | "generate_character_sheet"
-    | "enqueue_page_images"
-    | "prepare_render_input";
+  action: "prepare_story" | "generate_character_sheet" | "enqueue_page_images" | "prepare_render_input";
   bookId: string;
   orderId?: string;
 }
@@ -30,6 +37,8 @@ interface BookContextRow {
   reading_profile_id: ReadingProfile;
   money_lesson_key: MoneyLessonKey;
   interest_tags: string;
+  product_family: BookProductFamily;
+  layout_profile_id: string | null;
 }
 
 async function loadBookContext(bookId: string): Promise<BookContextRow> {
@@ -43,7 +52,9 @@ async function loadBookContext(bookId: string): Promise<BookContextRow> {
         cp.pronouns,
         b.reading_profile_id,
         b.money_lesson_key,
-        array_to_string(b.interest_tags, ',') AS interest_tags
+        array_to_string(b.interest_tags, ',') AS interest_tags,
+        COALESCE(b.product_family, 'picture_book_fixed_layout') AS product_family,
+        b.layout_profile_id
       FROM books b
       INNER JOIN orders o ON o.id = b.order_id
       INNER JOIN child_profiles cp ON cp.id = o.child_profile_id
@@ -59,6 +70,10 @@ async function loadBookContext(bookId: string): Promise<BookContextRow> {
   }
 
   return row;
+}
+
+function isPictureBookReadingProfile(profile: ReadingProfile): profile is PictureBookReadingProfile {
+  return pictureBookReadingProfiles.includes(profile as PictureBookReadingProfile);
 }
 
 async function markBookNeedsReview(
@@ -214,8 +229,8 @@ async function prepareStory(bookId: string): Promise<{ bookId: string; pageCount
       await txExecute(
         tx,
         `
-          INSERT INTO pages (id, book_id, page_index, text, illustration_brief_json, reading_checks_json, status)
-          VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), :pageIndex, :text, CAST(:brief AS jsonb), CAST(:checks AS jsonb), 'pending')
+          INSERT INTO pages (id, book_id, page_index, text, illustration_brief_json, reading_checks_json, composition_json, status)
+          VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), :pageIndex, :text, CAST(:brief AS jsonb), CAST(:checks AS jsonb), '{}'::jsonb, 'pending')
         `,
         [
           { name: "id", value: { stringValue: makeId() } },
@@ -308,7 +323,7 @@ async function generateCharacterSheet(bookId: string): Promise<{ bookId: string;
     {
       bookId,
       pageIndex: 0,
-      prompt: `Character sheet for ${context.child_first_name}. Keep outfit and facial features stable.`,
+      prompt: `Character sheet for ${context.child_first_name}. Keep outfit colors, facial features, and proportions consistent.`,
       role: "character_sheet"
     },
     1
@@ -321,9 +336,9 @@ async function generateCharacterSheet(bookId: string): Promise<{ bookId: string;
   await execute(
     `
       INSERT INTO images (
-        id, book_id, role, model_endpoint, prompt, seed, loras_json, fal_request_id, width, height, s3_url, qa_json, status
+        id, book_id, role, model_endpoint, prompt, seed, loras_json, input_assets_json, fal_request_id, width, height, s3_url, qa_json, status
       ) VALUES (
-        CAST(:id AS uuid), CAST(:bookId AS uuid), 'character_sheet', :endpoint, :prompt, :seed, CAST(:loras AS jsonb), :requestId, :width, :height, :s3, CAST(:qa AS jsonb), 'ready'
+        CAST(:id AS uuid), CAST(:bookId AS uuid), 'character_sheet', :endpoint, :prompt, :seed, CAST(:loras AS jsonb), '{}'::jsonb, :requestId, :width, :height, :s3, CAST(:qa AS jsonb), 'ready'
       )
     `,
     [
@@ -333,7 +348,7 @@ async function generateCharacterSheet(bookId: string): Promise<{ bookId: string;
       {
         name: "prompt",
         value: {
-          stringValue: `Character sheet for ${context.child_first_name}. Keep outfit colors and hair consistent.`
+          stringValue: `Character sheet for ${context.child_first_name}. Keep outfit colors, hair, and proportions consistent.`
         }
       },
       { name: "seed", value: { longValue: image.seed } },
@@ -357,6 +372,7 @@ interface PageRow {
   page_index: number;
   text: string;
   illustration_brief_json: string;
+  composition_json?: string;
 }
 
 interface CharacterSheetRow {
@@ -364,21 +380,36 @@ interface CharacterSheetRow {
   s3_url: string | null;
 }
 
-function styleConsistencyAnchor(context: BookContextRow): string {
+function legacyStyleAnchor(context: BookContextRow): string {
   return [
     "Children's picture-book illustration in muted watercolor with matte texture and soft natural lighting.",
-    `Keep ${context.child_first_name}'s hair, face shape, skin tone, outfit colors, and proportions identical across all pages.`,
-    "Maintain consistent line weight, brush texture, and palette from page to page."
+    `Use the attached character sheet for ${context.child_first_name}'s hair, face shape, skin tone, outfit colors, and proportions.`,
+    "Keep a calm, uncluttered composition suitable for a child-friendly storybook."
   ].join(" ");
 }
 
-async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
+function scenePrompt(sceneBrief: string): string {
+  return [
+    sceneBrief,
+    "Watercolor on white paper.",
+    "Soft matte texture and calm children's picture-book illustration style.",
+    "Leave surrounding paper feeling airy and clean."
+  ].join(" ");
+}
+
+async function enqueuePageImages(bookId: string): Promise<{ queued: number; productFamily: BookProductFamily }> {
   const queueUrl = process.env.IMAGE_QUEUE_URL;
   if (!queueUrl) {
     throw new Error("IMAGE_QUEUE_URL is required");
   }
 
+  const runtimeConfig = await getRuntimeConfig();
   const context = await loadBookContext(bookId);
+  const usePictureBookPipeline =
+    runtimeConfig.featureFlags.enablePictureBookPipeline &&
+    context.product_family === "picture_book_fixed_layout" &&
+    isPictureBookReadingProfile(context.reading_profile_id);
+
   const characterSheetRows = await query<CharacterSheetRow>(
     `
       SELECT prompt, s3_url
@@ -390,14 +421,13 @@ async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
     [{ name: "bookId", value: { stringValue: bookId } }]
   );
   const characterSheet = characterSheetRows[0] ?? { prompt: null, s3_url: null };
-  const consistencyAnchor = styleConsistencyAnchor(context);
   const characterSheetReferenceUrl = characterSheet.s3_url
     ? await presignGetObjectFromS3Url(characterSheet.s3_url)
     : null;
 
   const pages = await query<PageRow>(
     `
-      SELECT id, page_index, text, illustration_brief_json
+      SELECT id, page_index, text, illustration_brief_json, composition_json
       FROM pages
       WHERE book_id = CAST(:bookId AS uuid)
       ORDER BY page_index
@@ -405,21 +435,81 @@ async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
     [{ name: "bookId", value: { stringValue: bookId } }]
   );
 
+  const styleReferences = usePictureBookPipeline ? await ensurePictureBookStyleReferenceUrls() : null;
+  let previousTemplateId: PageTemplateId | null = null;
+  const pictureBookProfile = isPictureBookReadingProfile(context.reading_profile_id)
+    ? context.reading_profile_id
+    : null;
+
   for (const page of pages) {
+    const brief = safeJsonParse<Record<string, unknown>>(page.illustration_brief_json ?? "{}", {});
+    if (usePictureBookPipeline) {
+      const composition = selectPictureBookComposition({
+        bookId,
+        pageIndex: Number(page.page_index),
+        text: page.text,
+        readingProfileId: pictureBookProfile ?? "early_decoder_5_7",
+        previousTemplateId
+      });
+      previousTemplateId = composition.templateId;
+
+      await execute(
+        `UPDATE pages SET composition_json = CAST(:composition AS jsonb) WHERE id = CAST(:pageId AS uuid)`,
+        [
+          { name: "composition", value: { stringValue: JSON.stringify(composition) } },
+          { name: "pageId", value: { stringValue: page.id } }
+        ]
+      );
+
+      logStructured("PictureBookTemplateSelected", {
+        bookId,
+        pageId: page.id,
+        pageIndex: Number(page.page_index),
+        templateId: composition.templateId
+      });
+
+      await sqs.send(
+        new SendMessageCommand({
+          QueueUrl: queueUrl,
+          MessageBody: JSON.stringify({
+            mode: "picture_book_fixed_layout",
+            productFamily: context.product_family,
+            bookId,
+            pageId: page.id,
+            pageIndex: Number(page.page_index),
+            text: page.text,
+            composition,
+            brief: {
+              illustrationBrief: String(brief.illustrationBrief ?? `Calm watercolor scene for ${context.child_first_name}`),
+              characterSheetS3Url: characterSheet.s3_url,
+              characterSheetReferenceUrl,
+              styleBoardS3Url: styleReferences?.styleBoardS3Url ?? null,
+              styleBoardReferenceUrl: styleReferences?.styleBoardReferenceUrl ?? null,
+              paperTextureS3Url: styleReferences?.paperTextureS3Url ?? null,
+              paperTextureReferenceUrl: styleReferences?.paperTextureReferenceUrl ?? null,
+              scenePrompt: scenePrompt(String(brief.illustrationBrief ?? `Calm watercolor scene for ${context.child_first_name}`))
+            }
+          })
+        })
+      );
+      continue;
+    }
+
     await sqs.send(
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify({
+          mode: "legacy",
           bookId,
           pageId: page.id,
           pageIndex: Number(page.page_index),
           text: page.text,
           brief: {
-            ...JSON.parse(page.illustration_brief_json || "{}"),
-            styleAnchor: consistencyAnchor,
+            ...brief,
+            styleAnchor: legacyStyleAnchor(context),
             characterAnchor:
               characterSheet.prompt ??
-              `Use the same child character model for ${context.child_first_name} with stable clothing and facial features.`,
+              `Use the attached character sheet for ${context.child_first_name}'s stable clothing and facial features.`,
             characterSheetS3Url: characterSheet.s3_url,
             characterSheetReferenceUrl
           }
@@ -428,7 +518,7 @@ async function enqueuePageImages(bookId: string): Promise<{ queued: number }> {
     );
   }
 
-  return { queued: pages.length };
+  return { queued: pages.length, productFamily: context.product_family };
 }
 
 interface PageWithImageStatus {
@@ -437,17 +527,72 @@ interface PageWithImageStatus {
   image_status: string | null;
 }
 
+async function upsertPagePreviewRecord(bookId: string, pageId: string, pageIndex: number, previewS3Url: string): Promise<void> {
+  const existing = await query<{ id: string }>(
+    `SELECT id::text AS id FROM images WHERE page_id = CAST(:pageId AS uuid) AND role = 'page_preview' LIMIT 1`,
+    [{ name: "pageId", value: { stringValue: pageId } }]
+  );
+
+  if (existing[0]) {
+    await execute(
+      `
+        UPDATE images
+        SET model_endpoint = 'renderer-preview',
+            prompt = 'fixed layout page preview',
+            seed = 0,
+            width = 2048,
+            height = 2048,
+            s3_url = :s3,
+            qa_json = '{}'::jsonb,
+            status = 'pending'
+        WHERE id = CAST(:id AS uuid)
+      `,
+      [
+        { name: "s3", value: { stringValue: previewS3Url } },
+        { name: "id", value: { stringValue: existing[0].id } }
+      ]
+    );
+    return;
+  }
+
+  await execute(
+    `
+      INSERT INTO images (
+        id, book_id, page_id, role, model_endpoint, prompt, seed, input_assets_json, width, height, s3_url, qa_json, status
+      ) VALUES (
+        CAST(:id AS uuid), CAST(:bookId AS uuid), CAST(:pageId AS uuid), 'page_preview', 'renderer-preview', 'fixed layout page preview', 0, '{}'::jsonb, 2048, 2048, :s3, '{}'::jsonb, 'pending'
+      )
+    `,
+    [
+      { name: "id", value: { stringValue: makeId() } },
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "pageId", value: { stringValue: pageId } },
+      { name: "s3", value: { stringValue: previewS3Url } }
+    ]
+  );
+}
+
 async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: string; outputPdfKey: string }> {
+  const runtimeConfig = await getRuntimeConfig();
   const context = await loadBookContext(bookId);
+  const usePictureBookPipeline =
+    runtimeConfig.featureFlags.enablePictureBookPipeline &&
+    context.product_family === "picture_book_fixed_layout" &&
+    isPictureBookReadingProfile(context.reading_profile_id);
+
+  const imageRole = usePictureBookPipeline ? "page_fill" : "page";
   const rows = await query<PageWithImageStatus>(
     `
       SELECT p.id, p.page_index, i.status as image_status
       FROM pages p
-      LEFT JOIN images i ON i.page_id = p.id AND i.role = 'page'
+      LEFT JOIN images i ON i.page_id = p.id AND i.role = :role
       WHERE p.book_id = CAST(:bookId AS uuid)
       ORDER BY p.page_index
     `,
-    [{ name: "bookId", value: { stringValue: bookId } }]
+    [
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "role", value: { stringValue: imageRole } }
+    ]
   );
 
   const pending = rows.filter((row) => row.image_status !== "ready");
@@ -460,9 +605,12 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
       SELECT
         COUNT(*) FILTER (WHERE COALESCE(qa_json::text, '') ILIKE '%safety_flagged_prompt:%')::int AS safety_flags
       FROM images
-      WHERE book_id = CAST(:bookId AS uuid) AND role = 'page'
+      WHERE book_id = CAST(:bookId AS uuid) AND role = :role
     `,
-    [{ name: "bookId", value: { stringValue: bookId } }]
+    [
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "role", value: { stringValue: imageRole } }
+    ]
   );
   const safetyFlags = Number(imageSafetyRows[0]?.safety_flags ?? 0);
   if (safetyFlags > 0) {
@@ -472,15 +620,49 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
     throw new Error("BOOK_NEEDS_REVIEW:image_safety");
   }
 
+  if (!usePictureBookPipeline) {
+    const pageData = await query<{
+      page_index: number;
+      text: string;
+      image_url: string;
+    }>(
+      `
+        SELECT p.page_index, p.text, i.s3_url AS image_url
+        FROM pages p
+        INNER JOIN images i ON i.page_id = p.id AND i.role = 'page'
+        WHERE p.book_id = CAST(:bookId AS uuid)
+        ORDER BY p.page_index
+      `,
+      [{ name: "bookId", value: { stringValue: bookId } }]
+    );
+
+    const renderInputKey = `books/${bookId}/render/render-input.json`;
+    const outputPdfKey = `books/${bookId}/render/book.pdf`;
+
+    await putJson(renderInputKey, {
+      bookId,
+      title: "Bitcoin Adventure",
+      pages: pageData.map((row) => ({
+        index: Number(row.page_index),
+        text: row.text,
+        imageS3Url: row.image_url
+      }))
+    });
+
+    return { renderInputKey, outputPdfKey };
+  }
+
   const pageData = await query<{
+    page_id: string;
     page_index: number;
     text: string;
     image_url: string;
+    composition_json: string;
   }>(
     `
-      SELECT p.page_index, p.text, i.s3_url AS image_url
+      SELECT p.id::text AS page_id, p.page_index, p.text, p.composition_json::text AS composition_json, i.s3_url AS image_url
       FROM pages p
-      INNER JOIN images i ON i.page_id = p.id AND i.role = 'page'
+      INNER JOIN images i ON i.page_id = p.id AND i.role = 'page_fill'
       WHERE p.book_id = CAST(:bookId AS uuid)
       ORDER BY p.page_index
     `,
@@ -489,15 +671,53 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
 
   const renderInputKey = `books/${bookId}/render/render-input.json`;
   const outputPdfKey = `books/${bookId}/render/book.pdf`;
+  const title = `${context.child_first_name}'s Bitcoin Adventure`;
+  const pictureBookReadingProfile = isPictureBookReadingProfile(context.reading_profile_id)
+    ? context.reading_profile_id
+    : "early_decoder_5_7";
+
+  const renderPages = [] as Array<{
+    index: number;
+    text: string;
+    composition: PageCompositionSpec;
+    artImageS3Url: string;
+    previewOutputKey: string;
+  }>;
+
+  for (const row of pageData) {
+    const composition = safeJsonParse<PageCompositionSpec>(row.composition_json ?? "{}", {
+      layoutProfileId: pictureBookLayoutProfileId(),
+      templateId: "corner_ul_ellipse",
+      canvas: { width: 2048, height: 2048 },
+      textBox: { x: 0.08, y: 0.08, width: 0.34, height: 0.25 },
+      artBox: { x: 0.40, y: 0.18, width: 0.52, height: 0.62 },
+      maskBox: { x: 0.36, y: 0.14, width: 0.58, height: 0.68 },
+      fade: { shape: "ellipse", featherPx: 120 },
+      textStyle: {
+        readingProfileId: pictureBookReadingProfile,
+        preferredFontPx: 64,
+        minFontPx: 52,
+        lineHeight: 1.2,
+        align: "left"
+      }
+    });
+    const previewOutputKey = `books/${bookId}/render/previews/page-${Number(row.page_index) + 1}.png`;
+    await upsertPagePreviewRecord(bookId, row.page_id, Number(row.page_index), `s3://${process.env.ARTIFACT_BUCKET}/${previewOutputKey}`);
+    renderPages.push({
+      index: Number(row.page_index),
+      text: row.text,
+      composition,
+      artImageS3Url: row.image_url,
+      previewOutputKey
+    });
+  }
 
   await putJson(renderInputKey, {
     bookId,
-    title: "Bitcoin Adventure",
-    pages: pageData.map((row) => ({
-      index: Number(row.page_index),
-      text: row.text,
-      imageS3Url: row.image_url
-    }))
+    title,
+    productFamily: context.product_family,
+    layoutProfileId: context.layout_profile_id ?? pictureBookLayoutProfileId(),
+    pages: renderPages
   });
 
   return { renderInputKey, outputPdfKey };

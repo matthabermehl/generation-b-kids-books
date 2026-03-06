@@ -16,4 +16,11 @@ describe("openapi spec", () => {
     expect(openApiSpec.paths["/v1/orders"].post.parameters?.[0].name).toBe("Idempotency-Key");
     expect(openApiSpec.paths["/v1/orders/{orderId}/checkout"].post.parameters?.[0].name).toBe("Idempotency-Key");
   });
+
+  it("documents additive preview fields on book pages", () => {
+    const pageSchema = openApiSpec.components.schemas.BookResponse.properties.pages.items;
+    expect(pageSchema.properties.previewImageUrl).toBeDefined();
+    expect(pageSchema.properties.templateId).toBeDefined();
+    expect(pageSchema.properties.productFamily).toBeDefined();
+  });
 });

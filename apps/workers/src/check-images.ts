@@ -28,7 +28,7 @@ export const handler: Handler<Event> = async (event) => {
         MAX(b.order_id::text) AS order_id
       FROM pages p
       INNER JOIN books b ON b.id = p.book_id
-      LEFT JOIN images i ON i.page_id = p.id AND i.role = 'page'
+      LEFT JOIN images i ON i.page_id = p.id AND i.role IN ('page', 'page_fill')
       WHERE p.book_id = CAST(:bookId AS uuid)
     `,
     [{ name: "bookId", value: { stringValue: event.bookId } }]

@@ -4,6 +4,7 @@
 - Environment: `dev` only.
 - Region: `us-east-1`.
 - Cloud profile for CLI/CDK: `AWS_PROFILE=personal`.
+- Primary product family in this phase: `picture_book_fixed_layout` for ages `3-7`.
 - Runtime mode:
   - real AWS orchestration/storage/database
   - real OpenAI/Anthropic/fal providers (controlled by SSM flags)
@@ -18,6 +19,13 @@
 5. Pipeline Lambdas generate story assets, moderate text, fan out image jobs to SQS, run image safety checks, prepare render input, and run PDF render on ECS Fargate.
 6. Final artifacts are written to S3 and indexed in Aurora; flagged books are moved to `needs_review` and blocked from release.
 7. Parent can request child profile deletion (`DELETE /v1/child-profiles/{childProfileId}`) which queues artifact purge.
+
+For `picture_book_fixed_layout` books, the image/render chain is:
+1. deterministic page template selection
+2. `scene_plate` generation with explicit character + style references
+3. masked fill into a white page canvas
+4. preview PNG rendering
+5. final PDF rendering with live text
 
 ## Runtime Components
 
@@ -51,7 +59,7 @@ Cross-cutting:
 
 ### Workers (`apps/workers`)
 - `pipeline.ts`: story generation + text moderation + render preparation
-- `image-worker.ts`: page image generation + prompt safety checks
+- `image-worker.ts`: legacy page image generation or fixed-layout `scene_plate`/`page_fill` generation + QA
 - `check-images.ts`: completion + image safety escalation to `needs_review`
 - `finalize.ts`: final release gate before marking `ready`
 - `execution-status.ts`: Step Functions terminal failure synchronization without overriding `needs_review`
@@ -60,7 +68,9 @@ Cross-cutting:
 - `migrate.ts`: schema migration custom resource
 
 ### Renderer (`apps/renderer`)
-- ECS Fargate service and one-shot PDF render command
+- ECS Fargate service and one-shot render command
+- picture-book render path writes per-page preview PNGs and final live-text PDF
+- legacy render path remains supported for fallback books
 
 ### Shared Packages
 - `packages/domain`: enums/types/validators (includes Montessori realism check)
@@ -106,8 +116,17 @@ Phase 3 additions:
 - `payment_events`
 - `privacy_events`
 
+Fixed-layout additions:
+- `books.product_family`
+- `books.layout_profile_id`
+- `pages.composition_json`
+- `images.parent_image_id`
+- `images.input_assets_json`
+- `images.mask_s3_url`
+
 ## Determinism, Safety, and Privacy Controls
 - Deterministic seed: `hash32(book_id + ":" + page_index + ":" + version)`
+- Deterministic page template selection for fixed-layout books
 - Story checks:
   - late Bitcoin reveal (~80/20 arc)
   - banned financial claims
@@ -117,6 +136,10 @@ Phase 3 additions:
   - text moderation gate pre-image stage
   - image prompt safety gate
   - release gate before finalization
+- Fixed-layout page QA:
+  - text-fit check
+  - whitespace/luminance check in text zone
+  - contrast and art occupancy checks
 - Policy-triggered `needs_review` status blocks release/download path
 - Parent self-service deletion queues artifact purge and audits to `privacy_events`
 

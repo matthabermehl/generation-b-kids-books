@@ -4,7 +4,14 @@ import { z } from "zod";
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { StartExecutionCommand, SFNClient } from "@aws-sdk/client-sfn";
 import type Stripe from "stripe";
-import { moneyLessonKeys, readingProfiles, type MoneyLessonKey, type ReadingProfile } from "@book/domain";
+import {
+  moneyLessonKeys,
+  pictureBookLayoutProfileId,
+  readingProfiles,
+  type BookProductFamily,
+  type MoneyLessonKey,
+  type ReadingProfile
+} from "@book/domain";
 import { createLoginToken, createSessionToken, verifyLoginToken, verifySessionToken } from "./lib/auth.js";
 import { requiredEnv } from "./lib/env.js";
 import { sendLoginLink } from "./lib/email.js";
@@ -151,7 +158,8 @@ async function createOrder(
     moneyLessonKey: MoneyLessonKey;
     interestTags: string[];
     readingProfileId: ReadingProfile;
-  }
+  },
+  bookConfig: { productFamily: BookProductFamily; layoutProfileId: string | null }
 ): Promise<{ orderId: string; bookId: string; childProfileId: string; status: string; checkoutMode: string }> {
   const childProfileId = randomUUID();
   const orderId = randomUUID();
@@ -186,15 +194,17 @@ async function createOrder(
 
   await execute(
     `
-      INSERT INTO books (id, order_id, money_lesson_key, interest_tags, reading_profile_id, book_version, status)
-      VALUES (CAST(:id AS uuid), CAST(:orderId AS uuid), :lesson, string_to_array(:interests, ','), :profile, 'v1', 'draft')
+      INSERT INTO books (id, order_id, money_lesson_key, interest_tags, reading_profile_id, product_family, layout_profile_id, book_version, status)
+      VALUES (CAST(:id AS uuid), CAST(:orderId AS uuid), :lesson, string_to_array(:interests, ','), :profile, :productFamily, :layoutProfileId, 'v1', 'draft')
     `,
     [
       { name: "id", value: { stringValue: bookId } },
       { name: "orderId", value: { stringValue: orderId } },
       { name: "lesson", value: { stringValue: input.moneyLessonKey } },
       { name: "interests", value: { stringValue: input.interestTags.join(",") } },
-      { name: "profile", value: { stringValue: input.readingProfileId } }
+      { name: "profile", value: { stringValue: input.readingProfileId } },
+      { name: "productFamily", value: { stringValue: bookConfig.productFamily } },
+      { name: "layoutProfileId", value: { stringValue: bookConfig.layoutProfileId ?? "" } }
     ]
   );
 
@@ -204,6 +214,22 @@ async function createOrder(
     childProfileId,
     status: "created",
     checkoutMode: "stripe"
+  };
+}
+
+function resolveBookConfig(
+  readingProfileId: ReadingProfile
+): { productFamily: BookProductFamily; layoutProfileId: string | null } {
+  if (readingProfileId === "independent_8_10") {
+    return {
+      productFamily: "chapter_book_reflowable",
+      layoutProfileId: pictureBookLayoutProfileId()
+    };
+  }
+
+  return {
+    productFamily: "picture_book_fixed_layout",
+    layoutProfileId: pictureBookLayoutProfileId()
   };
 }
 
@@ -613,7 +639,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       }
 
       const payload = await parseBody(event, createOrderSchema);
-      const created = await withIdempotency(auth.userId, idempotencyKey, async () => createOrder(auth.userId, payload));
+      const runtimeConfig = await getRuntimeConfig();
+      if (payload.readingProfileId === "independent_8_10" && !runtimeConfig.featureFlags.enableIndependent8To10) {
+        return json(422, {
+          error: "Reading profile independent_8_10 is not enabled yet."
+        });
+      }
+
+      const created = await withIdempotency(auth.userId, idempotencyKey, async () =>
+        createOrder(auth.userId, payload, resolveBookConfig(payload.readingProfileId))
+      );
       return json(200, created);
     }
 
@@ -819,9 +854,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         reading_profile_id: string;
         money_lesson_key: string;
         child_first_name: string;
+        product_family: BookProductFamily;
       }>(
         `
-          SELECT b.id, b.status, b.reading_profile_id, b.money_lesson_key, cp.child_first_name
+          SELECT b.id, b.status, b.reading_profile_id, b.money_lesson_key, cp.child_first_name, COALESCE(b.product_family, 'picture_book_fixed_layout') AS product_family
           FROM books b
           INNER JOIN orders o ON o.id = b.order_id
           INNER JOIN child_profiles cp ON cp.id = o.child_profile_id
@@ -843,11 +879,20 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         text: string;
         status: string;
         image_url: string | null;
+        preview_image_url: string | null;
+        template_id: string | null;
       }>(
         `
-          SELECT p.page_index, p.text, p.status, i.s3_url AS image_url
+          SELECT
+            p.page_index,
+            p.text,
+            p.status,
+            i.s3_url AS image_url,
+            preview.s3_url AS preview_image_url,
+            p.composition_json->>'templateId' AS template_id
           FROM pages p
           LEFT JOIN images i ON i.page_id = p.id AND i.role = 'page'
+          LEFT JOIN images preview ON preview.page_id = p.id AND preview.role = 'page_preview'
           WHERE p.book_id = CAST(:bookId AS uuid)
           ORDER BY p.page_index
         `,
@@ -860,11 +905,15 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         childFirstName: bookRows[0].child_first_name,
         readingProfileId: bookRows[0].reading_profile_id,
         moneyLessonKey: bookRows[0].money_lesson_key,
+        productFamily: bookRows[0].product_family,
         pages: pages.map((page) => ({
           pageIndex: Number(page.page_index),
           text: page.text,
           status: page.status,
-          imageUrl: s3ToPublicUrl(page.image_url)
+          imageUrl: s3ToPublicUrl(page.preview_image_url ?? page.image_url),
+          previewImageUrl: s3ToPublicUrl(page.preview_image_url),
+          templateId: page.template_id ?? undefined,
+          productFamily: bookRows[0].product_family
         }))
       });
     }

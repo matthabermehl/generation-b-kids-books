@@ -64,6 +64,15 @@ export const handler: Handler<Event> = async (event) => {
 
   await execute(
     `
+      UPDATE images
+      SET status = 'ready'
+      WHERE book_id = CAST(:bookId AS uuid) AND role = 'page_preview'
+    `,
+    [{ name: "bookId", value: { stringValue: event.bookId } }]
+  );
+
+  await execute(
+    `
       UPDATE books
       SET status = 'ready', ready_at = NOW()
       WHERE id = CAST(:bookId AS uuid)
