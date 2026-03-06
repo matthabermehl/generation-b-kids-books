@@ -645,7 +645,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
     const imageNeedsReviewFailure = new sfn.Fail(this, "ImageNeedsReview", {
       error: "ImageNeedsReview",
-      cause: "Image safety policy flagged one or more pages for manual review."
+      cause: "One or more page images require manual review."
     });
 
     imageDoneChoice

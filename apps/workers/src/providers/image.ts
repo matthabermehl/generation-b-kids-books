@@ -85,20 +85,42 @@ interface FalResultResponse {
 }
 
 interface FalQueuedRequest {
+  endpoint: string;
   requestId: string;
   statusUrl: string;
   responseUrl: string;
 }
 
-class FalRequestError extends Error {
+export class FalRequestError extends Error {
   readonly status: number | null;
   readonly retryable: boolean;
+  readonly code: "provider_timeout" | "request_error";
+  readonly requestId?: string;
+  readonly endpoint?: string;
+  readonly pollCount?: number;
+  readonly elapsedMs?: number;
 
-  constructor(message: string, status: number | null, retryable: boolean) {
+  constructor(
+    message: string,
+    status: number | null,
+    retryable: boolean,
+    code: "provider_timeout" | "request_error" = "request_error",
+    context: {
+      requestId?: string;
+      endpoint?: string;
+      pollCount?: number;
+      elapsedMs?: number;
+    } = {}
+  ) {
     super(message);
     this.name = "FalRequestError";
     this.status = status;
     this.retryable = retryable;
+    this.code = code;
+    this.requestId = context.requestId;
+    this.endpoint = context.endpoint;
+    this.pollCount = context.pollCount;
+    this.elapsedMs = context.elapsedMs;
   }
 }
 
@@ -203,6 +225,7 @@ abstract class FalTransport {
     }
 
     return {
+      endpoint,
       requestId,
       statusUrl: data.status_url ?? data.statusUrl ?? this.defaultStatusUrl(endpoint, requestId),
       responseUrl: data.response_url ?? data.responseUrl ?? this.defaultResponseUrl(endpoint, requestId)
@@ -210,7 +233,13 @@ abstract class FalTransport {
   }
 
   private async waitUntilComplete(queuedRequest: FalQueuedRequest): Promise<void> {
-    const maxPolls = 45;
+    const startedAt = Date.now();
+    const maxPolls =
+      queuedRequest.endpoint === this.config.falEndpoints.scenePlate
+        ? 60
+        : queuedRequest.endpoint === this.config.falEndpoints.pageFill
+          ? 80
+          : 45;
     for (let poll = 1; poll <= maxPolls; poll += 1) {
       const response = await this.withTransportRetries(
         () =>
@@ -249,7 +278,28 @@ abstract class FalTransport {
       await sleep(1_500);
     }
 
-    throw new Error(`fal poll timed out for request ${queuedRequest.requestId}`);
+    const elapsedMs = Date.now() - startedAt;
+    console.error("PROVIDER_ERROR", {
+      stage: "fal_status_poll_timeout",
+      provider: "fal",
+      retryable: true,
+      endpoint: queuedRequest.endpoint,
+      requestId: queuedRequest.requestId,
+      pollCount: maxPolls,
+      elapsedMs
+    });
+    throw new FalRequestError(
+      `fal poll timed out for request ${queuedRequest.requestId}`,
+      null,
+      true,
+      "provider_timeout",
+      {
+        requestId: queuedRequest.requestId,
+        endpoint: queuedRequest.endpoint,
+        pollCount: maxPolls,
+        elapsedMs
+      }
+    );
   }
 
   private async fetchResult(queuedRequest: FalQueuedRequest): Promise<FalResultResponse> {

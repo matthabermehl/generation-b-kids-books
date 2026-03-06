@@ -20,10 +20,13 @@
     "dev:web": "pnpm --filter @book/web dev",
     "ops:ssm:migrate-secure": "AWS_PROFILE=personal AWS_REGION=us-east-1 bash ./scripts/ops/migrate-ssm-params.sh",
     "ops:provider-smoke": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/provider-connectivity-smoke.mjs",
+    "ops:picture-book-smoke": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/picture-book-smoke.mjs",
     "ops:stripe-smoke": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/stripe-smoke.mjs",
     "ops:phase2-e2e": "AWS_PROFILE=personal AWS_REGION=us-east-1 node ./scripts/ops/phase2-e2e-smoke.mjs"
   },
   "devDependencies": {
+    "@aws-sdk/client-cloudformation": "^3.750.0",
+    "@aws-sdk/client-rds-data": "^3.750.0",
     "@aws-sdk/client-ssm": "^3.750.0",
     "@types/node": "^22.13.10",
     "eslint": "^9.22.0",

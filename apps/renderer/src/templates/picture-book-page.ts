@@ -31,6 +31,13 @@ export interface PageCompositionSpec {
   };
 }
 
+interface PixelRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 export interface TextFitResult {
   ok: boolean;
   fontPx: number;
@@ -46,13 +53,42 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function rectToPixels(rect: NormalizedRect, canvas: { width: number; height: number }) {
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function rectToPixels(rect: NormalizedRect, canvas: { width: number; height: number }): PixelRect {
+  const left = Math.round(rect.x * canvas.width);
+  const top = Math.round(rect.y * canvas.height);
+  const width = Math.round(rect.width * canvas.width);
+  const height = Math.round(rect.height * canvas.height);
+
   return {
-    left: Math.round(rect.x * canvas.width),
-    top: Math.round(rect.y * canvas.height),
-    width: Math.round(rect.width * canvas.width),
-    height: Math.round(rect.height * canvas.height)
+    left: clamp(left, 0, canvas.width - 1),
+    top: clamp(top, 0, canvas.height - 1),
+    width: clamp(width, 1, canvas.width - left),
+    height: clamp(height, 1, canvas.height - top)
   };
+}
+
+function expandRect(rect: PixelRect, expansionPx: number, canvas: { width: number; height: number }): PixelRect {
+  const left = clamp(rect.left - expansionPx, 0, canvas.width - 1);
+  const top = clamp(rect.top - expansionPx, 0, canvas.height - 1);
+  const right = clamp(rect.left + rect.width + expansionPx, 1, canvas.width);
+  const bottom = clamp(rect.top + rect.height + expansionPx, 1, canvas.height);
+
+  return {
+    left,
+    top,
+    width: clamp(right - left, 1, canvas.width - left),
+    height: clamp(bottom - top, 1, canvas.height - top)
+  };
+}
+
+function protectedTextRect(composition: PageCompositionSpec): PixelRect {
+  const textRect = rectToPixels(composition.textBox, composition.canvas);
+  const expansion = composition.templateId.startsWith("band_") ? 56 : 72;
+  return expandRect(textRect, expansion, composition.canvas);
 }
 
 function wrapText(text: string, maxCharsPerLine: number): string[] {
@@ -118,6 +154,15 @@ function fadeMaskSvg(composition: PageCompositionSpec): string {
   </svg>`;
 }
 
+function knockoutSvg(composition: PageCompositionSpec, rect: PixelRect, featherPx: number): string {
+  const blur = Math.max(8, Math.round(featherPx / 2));
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${composition.canvas.width}" height="${composition.canvas.height}" viewBox="0 0 ${composition.canvas.width} ${composition.canvas.height}">
+    <defs><filter id="blur"><feGaussianBlur stdDeviation="${blur}" /></filter></defs>
+    <rect width="100%" height="100%" fill="rgba(255,255,255,0)" />
+    <rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" rx="40" ry="40" fill="white" filter="url(#blur)" />
+  </svg>`;
+}
+
 export async function buildArtBackground(artBytes: Buffer, composition: PageCompositionSpec): Promise<Buffer> {
   const mask = await sharp(Buffer.from(fadeMaskSvg(composition))).png().toBuffer();
   const normalizedArt = await sharp(artBytes)
@@ -130,6 +175,8 @@ export async function buildArtBackground(artBytes: Buffer, composition: PageComp
     .png()
     .toBuffer();
   const masked = await sharp(normalizedArt).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
+  const knockout = await sharp(Buffer.from(knockoutSvg(composition, protectedTextRect(composition), 24))).png().toBuffer();
+
   return sharp({
     create: {
       width: composition.canvas.width,
@@ -138,7 +185,10 @@ export async function buildArtBackground(artBytes: Buffer, composition: PageComp
       background: "#ffffff"
     }
   })
-    .composite([{ input: masked, blend: "over" }])
+    .composite([
+      { input: masked, blend: "over" },
+      { input: knockout, blend: "over" }
+    ])
     .png()
     .toBuffer();
 }

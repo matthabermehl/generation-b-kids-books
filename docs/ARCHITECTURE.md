@@ -23,9 +23,10 @@
 For `picture_book_fixed_layout` books, the image/render chain is:
 1. deterministic page template selection
 2. `scene_plate` generation with explicit character + style references
-3. masked fill into a white page canvas
-4. preview PNG rendering
-5. final PDF rendering with live text
+3. masked fill into a white page canvas with a protected text-safe region
+4. deterministic white knockout + fade behind live text
+5. preview PNG rendering
+6. final PDF rendering with live text
 
 ## Runtime Components
 
@@ -60,7 +61,7 @@ Cross-cutting:
 ### Workers (`apps/workers`)
 - `pipeline.ts`: story generation + text moderation + render preparation
 - `image-worker.ts`: legacy page image generation or fixed-layout `scene_plate`/`page_fill` generation + QA
-- `check-images.ts`: completion + image safety escalation to `needs_review`
+- `check-images.ts`: completion + image safety / picture-book QA escalation to `needs_review`
 - `finalize.ts`: final release gate before marking `ready`
 - `execution-status.ts`: Step Functions terminal failure synchronization without overriding `needs_review`
 - `privacy-purge.ts`: async S3 artifact deletion + privacy event completion
@@ -138,7 +139,8 @@ Fixed-layout additions:
   - release gate before finalization
 - Fixed-layout page QA:
   - text-fit check
-  - whitespace/luminance check in text zone
+  - protected text-zone knockout behind live text
+  - whitespace/luminance check in an inset text zone
   - contrast and art occupancy checks
 - Policy-triggered `needs_review` status blocks release/download path
 - Parent self-service deletion queues artifact purge and audits to `privacy_events`
@@ -152,5 +154,6 @@ Fixed-layout additions:
 - `pnpm cdk:diff`
 - `pnpm cdk:deploy:dev`
 - `pnpm ops:provider-smoke`
+- `pnpm ops:picture-book-smoke`
 - `pnpm ops:stripe-smoke`
 - `pnpm ops:phase2-e2e` (full paid flow smoke)

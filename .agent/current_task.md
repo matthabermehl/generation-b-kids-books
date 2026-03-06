@@ -1,25 +1,25 @@
 # Current Task
 
-Task ID: wip-carryover-01
+Task ID: picture-book-hardening-01
 
 ## Goal
-Implement the fixed-layout picture-book pipeline slice for ages 3-7 while preserving the legacy path behind flags.
+Harden the fixed-layout picture-book pipeline for real-LLM dev validation, deterministic text-safe regions, and manual-review fallback on picture-book QA exhaustion.
 
 ## Constraints
 - Keep the legacy image/render path working when `enable_picture_book_pipeline=false`.
-- Use additive schema changes only.
+- Keep public APIs additive and stable.
 - Block `independent_8_10` by default.
 
 ## Plan (short)
-1. Add shared product/layout types and runtime flags.
-2. Rewire workers and renderer for layered picture-book pages.
-3. Expose previews through API/web and verify with tests/quality gates.
+1. Add the dedicated picture-book smoke script and richer failure artifacts.
+2. Tighten shared layout geometry and deterministic text-safe protection in mask/compositor/QA code.
+3. Route exhausted picture-book QA to `needs_review`, validate with tests, deploy dev, and disable `enable_mock_llm`.
 
 ## Evidence Required
-- `pnpm -r lint`
-- `pnpm -r test`
+- `pnpm ops:provider-smoke`
+- `pnpm ops:picture-book-smoke`
 - `bash scripts/agent/quality.sh`
 
 ## Status
 - baseline: smoke PASS
-- work: completed
+- work: implementation complete; blocked on dev OpenAI SSM credential / `enable_mock_llm`

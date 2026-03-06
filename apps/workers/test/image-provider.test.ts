@@ -6,7 +6,7 @@ vi.mock("../src/lib/ssm-config.js", () => ({
   getRuntimeConfig: getRuntimeConfigMock
 }));
 
-import { resolveImageProvider, resolvePictureBookImageProviders } from "../src/providers/image.js";
+import { FalRequestError, resolveImageProvider, resolvePictureBookImageProviders } from "../src/providers/image.js";
 
 function runtimeConfig(overrides?: Record<string, unknown>) {
   return {
@@ -57,6 +57,7 @@ describe("image provider", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -255,6 +256,47 @@ describe("image provider", () => {
 
     expect(image.endpoint).toBe("mock-fal");
     expect(image.contentType).toBe("image/svg+xml");
+  });
+
+  it("classifies fill polling timeouts as retryable provider timeouts", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ request_id: "req-timeout" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockImplementation(async () =>
+        new Response(JSON.stringify({ status: "IN_PROGRESS" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { pageFillProvider } = await resolvePictureBookImageProviders();
+    const pending = pageFillProvider.harmonizePageArt(
+      {
+        bookId: "book-fill-timeout",
+        pageIndex: 1,
+        prompt: "Blend art into the mask.",
+        canvasImageUrl: "https://example.com/canvas.png",
+        maskImageUrl: "https://example.com/mask.png"
+      },
+      1
+    );
+    const assertion = expect(pending).rejects.toMatchObject({
+      name: "FalRequestError",
+      code: "provider_timeout",
+      retryable: true,
+      requestId: "req-timeout"
+    } satisfies Partial<FalRequestError>);
+    await vi.runAllTimersAsync();
+    await assertion;
+    vi.useRealTimers();
   });
 
   it("routes page renders to LoRA endpoint when style LoRA is configured", async () => {

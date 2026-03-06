@@ -1,25 +1,31 @@
 import sharp from "sharp";
-import type { PageCompositionSpec } from "@book/domain";
-import { normalizedRectToPixels } from "./page-mask.js";
+import { directionalArtOverflow, type PageCompositionSpec, type PixelRect } from "@book/domain";
+import { createProtectedTextKnockoutPng, normalizedRectToPixels } from "./page-mask.js";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export async function createPlacedPageCanvas(
-  sceneBytes: Buffer,
-  composition: PageCompositionSpec,
-  overflowRatio = 0.08
-): Promise<Buffer> {
+export function resolvePlacedArtRect(composition: PageCompositionSpec): PixelRect {
   const artRect = normalizedRectToPixels(composition.artBox, composition.canvas);
-  const overflowPx = Math.round(composition.canvas.width * overflowRatio);
-  const targetWidth = clamp(artRect.width + overflowPx * 2, 1, composition.canvas.width);
-  const targetHeight = clamp(artRect.height + overflowPx * 2, 1, composition.canvas.height);
-  const left = clamp(artRect.left - overflowPx, 0, composition.canvas.width - targetWidth);
-  const top = clamp(artRect.top - overflowPx, 0, composition.canvas.height - targetHeight);
+  const overflow = directionalArtOverflow(composition.templateId);
+  const left = clamp(artRect.left - overflow.left, 0, composition.canvas.width - 1);
+  const top = clamp(artRect.top - overflow.top, 0, composition.canvas.height - 1);
+  const right = clamp(artRect.left + artRect.width + overflow.right, left + 1, composition.canvas.width);
+  const bottom = clamp(artRect.top + artRect.height + overflow.bottom, top + 1, composition.canvas.height);
 
+  return {
+    left,
+    top,
+    width: clamp(right - left, 1, composition.canvas.width - left),
+    height: clamp(bottom - top, 1, composition.canvas.height - top)
+  };
+}
+
+export async function createPlacedPageCanvas(sceneBytes: Buffer, composition: PageCompositionSpec): Promise<Buffer> {
+  const placementRect = resolvePlacedArtRect(composition);
   const sceneLayer = await sharp(sceneBytes)
-    .resize({ width: targetWidth, height: targetHeight, fit: "cover" })
+    .resize({ width: placementRect.width, height: placementRect.height, fit: "cover" })
     .png()
     .toBuffer();
 
@@ -31,7 +37,7 @@ export async function createPlacedPageCanvas(
       background: "#ffffff"
     }
   })
-    .composite([{ input: sceneLayer, left, top }])
+    .composite([{ input: sceneLayer, left: placementRect.left, top: placementRect.top }])
     .png()
     .toBuffer();
 }
@@ -77,6 +83,7 @@ export async function createFadedArtBackground(artBytes: Buffer, composition: Pa
     .png()
     .toBuffer();
   const masked = await sharp(normalizedArt).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
+  const knockout = await createProtectedTextKnockoutPng(composition, 24);
 
   return sharp({
     create: {
@@ -86,7 +93,10 @@ export async function createFadedArtBackground(artBytes: Buffer, composition: Pa
       background: "#ffffff"
     }
   })
-    .composite([{ input: masked, blend: "over" }])
+    .composite([
+      { input: masked, blend: "over" },
+      { input: knockout.bytes, blend: "over" }
+    ])
     .png()
     .toBuffer();
 }

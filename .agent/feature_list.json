@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-06T00:42:00Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-06T14:06:49Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -22,6 +22,18 @@
     ],
     "passes": true,
     "evidence": "Implemented the 3-7 fixed-layout picture-book pipeline slice with additive schema/config updates, layered image roles, preview rendering, and passing lint/test/quality checks (2026-03-06)."
+  },
+  {
+    "id": "picture-book-hardening-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Harden the fixed-layout picture-book pipeline for real-LLM dev validation and manual-review fallback",
+    "steps": [
+      "Add deterministic text-safe enforcement, smarter retry logic, and picture-book QA/manual-review routing",
+      "Add a dedicated picture-book smoke harness and validate the real-LLM dev path"
+    ],
+    "passes": false,
+    "evidence": "Code path implemented and deployed: bash scripts/agent/quality.sh => PASS; bash scripts/agent/smoke.sh => PASS; pnpm cdk:deploy:dev => PASS. Remaining blocker is dev OpenAI SSM config: pnpm ops:provider-smoke => FAIL (openai 401 archived project); /ai-childrens-book/dev/openai_api_key last modified 2026-03-04T21:30:35-05:00; API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke => FAIL fast because enable_mock_llm is still true."
   },
   {
     "id": "docs-source-of-truth-01",

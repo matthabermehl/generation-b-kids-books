@@ -1,5 +1,7 @@
 import {
+  compositionForTemplate,
   selectPageComposition,
+  selectAlternatePageTemplate,
   type PageCompositionSpec,
   type PageTemplateId,
   type PictureBookReadingProfile
@@ -13,4 +15,22 @@ export function selectPictureBookComposition(input: {
   previousTemplateId?: PageTemplateId | null;
 }): PageCompositionSpec {
   return selectPageComposition(input);
+}
+
+export function selectAlternatePictureBookComposition(input: {
+  text: string;
+  currentTemplateId: PageTemplateId;
+  readingProfileId: PictureBookReadingProfile;
+}): PageCompositionSpec | null {
+  const alternateTemplateId = selectAlternatePageTemplate({
+    currentTemplateId: input.currentTemplateId,
+    readingProfileId: input.readingProfileId,
+    text: input.text
+  });
+
+  if (!alternateTemplateId) {
+    return null;
+  }
+
+  return compositionForTemplate(alternateTemplateId, input.readingProfileId);
 }

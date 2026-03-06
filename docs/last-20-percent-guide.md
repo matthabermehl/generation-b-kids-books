@@ -37,14 +37,20 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
    - `/ai-childrens-book/dev/enable_mock_llm=false`
    - `/ai-childrens-book/dev/enable_mock_image=false`
    - `/ai-childrens-book/dev/enable_mock_checkout=false`
+   - `/ai-childrens-book/dev/enable_picture_book_pipeline=true`
 
 4. Validate external connectivity:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke`
 
-5. Validate payment path only:
+5. Validate fixed-layout picture-book path:
+   - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> READING_PROFILE_ID=read_aloud_3_4 pnpm ops:picture-book-smoke`
+   - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> READING_PROFILE_ID=early_decoder_5_7 pnpm ops:picture-book-smoke`
+   - Confirm artifact JSON under `.agent/artifacts/` includes `previewCount == pageCount` for `ready` books.
+
+6. Validate payment path only:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> SMOKE_EMAIL=<email> pnpm ops:stripe-smoke`
 
-6. Validate full e2e paid flow:
+7. Validate full e2e paid flow:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> SMOKE_EMAIL=<email> pnpm ops:phase2-e2e`
 
 ## 2. Rollback and Troubleshooting
@@ -67,8 +73,9 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
 
 ### Safety/review triage
 1. Check `NeedsReviewSpikeAlarm`.
-2. Search logs for `BOOK_NEEDS_REVIEW` and inspect stage values (`text_moderation`, `image_safety`, `finalize_gate`).
+2. Search logs for `BOOK_NEEDS_REVIEW` and inspect stage values (`text_moderation`, `image_safety`, `image_qa`, `finalize_gate`).
 3. Review `evaluations` rows and `images.qa_json` for flagged reasons.
+4. For picture-book books, expect exhausted page QA to resolve as `stage=image_qa` instead of a hard failed order.
 
 ### Stuck order triage
 1. Check `OrderStuckAlarm` and `OrderStuckCount` metric.

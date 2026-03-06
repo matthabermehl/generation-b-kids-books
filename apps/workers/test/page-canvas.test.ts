@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import type { PageCompositionSpec } from "@book/domain";
-import { createFadedArtBackground } from "../src/lib/page-canvas.js";
+import { normalizedRectToPixels, type PageCompositionSpec } from "@book/domain";
+import { createFadedArtBackground, resolvePlacedArtRect } from "../src/lib/page-canvas.js";
 
 const composition: PageCompositionSpec = {
   layoutProfileId: "pb_square_8_5_v1",
   templateId: "corner_ul_ellipse",
   canvas: { width: 2048, height: 2048 },
   textBox: { x: 0.08, y: 0.08, width: 0.34, height: 0.25 },
-  artBox: { x: 0.40, y: 0.18, width: 0.52, height: 0.62 },
-  maskBox: { x: 0.36, y: 0.14, width: 0.58, height: 0.68 },
+  artBox: { x: 0.44, y: 0.22, width: 0.48, height: 0.56 },
+  maskBox: { x: 0.42, y: 0.18, width: 0.52, height: 0.62 },
   fade: { shape: "ellipse", featherPx: 120 },
   textStyle: {
     readingProfileId: "read_aloud_3_4",
@@ -34,5 +34,14 @@ describe("page canvas", () => {
     expect(background.length).toBeGreaterThan(0);
     expect(metadata.width).toBe(2048);
     expect(metadata.height).toBe(2048);
+  });
+
+  it("pushes directional overflow away from the text-safe corner", () => {
+    const placementRect = resolvePlacedArtRect(composition);
+    const artRect = normalizedRectToPixels(composition.artBox, composition.canvas);
+
+    expect(artRect.left - placementRect.left).toBe(24);
+    expect(placementRect.width - artRect.width - (artRect.left - placementRect.left)).toBe(120);
+    expect(placementRect.height - artRect.height - (artRect.top - placementRect.top)).toBe(120);
   });
 });
