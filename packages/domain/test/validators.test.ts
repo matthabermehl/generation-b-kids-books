@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { pageSeed, validateMontessoriRealism, validateNarrativeRatio, validateReadingProfile } from "../src/index.js";
+import {
+  pageSeed,
+  validateMontessoriRealism,
+  validateNarrativeRatio,
+  validatePageVariation,
+  validateReadingProfile
+} from "../src/index.js";
 
 describe("seed", () => {
   it("returns deterministic page seed", () => {
@@ -38,5 +44,22 @@ describe("montessori realism", () => {
     ]);
 
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("page variation", () => {
+  it("flags repetitive boilerplate pages", () => {
+    const repeated = "Maya notices prices changing and plans ahead.";
+    const pages = Array.from({ length: 10 }, (_, index) => ({
+      pageIndex: index,
+      pageText: repeated,
+      illustrationBrief: "",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = validatePageVariation(pages);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.code === "LOW_VARIATION_TEMPLATE")).toBe(true);
   });
 });

@@ -8,6 +8,18 @@ const idempotencyHeader = {
   }
 } as const;
 
+const mockRunTagHeader = {
+  in: "header",
+  name: "X-Mock-Run-Tag",
+  required: false,
+  schema: {
+    type: "string",
+    minLength: 1
+  },
+  description:
+    "Required when mock LLM or mock image providers are enabled. Used to explicitly authorize intentional mock runs."
+} as const;
+
 const bearerAuth = [{ BearerAuth: [] }] as const;
 
 export const openApiSpec = {
@@ -390,6 +402,7 @@ export const openApiSpec = {
         security: bearerAuth,
         parameters: [
           idempotencyHeader,
+          mockRunTagHeader,
           {
             in: "path",
             name: "orderId",

@@ -28,6 +28,7 @@ import { runImageGenerationAttempts } from "./lib/image-attempts.js";
 interface LegacyJobPayload {
   mode?: "legacy";
   bookId: string;
+  mockRunTag?: string | null;
   pageId: string;
   pageIndex: number;
   text: string;
@@ -44,6 +45,7 @@ interface PictureBookJobPayload {
   mode: "picture_book_fixed_layout";
   productFamily: "picture_book_fixed_layout";
   bookId: string;
+  mockRunTag?: string | null;
   pageId: string;
   pageIndex: number;
   text: string;
@@ -259,7 +261,10 @@ function qaCategoryFromError(error: unknown): PictureBookQaCategory {
 }
 
 async function generateLegacyPageImage(job: LegacyJobPayload): Promise<void> {
-  const provider = await resolveImageProvider();
+  const provider = await resolveImageProvider({
+    mockRunTag: job.mockRunTag,
+    source: "image_worker"
+  });
   const prompt = legacyImagePrompt(job);
   const attemptResult = await runImageGenerationAttempts(provider, {
     bookId: job.bookId,
@@ -346,7 +351,10 @@ async function persistScenePlate(
 }
 
 async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void> {
-  const { scenePlateProvider, pageFillProvider } = await resolvePictureBookImageProviders();
+  const { scenePlateProvider, pageFillProvider } = await resolvePictureBookImageProviders({
+    mockRunTag: job.mockRunTag,
+    source: "image_worker_picture_book"
+  });
   const scenePrompt = job.brief.scenePrompt;
   const promptSafetyTerms = blockedTermsInText(scenePrompt);
   const referenceImageUrls = [

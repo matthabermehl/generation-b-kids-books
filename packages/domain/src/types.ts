@@ -16,13 +16,22 @@ export interface CreateOrderInput {
   readingProfileId: ReadingProfile;
 }
 
-export interface StoryBeat {
+export interface PlannedBeat {
   purpose: string;
   conflict: string;
   sceneLocation: string;
   emotionalTarget: string;
+  pageIndexEstimate: number;
+  decodabilityTags: string[];
+  newWordsIntroduced: string[];
   bitcoinRelevanceScore: number;
 }
+
+export interface BeatSheet {
+  beats: PlannedBeat[];
+}
+
+export type StoryBeat = PlannedBeat;
 
 export interface StoryPage {
   pageIndex: number;

@@ -23,4 +23,11 @@ describe("openapi spec", () => {
     expect(pageSchema.properties.templateId).toBeDefined();
     expect(pageSchema.properties.productFamily).toBeDefined();
   });
+
+  it("documents optional mock run authorization header for mark-paid", () => {
+    const parameters = openApiSpec.paths["/v1/orders/{orderId}/mark-paid"].post.parameters ?? [];
+    const headerNames = parameters.map((parameter) => parameter.name);
+    expect(headerNames).toContain("Idempotency-Key");
+    expect(headerNames).toContain("X-Mock-Run-Tag");
+  });
 });

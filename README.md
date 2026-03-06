@@ -9,7 +9,7 @@ Monorepo for the AI children's book app (web, API, workers, renderer, and AWS CD
 - `apps/workers`: pipeline, LLM/image workers, safety checks, status/finalize
 - `apps/renderer`: PDF renderer service (ECS/Fargate container)
 - `packages/domain`: shared domain types/enums/seed/validators
-- `packages/prompts`: prompt templates and deterministic checks
+- `packages/prompts`: schema-first prompt templates, beat/page deterministic checks, and prompt-principle invariants
 - `infra/cdk`: AWS CDK (JavaScript) stack
 - `scripts/ops`: smoke checks and ops scripts
 
@@ -109,8 +109,23 @@ Primary files:
 - `apps/renderer/src/lib/render-book.ts`
 - `packages/domain/src/layouts.ts`
 
+## Story Prompting Pipeline
+
+Story generation now runs as a staged pipeline:
+
+1. Beat planner generates strict `BeatSheet` JSON with structured beat fields.
+2. Deterministic beat checks enforce 80/20 timing, Montessori realism, and SoR planning heuristics.
+3. Three strict critics (Montessori, SoR, narrative freshness) score beats.
+4. Surgical rewrite loop fixes only flagged beats.
+5. Final page writer uses Anthropic Opus 4.6 (hard-pinned) with strict schema output.
+6. Beat-plan lineage is persisted to `books/<bookId>/beat-plan.json` and recorded in `evaluations` (`stage='beat_plan'`).
+7. If beat planning fails after rewrites, failure lineage is persisted to `books/<bookId>/beat-plan-failed.json` before the workflow fails.
+8. Deterministic final-story checks now include low-variation/repetition detection so boilerplate page text cannot pass silently.
+
 ## Runtime Config Source
 
 Image endpoints, style LoRA URL, and mock toggles are loaded from SSM runtime config.
 
 - Find it in: `apps/workers/src/lib/ssm-config.ts`
+- Mock-provider runs are explicitly authorized with `X-Mock-Run-Tag` on `POST /v1/orders/{orderId}/mark-paid` whenever mock LLM/image flags are enabled.
+- PDF renderer embeds image binaries (PNG/JPEG; SVG rasterized to PNG) and no longer prints raw `s3://...` illustration URLs.

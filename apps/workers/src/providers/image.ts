@@ -1,4 +1,5 @@
 import { pageSeed } from "@book/domain";
+import { assertMockRunAuthorized, type MockRunContext } from "../lib/mock-guard.js";
 import { getRuntimeConfig, type RuntimeConfig } from "../lib/ssm-config.js";
 import { sleep } from "../lib/helpers.js";
 
@@ -544,8 +545,12 @@ class FluxFillProvider extends FalTransport implements PageFillProvider {
   }
 }
 
-export async function resolveImageProvider(): Promise<ImageProvider> {
+export async function resolveImageProvider(context: MockRunContext = {}): Promise<ImageProvider> {
   const config = await getRuntimeConfig();
+  assertMockRunAuthorized(config, {
+    ...context,
+    source: context.source ?? "resolve_image_provider"
+  });
   if (config.featureFlags.enableMockImage) {
     return new MockImageProvider();
   }
@@ -553,11 +558,15 @@ export async function resolveImageProvider(): Promise<ImageProvider> {
   return new FalImageProvider(config);
 }
 
-export async function resolvePictureBookImageProviders(): Promise<{
+export async function resolvePictureBookImageProviders(context: MockRunContext = {}): Promise<{
   scenePlateProvider: ScenePlateProvider;
   pageFillProvider: PageFillProvider;
 }> {
   const config = await getRuntimeConfig();
+  assertMockRunAuthorized(config, {
+    ...context,
+    source: context.source ?? "resolve_picture_book_image_providers"
+  });
   if (config.featureFlags.enableMockImage) {
     return {
       scenePlateProvider: new MockScenePlateProvider(),

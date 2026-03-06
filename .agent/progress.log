@@ -57,3 +57,14 @@ Evidence:
 Notes: dev stack is deployed and stable; provider smoke uses the decrypted SSM openai_api_key directly with no project header; /ai-childrens-book/dev/openai_api_key metadata shows last modified 2026-03-04T21:30:35-05:00, so the remaining blocker is stale dev OpenAI credential/config rather than picture-book pipeline code
 Next: rotate /ai-childrens-book/dev/openai_api_key to a live project key, set enable_mock_llm=false, then run both read_aloud_3_4 and early_decoder_5_7 picture-book smokes
 Commit: f300ef0
+2026-03-06T13:12:00-0500
+Task: merge-master-picture-book-01
+Baseline: smoke PASS
+Change: merged master into codex/picture-book-fixed-layout, preserved story-pipeline hardening plus fixed-layout picture-book functionality, ported legacy renderer image embedding into render-book, propagated mock-run authorization across picture-book paths, and hardened OpenAI gpt-5-mini compatibility for structured calls (max_completion_tokens, no custom temperature, minimal reasoning, retryable empty-content handling)
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- bash scripts/agent/quality.sh => PASS
+- pnpm ops:provider-smoke => PASS
+- pnpm cdk:deploy:dev => PASS (deployed merged branch before final local OpenAI empty-content retry hardening)
+Notes: live mark-paid validation on dev now reaches real story generation and then fails on Fal billing exhaustion (403 User is locked / Exhausted balance); final local provider hardening for OpenAI empty-content handling is covered by worker tests and direct API probes but was not redeployed after the last patch in this session
+Next: top up Fal balance, redeploy the final llm-provider patch, then rerun one mark-paid smoke to confirm story_critic stays on OpenAI and image generation proceeds
