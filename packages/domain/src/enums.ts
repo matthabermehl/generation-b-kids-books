@@ -28,8 +28,12 @@ export const pageTemplateIds = [
   "corner_ur_ellipse",
   "column_left_soft",
   "column_right_soft",
+  "column_left_tall",
+  "column_right_tall",
   "band_top_soft",
-  "band_bottom_soft"
+  "band_bottom_soft",
+  "band_top_tall",
+  "band_bottom_tall"
 ] as const;
 export type PageTemplateId = (typeof pageTemplateIds)[number];
 

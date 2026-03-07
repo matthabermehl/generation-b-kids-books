@@ -93,11 +93,12 @@ async function persistPageComposition(pageId: string, composition: PageCompositi
   ]);
 }
 
-function pictureBookFillPrompt(illustrationBrief: string): string {
+export function pictureBookFillPrompt(illustrationBrief: string): string {
   return [
     "Preserve all existing blank white paper and negative space outside the masked watercolor region.",
     "Harmonize only inside the editable watercolor region with soft edges and clean paper transitions.",
     "Do not introduce new elements outside the editable region.",
+    "Do not render any text, letters, words, numbers, captions, labels, logos, or watermarks anywhere in the artwork.",
     illustrationBrief
   ].join(" ");
 }
@@ -151,6 +152,10 @@ function qaCategoryFromError(error: unknown): PictureBookQaCategory {
     return "provider_timeout";
   }
   return "other";
+}
+
+function qaHasTextOverflow(qaPayload: PictureBookQaPayload | null): boolean {
+  return qaPayload?.issues.includes("text_overflow") ?? false;
 }
 
 async function generateLegacyPageImage(job: LegacyJobPayload): Promise<void> {
@@ -438,47 +443,69 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
     }
 
     if (firstFill.category === "text_zone") {
-      const alternateComposition = selectAlternatePictureBookComposition({
-        text: job.text,
-        currentTemplateId: compositionForScene.templateId,
-        readingProfileId: compositionForScene.textStyle.readingProfileId
-      });
-
-      if (!alternateComposition) {
+      if (!qaHasTextOverflow(firstFill.qaPayload)) {
         stopAfterTextZoneFailure = true;
         break;
       }
 
-      compositionForScene = alternateComposition;
-      activeComposition = alternateComposition;
-      await persistPageComposition(job.pageId, compositionForScene);
+      let retryComposition = compositionForScene;
+      let retryScene = false;
 
-      logStructured("PictureBookTemplateSelected", {
-        bookId: job.bookId,
-        pageId: job.pageId,
-        pageIndex: job.pageIndex,
-        templateId: compositionForScene.templateId,
-        reason: "qa_retry"
-      });
+      for (let fillAttempt = 2; fillAttempt <= 3; fillAttempt += 1) {
+        const alternateComposition = selectAlternatePictureBookComposition({
+          bookId: job.bookId,
+          pageIndex: job.pageIndex,
+          text: job.text,
+          currentTemplateId: retryComposition.templateId,
+          readingProfileId: retryComposition.textStyle.readingProfileId
+        });
 
-      const secondFill = await runFillAttempt({
-        composition: compositionForScene,
-        sceneAttempt,
-        fillAttempt: 2,
-        sceneRecord,
-        scenePlate
-      });
-      finalQa = secondFill.qaPayload;
-      if (secondFill.passed) {
-        return;
+        if (!alternateComposition) {
+          stopAfterTextZoneFailure = true;
+          break;
+        }
+
+        retryComposition = alternateComposition;
+        compositionForScene = alternateComposition;
+        activeComposition = alternateComposition;
+        await persistPageComposition(job.pageId, retryComposition);
+
+        logStructured("PictureBookTemplateSelected", {
+          bookId: job.bookId,
+          pageId: job.pageId,
+          pageIndex: job.pageIndex,
+          templateId: retryComposition.templateId,
+          reason: "qa_retry"
+        });
+
+        const retryFill = await runFillAttempt({
+          composition: retryComposition,
+          sceneAttempt,
+          fillAttempt,
+          sceneRecord,
+          scenePlate
+        });
+        finalQa = retryFill.qaPayload;
+        if (retryFill.passed) {
+          return;
+        }
+
+        if (retryFill.category === "art_strength" || retryFill.category === "provider_timeout") {
+          retryScene = true;
+          break;
+        }
+
+        if (retryFill.category !== "text_zone" || !qaHasTextOverflow(retryFill.qaPayload)) {
+          stopAfterTextZoneFailure = retryFill.category === "text_zone";
+          break;
+        }
+
+        if (fillAttempt === 3) {
+          stopAfterTextZoneFailure = true;
+        }
       }
 
-      if (secondFill.category === "text_zone") {
-        stopAfterTextZoneFailure = true;
-        break;
-      }
-
-      if (secondFill.category === "art_strength" || secondFill.category === "provider_timeout") {
+      if (retryScene) {
         continue;
       }
 

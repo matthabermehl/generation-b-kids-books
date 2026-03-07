@@ -23,17 +23,52 @@ export const handler: Handler<Event> = async (event) => {
 
   const rows = await query<Row>(
     `
+      WITH page_state AS (
+        SELECT
+          p.id,
+          p.status AS page_status,
+          b.order_id::text AS order_id,
+          COALESCE(b.product_family, 'picture_book_fixed_layout') AS product_family,
+          page_image.status AS page_image_status,
+          page_image.qa_json AS page_image_qa_json,
+          fill_image.status AS fill_image_status,
+          fill_image.qa_json AS fill_image_qa_json
+        FROM pages p
+        INNER JOIN books b ON b.id = p.book_id
+        LEFT JOIN images page_image
+          ON page_image.page_id = p.id
+         AND page_image.role = 'page'
+         AND page_image.is_current = TRUE
+        LEFT JOIN images fill_image
+          ON fill_image.page_id = p.id
+         AND fill_image.role = 'page_fill'
+         AND fill_image.is_current = TRUE
+        WHERE p.book_id = CAST(:bookId AS uuid)
+      )
       SELECT
-        COUNT(p.*)::int AS total,
-        COUNT(p.*) FILTER (WHERE p.status = 'ready')::int AS ready,
-        COUNT(p.*) FILTER (WHERE p.status = 'failed')::int AS failed,
-        COUNT(i.*) FILTER (WHERE COALESCE(i.qa_json::text, '') ILIKE '%safety_flagged_prompt:%')::int AS safety_failed,
-        MAX(b.order_id::text) AS order_id,
-        MAX(COALESCE(b.product_family, 'picture_book_fixed_layout')) AS product_family
-      FROM pages p
-      INNER JOIN books b ON b.id = p.book_id
-      LEFT JOIN images i ON i.page_id = p.id AND i.role IN ('page', 'page_fill') AND i.is_current = TRUE
-      WHERE p.book_id = CAST(:bookId AS uuid)
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (
+          WHERE page_status = 'ready'
+            AND CASE
+              WHEN product_family = 'picture_book_fixed_layout'
+                THEN COALESCE(fill_image_status, '') = 'ready'
+              ELSE COALESCE(page_image_status, '') = 'ready'
+            END
+        )::int AS ready,
+        COUNT(*) FILTER (WHERE page_status = 'failed')::int AS failed,
+        COUNT(*) FILTER (
+          WHERE COALESCE(
+            CASE
+              WHEN product_family = 'picture_book_fixed_layout'
+                THEN fill_image_qa_json::text
+              ELSE page_image_qa_json::text
+            END,
+            ''
+          ) ILIKE '%safety_flagged_prompt:%'
+        )::int AS safety_failed,
+        MAX(order_id) AS order_id,
+        MAX(product_family) AS product_family
+      FROM page_state
     `,
     [{ name: "bookId", value: { stringValue: event.bookId } }]
   );

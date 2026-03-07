@@ -1,9 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  rankPageTemplateCandidates,
   protectedTextRect,
   selectAlternatePageTemplate,
   selectPageComposition
 } from "../src/layouts.js";
+
+const earlyDecoderOverflowText = `In the kitchen, Mom sat with Nora.
+
+"You can do chores to earn coins," Mom said. "One coin for each chore."
+
+Nora looked at the list: sweep the steps, fold the socks, wipe the table.
+
+Then Nora saw a soccer sticker on the table. It cost two coins.
+
+"I could buy that sticker now," Nora thought. "But then I would have only three coins left."`;
 
 describe("picture book layouts", () => {
   it("selects deterministic templates for a given page", () => {
@@ -44,15 +55,36 @@ describe("picture book layouts", () => {
     expect(current.templateId.split("_")[0]).not.toBe(previous.templateId.split("_")[0]);
   });
 
-  it("selects a deterministic alternate template from a different family", () => {
+  it("selects the next deterministic alternate template in ranked order", () => {
+    const ranked = rankPageTemplateCandidates({
+      bookId: "book-2",
+      pageIndex: 3,
+      text: earlyDecoderOverflowText,
+      readingProfileId: "early_decoder_5_7"
+    }).map((entry) => entry.templateId);
     const alternate = selectAlternatePageTemplate({
-      currentTemplateId: "corner_ul_ellipse",
+      bookId: "book-2",
+      pageIndex: 3,
+      currentTemplateId: ranked[0]!,
       readingProfileId: "early_decoder_5_7",
-      text: "This is another longer early reader page that should prefer a different template family."
+      text: earlyDecoderOverflowText
     });
 
-    expect(alternate).toBe("band_top_soft");
-    expect(alternate?.split("_")[0]).not.toBe("corner");
+    expect(alternate).toBe(ranked[1]);
+  });
+
+  it("ranks long early-decoder pages onto tall layouts before soft fallbacks", () => {
+    const ranked = rankPageTemplateCandidates({
+      bookId: "book-overflow",
+      pageIndex: 2,
+      text: earlyDecoderOverflowText,
+      readingProfileId: "early_decoder_5_7"
+    });
+
+    expect(ranked[0]?.templateId).toMatch(/^column_(left|right)_tall$/);
+    expect(ranked[0]?.fit.ok).toBe(true);
+    expect(ranked.find((entry) => entry.templateId === "column_left_soft")?.fit.ok).toBe(false);
+    expect(ranked.find((entry) => entry.templateId === "column_right_soft")?.fit.ok).toBe(false);
   });
 
   it("expands a protected text rect beyond the live text box", () => {

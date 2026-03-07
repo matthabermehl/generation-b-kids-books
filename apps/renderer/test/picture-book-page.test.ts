@@ -1,23 +1,16 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
+import { compositionForTemplate, fitTextToBox as sharedFitTextToBox } from "@book/domain";
 import { fitTextToBox, renderPictureBookPreview, type PageCompositionSpec } from "../src/templates/picture-book-page.js";
 
-const composition: PageCompositionSpec = {
-  layoutProfileId: "pb_square_8_5_v1",
-  templateId: "band_top_soft",
-  canvas: { width: 2048, height: 2048 },
-  textBox: { x: 0.10, y: 0.08, width: 0.80, height: 0.18 },
-  artBox: { x: 0.12, y: 0.26, width: 0.76, height: 0.58 },
-  maskBox: { x: 0.10, y: 0.22, width: 0.80, height: 0.64 },
-  fade: { shape: "soft_band", featherPx: 88 },
-  textStyle: {
-    readingProfileId: "early_decoder_5_7",
-    preferredFontPx: 64,
-    minFontPx: 52,
-    lineHeight: 1.24,
-    align: "left"
-  }
-};
+const composition: PageCompositionSpec = compositionForTemplate("band_top_soft", "early_decoder_5_7");
+const tallComposition: PageCompositionSpec = compositionForTemplate("band_top_tall", "read_aloud_3_4");
+const tallText = `Ava put on her coat to go to the park.
+She held her jar tight.
+"I could buy a treat at the park," she said.
+"But if I spend a coin on a treat, I will have less for my night-light."
+Ava looked at her coins.
+Spend now, or save for later?`;
 
 describe("picture book renderer", () => {
   it("renders a preview png from art and text", async () => {
@@ -59,5 +52,23 @@ describe("picture book renderer", () => {
   it("reports overflow for extremely long text", () => {
     const fit = fitTextToBox("word ".repeat(400), composition);
     expect(fit.ok).toBe(false);
+  });
+
+  it("uses the shared text fitter for tall layouts and renders matching line breaks", async () => {
+    const art = await sharp({
+      create: { width: 2048, height: 2048, channels: 4, background: { r: 214, g: 224, b: 236, alpha: 1 } }
+    })
+      .png()
+      .toBuffer();
+
+    const rendered = await renderPictureBookPreview({
+      artBytes: art,
+      text: tallText,
+      composition: tallComposition
+    });
+    const sharedFit = sharedFitTextToBox(tallText, tallComposition);
+
+    expect(rendered.textFit).toEqual(sharedFit);
+    expect(rendered.textFit.ok).toBe(true);
   });
 });

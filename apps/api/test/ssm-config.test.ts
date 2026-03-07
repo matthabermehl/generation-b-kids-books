@@ -86,4 +86,36 @@ describe("api runtime ssm config", () => {
     await getRuntimeConfig();
     expect(sendMock).toHaveBeenCalledTimes(1);
   });
+
+  it("treats the reviewer allowlist sentinel as no reviewers configured", async () => {
+    sendMock.mockResolvedValue({
+      Parameters: [
+        parameter("sendgrid_api_key", "sg"),
+        parameter("openai_api_key", "oa"),
+        parameter("anthropic_api_key", "an"),
+        parameter("fal_key", "fk"),
+        parameter("jwt_signing_secret", "x".repeat(32)),
+        parameter("stripe_secret_key", "sk_test_123"),
+        parameter("stripe_webhook_secret", "whsec_123"),
+        parameter("stripe_price_id", "price_123"),
+        parameter("stripe_success_url", "https://example.com/success"),
+        parameter("stripe_cancel_url", "https://example.com/cancel"),
+        parameter("sendgrid_from_email", "noreply@example.com"),
+        parameter("web_base_url", "https://example.com"),
+        parameter("reviewer_email_allowlist", "__unset__"),
+        parameter("enable_mock_llm", "false"),
+        parameter("enable_mock_image", "false"),
+        parameter("enable_mock_checkout", "false"),
+        parameter("enable_picture_book_pipeline", "true"),
+        parameter("enable_independent_8_to_10", "false"),
+        parameter("fal_endpoint_scene_plate", "fal-ai/flux-pro/kontext/max/multi"),
+        parameter("fal_endpoint_page_fill", "fal-ai/flux-pro/v1/fill"),
+        parameter("auth_link_ttl_minutes", "30")
+      ]
+    });
+
+    const config = await getRuntimeConfig();
+
+    expect(config.reviewerEmailAllowlist).toEqual([]);
+  });
 });

@@ -63,4 +63,28 @@ describe("check-images", () => {
     });
     expect(executeMock).not.toHaveBeenCalled();
   });
+
+  it("does not report done until the current picture-book fill image is ready", async () => {
+    queryMock.mockResolvedValue([
+      {
+        total: 12,
+        ready: 11,
+        failed: 0,
+        safety_failed: 0,
+        order_id: "order-3",
+        product_family: "picture_book_fixed_layout"
+      }
+    ]);
+
+    const result = await handler({ bookId: "book-3" } as never, {} as never, () => undefined);
+
+    expect(result).toMatchObject({
+      ready: 11,
+      pending: 1,
+      done: false,
+      needsReview: false,
+      productFamily: "picture_book_fixed_layout"
+    });
+    expect(executeMock).not.toHaveBeenCalled();
+  });
 });

@@ -47,6 +47,7 @@ export interface RuntimeConfig {
 }
 
 const ssm = new SSMClient({});
+const reviewerEmailAllowlistUnsetSentinel = "__unset__";
 
 const runtimeConfigSchema = z.object({
   secrets: z.object({
@@ -173,7 +174,7 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
     reviewerEmailAllowlist: (byName.reviewer_email_allowlist ?? "")
       .split(",")
       .map((email) => email.trim().toLowerCase())
-      .filter(Boolean),
+      .filter((email) => Boolean(email) && email !== reviewerEmailAllowlistUnsetSentinel),
     models: {
       openaiJson: byName.openai_model_json ?? "gpt-5-mini-2025-08-07",
       openaiVision: byName.openai_model_vision ?? "gpt-5-mini-2025-08-07",

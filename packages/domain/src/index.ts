@@ -4,3 +4,4 @@ export * from "./types.js";
 export * from "./validators.js";
 export * from "./providers.js";
 export * from "./layouts.js";
+export * from "./text-layout.js";

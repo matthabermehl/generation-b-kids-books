@@ -120,3 +120,32 @@ Evidence:
 - pnpm --filter @book/cdk test => PASS
 Notes: reviewer route gating now waits for session bootstrap instead of redirecting early; OpenAPI/type generation is wired into the web package scripts so review-console DTOs stay in sync with API changes.
 Commit: b93c31a
+2026-03-06T21:00:56-0500
+Task: picture-book-hardening-01
+Baseline: smoke FAIL once, then PASS on rerun
+Change: validated the deployed dev parent UI with real browser automation and two live mark-paid builds; both runs still terminate in image-QA manual review before PDF release.
+Evidence:
+- bash scripts/agent/smoke.sh => FAIL once in `apps/renderer/test/render-once.test.ts`, then PASS via triage rerun
+- pnpm --filter @book/renderer exec vitest run test/render-once.test.ts --reporter=basic => PASS 3/3
+- Playwright artifact: output/playwright/ui-book-building.png
+- Playwright artifact: output/playwright/ui-book-needs-review.png
+- live UI run order 1bf9be02-2ef3-44bd-ae68-2211b658e9cf / book 1548d9d8-9e5e-4b35-bef0-6f93cc06b289 => needs_review
+- live UI run order c465e986-48bb-498f-a449-90639105eccc / book c115d422-7a15-42e9-90db-204fada1fc19 => needs_review
+- Step Functions describe-execution for both runs => FAILED with `ImageNeedsReview`
+Notes: `prepare_story` is no longer the blocker. The current deployed dev pipeline fails downstream because multiple `page_fill` QA checks end in `text_overflow` after limited template retries; the deployed dev database also lacks the `review_cases` table, so the newer review-console persistence does not appear to be migrated there yet.
+
+2026-03-06T23:16:09-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: finished the fixed-layout hardening pass by centralizing text-fit logic in `@book/domain`, adding tall picture-book layouts and fit-ranked candidate walking, hashing migration SQL in CDK so deploys rerun schema updates, aligning `check-images` readiness handling, defaulting the reviewer allowlist sentinel safely, and fixing renderer container packaging so `@book/domain` resolves at runtime.
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- bash scripts/agent/quality.sh => PASS
+- pnpm cdk:deploy:dev => UPDATE_COMPLETE
+- RDS query => `review_cases` and `review_events` exist in dev Aurora
+- SSM query => `/ai-childrens-book/dev/reviewer_email_allowlist` exists (`__unset__`)
+- Playwright => ready order `bd2165c0-15f4-4e24-b976-2cdeededd3b2` / book `f892b0ad-11e3-4310-a0c6-2f5c2b99eea3` loads rendered previews and exposes a working `Download` link
+- saved artifact => `.agent/artifacts/picture-book-hardening-01/early-decoder-ready-f892b0ad.pdf` (`PDF`, 34 MB, 12 pages)
+- DB query for fresh target-profile runs => books `c24ff2bd-9f05-4ee5-920f-017fbfabced6` and `1e2809a5-2408-4529-a80c-3bdf13e1e243` still have pending pages whose latest `page_fill` rows fail with `fal submit failed (403): {"detail": "User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}`
+Notes: the original text-overflow/manual-review blocker is fixed, and dev review-schema drift is corrected. The task remains failing only because fresh end-to-end validation for both requested profile shapes is blocked by exhausted Fal provider balance, not by the deployed application code.
+Commit: pending

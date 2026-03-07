@@ -1,35 +1,29 @@
 # Current Task
-
-Task ID: review-console-01
+Task ID: picture-book-hardening-01
 
 ## Goal
-Revitalize the web frontend and add an internal review console plus reviewer workflow for `needs_review` books, while preserving the existing parent ordering and reader flow.
+Harden the fixed-layout picture-book pipeline so long text fits deterministically, overflow retries walk better layouts before review fallback, and dev migrations rerun when schema SQL changes.
 
-## Expected User-Visible Change
-- The web app has separate parent and reviewer areas in one deployable frontend.
-- Internal reviewers can sign in with the existing magic-link flow, see a review queue, inspect flagged books, and take `approve/continue`, `reject`, or `retry page` actions.
-- Parent users still see the existing order/checkout/reader flow, but `needs_review` is presented as “under internal review” rather than a dead end.
+## Constraints
+- Keep the current 12-page story flow and review semantics intact.
+- Fix root causes, not one-off content exceptions or manual database patches.
+- End with real dev validation evidence, including schema verification and UI/download behavior.
 
-## Files Expected To Change
-- `apps/web/src/**/*`
-- `apps/api/src/http.ts`
-- `apps/api/src/openapi/spec.ts`
-- `apps/api/src/lib/ssm-config.ts`
-- `apps/workers/src/pipeline.ts`
-- `apps/workers/src/image-worker.ts`
-- `apps/workers/src/check-images.ts`
-- `apps/workers/src/finalize.ts`
-- `apps/workers/src/migrate.ts`
-- `apps/workers/sql/001_init.sql`
-- `infra/cdk/lib/book-stack.js`
-- related tests, docs, and harness metadata
+## Plan (short)
+1) Move shared text-fit logic into `@book/domain` and make page-template ranking capacity-aware.
+2) Add tall picture-book layouts, template-aware font floors, and deterministic overflow candidate walking in the worker.
+3) Update renderer/tests to consume the shared fit logic, hash migration source content in CDK, then redeploy dev and rerun the real UI flow.
 
-## Tests / Verification
-- `bash scripts/agent/test.sh`
+## Evidence required
+- `bash scripts/agent/smoke.sh`
 - `bash scripts/agent/quality.sh`
-- targeted API, worker, and web tests for review auth, review actions, and current-attempt asset selection
-- `pnpm --filter @book/web build`
+- unit/integration tests covering new template ordering and overflow regressions
+- dev deploy + schema verification (`review_cases`, `review_events`, `reviewer_email_allowlist`)
+- Playwright/browser artifacts showing either a downloadable PDF or the exact remaining failure
 
 ## Status
-- baseline: smoke PASS on branch `codex/frontend-review-console`
-- current state: implemented and validated. The web app now has separate parent and reviewer areas, reviewer APIs/actions exist, review cases/audit rows are persisted, current-attempt asset selection is deterministic, and resume/retry flows pass the harness quality gates.
+- baseline: `bash scripts/agent/smoke.sh` PASS on current branch at 2026-03-06 23:11 local
+- local verification: `bash scripts/agent/quality.sh` PASS after the shared text-fit, worker retry, migration hash, allowlist fallback, and renderer packaging changes
+- deploy verification: dev stack is `UPDATE_COMPLETE`, renderer service is on task definition `:30`, Aurora now contains `review_cases` and `review_events`, and SSM now contains `/ai-childrens-book/dev/reviewer_email_allowlist`
+- UI verification: Playwright loaded ready order `bd2165c0-15f4-4e24-b976-2cdeededd3b2` / book `f892b0ad-11e3-4310-a0c6-2f5c2b99eea3`, rendered previews, and exposed a working PDF download link; saved artifacts live under `.agent/artifacts/picture-book-hardening-01/`
+- remaining blocker: fresh target-profile runs `c24ff2bd-9f05-4ee5-920f-017fbfabced6` (`early_decoder_5_7`) and `1e2809a5-2408-4529-a80c-3bdf13e1e243` (`read_aloud_3_4`) are still not valid pass evidence because latest `page_fill` rows fail with `fal submit failed (403): User is locked. Reason: Exhausted balance`

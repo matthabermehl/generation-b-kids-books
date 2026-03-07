@@ -1,4 +1,6 @@
 import path from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as cdk from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
@@ -31,6 +33,9 @@ import * as sfnTasks from "aws-cdk-lib/aws-stepfunctions-tasks";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "../../..");
+const migrationSourceHash = createHash("sha256")
+  .update(readFileSync(path.resolve(repoRoot, "apps/workers/src/migrate.ts"), "utf8"))
+  .digest("hex");
 
 function bool(name, fallback) {
   const value = process.env[name];
@@ -39,6 +44,15 @@ function bool(name, fallback) {
   }
 
   return value.toLowerCase() === "true";
+}
+
+function nonEmptyString(name, fallback) {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    return fallback;
+  }
+
+  return value;
 }
 
 export class AiChildrensBookDevStack extends cdk.Stack {
@@ -372,7 +386,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     imageWorkerFunction.addEventSource(
       new lambdaEventSources.SqsEventSource(imageQueue, {
-        batchSize: 5,
+        batchSize: 1,
         reportBatchItemFailures: true
       })
     );
@@ -474,7 +488,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
 
     const rendererImageAsset = new ecrAssets.DockerImageAsset(this, "RendererImageAsset", {
-      directory: path.resolve(repoRoot, "apps/renderer")
+      directory: repoRoot,
+      file: "apps/renderer/Dockerfile"
     });
 
     const rendererContainer = rendererTaskDefinition.addContainer("RendererContainer", {
@@ -832,7 +847,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const migrationsCustomResource = new cdk.CustomResource(this, "RunMigrations", {
       serviceToken: migrationsProvider.serviceToken,
       properties: {
-        MigrationVersion: "migrations-v3"
+        MigrationVersion: migrationSourceHash
       }
     });
     migrationsCustomResource.node.addDependency(cluster);
@@ -869,7 +884,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       ENABLE_MOCK_CHECKOUT: process.env.ENABLE_MOCK_CHECKOUT ?? "false",
       ENABLE_PICTURE_BOOK_PIPELINE: process.env.ENABLE_PICTURE_BOOK_PIPELINE ?? "false",
       ENABLE_INDEPENDENT_8_TO_10: process.env.ENABLE_INDEPENDENT_8_TO_10 ?? "false",
-      REVIEWER_EMAIL_ALLOWLIST: process.env.REVIEWER_EMAIL_ALLOWLIST ?? ""
+      REVIEWER_EMAIL_ALLOWLIST: nonEmptyString("REVIEWER_EMAIL_ALLOWLIST", "__unset__")
     };
 
     // CloudFormation does not support SecureString for AWS::SSM::Parameter.

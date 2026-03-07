@@ -201,9 +201,12 @@ function splitSqlStatements(sql: string): string[] {
 }
 
 export const handler: Handler<CloudFormationCustomResourceEvent, { PhysicalResourceId: string; Data?: { statementCount: number } }> = async (event) => {
+  const migrationVersion =
+    typeof event.ResourceProperties?.MigrationVersion === "string" ? event.ResourceProperties.MigrationVersion : "migrations";
+
   if (event.RequestType === "Delete") {
     return {
-      PhysicalResourceId: event.PhysicalResourceId ?? "migrations"
+      PhysicalResourceId: event.PhysicalResourceId ?? migrationVersion
     };
   }
 
@@ -214,7 +217,7 @@ export const handler: Handler<CloudFormationCustomResourceEvent, { PhysicalResou
   }
 
   return {
-    PhysicalResourceId: "migrations-v3",
+    PhysicalResourceId: migrationVersion,
     Data: {
       statementCount: statements.length
     }

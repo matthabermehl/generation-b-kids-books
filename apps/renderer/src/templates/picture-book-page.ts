@@ -1,48 +1,15 @@
 import sharp from "sharp";
+import {
+  fitTextToBox,
+  normalizedRectToPixels,
+  protectedTextRect,
+  type PageCompositionSpec,
+  type PixelRect,
+  type TextFitResult
+} from "@book/domain";
 import { rendererFonts } from "./fonts.js";
-
-export interface NormalizedRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface PageCompositionSpec {
-  layoutProfileId: "pb_square_8_5_v1";
-  templateId:
-    | "corner_ul_ellipse"
-    | "corner_ur_ellipse"
-    | "column_left_soft"
-    | "column_right_soft"
-    | "band_top_soft"
-    | "band_bottom_soft";
-  canvas: { width: number; height: number };
-  textBox: NormalizedRect;
-  artBox: NormalizedRect;
-  maskBox: NormalizedRect;
-  fade: { shape: "ellipse" | "soft_band"; featherPx: number };
-  textStyle: {
-    readingProfileId: "read_aloud_3_4" | "early_decoder_5_7";
-    preferredFontPx: number;
-    minFontPx: number;
-    lineHeight: number;
-    align: "left";
-  };
-}
-
-interface PixelRect {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-export interface TextFitResult {
-  ok: boolean;
-  fontPx: number;
-  lines: string[];
-}
+export type { PageCompositionSpec, TextFitResult };
+export { fitTextToBox };
 
 function escapeXml(value: string): string {
   return value
@@ -53,89 +20,8 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-function rectToPixels(rect: NormalizedRect, canvas: { width: number; height: number }): PixelRect {
-  const left = Math.round(rect.x * canvas.width);
-  const top = Math.round(rect.y * canvas.height);
-  const width = Math.round(rect.width * canvas.width);
-  const height = Math.round(rect.height * canvas.height);
-
-  return {
-    left: clamp(left, 0, canvas.width - 1),
-    top: clamp(top, 0, canvas.height - 1),
-    width: clamp(width, 1, canvas.width - left),
-    height: clamp(height, 1, canvas.height - top)
-  };
-}
-
-function expandRect(rect: PixelRect, expansionPx: number, canvas: { width: number; height: number }): PixelRect {
-  const left = clamp(rect.left - expansionPx, 0, canvas.width - 1);
-  const top = clamp(rect.top - expansionPx, 0, canvas.height - 1);
-  const right = clamp(rect.left + rect.width + expansionPx, 1, canvas.width);
-  const bottom = clamp(rect.top + rect.height + expansionPx, 1, canvas.height);
-
-  return {
-    left,
-    top,
-    width: clamp(right - left, 1, canvas.width - left),
-    height: clamp(bottom - top, 1, canvas.height - top)
-  };
-}
-
-function protectedTextRect(composition: PageCompositionSpec): PixelRect {
-  const textRect = rectToPixels(composition.textBox, composition.canvas);
-  const expansion = composition.templateId.startsWith("band_") ? 56 : 72;
-  return expandRect(textRect, expansion, composition.canvas);
-}
-
-function wrapText(text: string, maxCharsPerLine: number): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxCharsPerLine || !current) {
-      current = candidate;
-      continue;
-    }
-    lines.push(current);
-    current = word;
-  }
-
-  if (current) {
-    lines.push(current);
-  }
-
-  return lines;
-}
-
-export function fitTextToBox(text: string, composition: PageCompositionSpec): TextFitResult {
-  const boxWidth = composition.textBox.width * composition.canvas.width;
-  const boxHeight = composition.textBox.height * composition.canvas.height;
-
-  for (let fontPx = composition.textStyle.preferredFontPx; fontPx >= composition.textStyle.minFontPx; fontPx -= 2) {
-    const avgCharWidth = fontPx * 0.52;
-    const maxCharsPerLine = Math.max(10, Math.floor(boxWidth / avgCharWidth));
-    const lines = wrapText(text, maxCharsPerLine);
-    const totalHeight = lines.length * fontPx * composition.textStyle.lineHeight;
-    if (totalHeight <= boxHeight) {
-      return { ok: true, fontPx, lines };
-    }
-  }
-
-  return {
-    ok: false,
-    fontPx: composition.textStyle.minFontPx,
-    lines: wrapText(text, 18)
-  };
-}
-
 function fadeMaskSvg(composition: PageCompositionSpec): string {
-  const rect = rectToPixels(composition.maskBox, composition.canvas);
+  const rect = normalizedRectToPixels(composition.maskBox, composition.canvas);
   const blur = Math.max(8, Math.round(composition.fade.featherPx / 2));
   if (composition.fade.shape === "soft_band") {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${composition.canvas.width}" height="${composition.canvas.height}" viewBox="0 0 ${composition.canvas.width} ${composition.canvas.height}">
@@ -194,7 +80,7 @@ export async function buildArtBackground(artBytes: Buffer, composition: PageComp
 }
 
 function buildTextOverlaySvg(text: string, composition: PageCompositionSpec, fit: TextFitResult): string {
-  const rect = rectToPixels(composition.textBox, composition.canvas);
+  const rect = normalizedRectToPixels(composition.textBox, composition.canvas);
   const lineHeightPx = fit.fontPx * composition.textStyle.lineHeight;
   const tspans = fit.lines
     .map((line, index) => {

@@ -6,18 +6,20 @@
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "build": "pnpm --filter @book/domain build && tsc -p tsconfig.json",
+    "lint": "pnpm --filter @book/domain build && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @book/domain build && vitest run",
     "format": "echo 'format: @book/renderer no-op'"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.750.0",
+    "@book/domain": "workspace:*",
     "@resvg/resvg-js": "^2.6.2",
     "pdfkit": "^0.15.1",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "esbuild": "^0.25.1",
     "@types/node": "^22.13.10",
     "@types/pdfkit": "^0.17.3",
     "typescript": "^5.8.2",

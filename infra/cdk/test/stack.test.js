@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as cdk from "aws-cdk-lib";
-import { Template } from "aws-cdk-lib/assertions";
+import { Match, Template } from "aws-cdk-lib/assertions";
 import { AiChildrensBookDevStack } from "../lib/book-stack.js";
 
 describe("AiChildrensBookDevStack", () => {
@@ -19,9 +19,21 @@ describe("AiChildrensBookDevStack", () => {
     template.resourceCountIs("AWS::SQS::Queue", 4);
     template.resourceCountIs("AWS::CloudWatch::Alarm", 10);
     template.resourceCountIs("AWS::Events::Rule", 2);
+    template.hasResourceProperties("AWS::Lambda::EventSourceMapping", {
+      BatchSize: 1,
+      FunctionName: {
+        Ref: Match.stringLikeRegexp("^ImageWorkerFunction")
+      }
+    });
     template.hasOutput("BookBuildStateMachineArn", {});
     template.hasOutput("ApiUrl", {});
     template.hasOutput("PrivacyPurgeQueueUrl", {});
     expect(template.findResources("AWS::KMS::Key")).toBeTruthy();
+
+    const migrationResource = Object.values(template.findResources("AWS::CloudFormation::CustomResource")).find(
+      (resource) => "MigrationVersion" in (resource.Properties ?? {})
+    );
+    expect(migrationResource).toBeTruthy();
+    expect(migrationResource?.Properties?.MigrationVersion).not.toBe("migrations-v3");
   });
 });

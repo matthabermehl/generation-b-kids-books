@@ -1,0 +1,8 @@
+.git
+.agent
+output
+node_modules
+**/node_modules
+dist
+**/dist
+infra/cdk/cdk.out
