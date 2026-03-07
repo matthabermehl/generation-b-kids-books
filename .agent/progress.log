@@ -80,7 +80,7 @@ Evidence:
 - live mark-paid run 73af22e7-1a8f-4e89-b514-0386f75bb6ff (early_decoder_5_7 + inflation_candy) => FAILED in PrepareStory with BeatPlanningError
 - live mark-paid run bc4d54f4-e2e3-47c6-9c71-95120678fa10 (early_decoder_5_7 + saving_later) => FAILED in PrepareStory with BeatPlanningError
 Notes: Fal balance is no longer the blocker; the pipeline never reached character-sheet or page-image generation in these runs. Next work should target the beat-plan prompt/validator contract for 3-7 profiles.
-Commit: pending
+Commit: 6c22dc0
 
 2026-03-06T14:59:10-0500
 Task: picture-book-hardening-01
