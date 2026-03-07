@@ -27,6 +27,8 @@ describe("AiChildrensBookDevStack", () => {
     });
     template.hasOutput("BookBuildStateMachineArn", {});
     template.hasOutput("ApiUrl", {});
+    template.hasOutput("WebBucketName", {});
+    template.hasOutput("WebDistributionId", {});
     template.hasOutput("PrivacyPurgeQueueUrl", {});
     expect(template.findResources("AWS::KMS::Key")).toBeTruthy();
 
@@ -35,5 +37,15 @@ describe("AiChildrensBookDevStack", () => {
     );
     expect(migrationResource).toBeTruthy();
     expect(migrationResource?.Properties?.MigrationVersion).not.toBe("migrations-v3");
+
+    template.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: {
+        CacheBehaviors: Match.arrayWith([
+          Match.objectLike({
+            PathPattern: "books/*"
+          })
+        ])
+      }
+    });
   });
 });

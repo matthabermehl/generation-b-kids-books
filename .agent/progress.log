@@ -95,6 +95,21 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-07T08:48:00-0500
+Task: picture-book-hardening-01
+Baseline: existing app-code/dev evidence already passing; follow-up targeted the live reader preview regression visible in the attached screenshot
+Change: fixed public preview URL mapping from S3 to CloudFront (`/books/*` instead of `/artifacts/*`), added constrained reader/reviewer media sizing so loaded 2048px previews cannot blow out grid cards, and added an explicit `deploy:web:dev` publish step that builds the current SPA bundle, syncs it to the web bucket with sane cache headers, and invalidates CloudFront so the deployed UI stays aligned with repo source.
+Evidence:
+- pnpm --filter @book/api test => PASS
+- pnpm --filter @book/web test => PASS
+- pnpm run deploy:web:dev => PASS
+- curl https://dazfa7oc8fu6h.cloudfront.net/ => now references `/assets/index-CxtP7WeN.js` and `/assets/index-CpSJNAun.css`
+- Playwright reload on https://dazfa7oc8fu6h.cloudfront.net/ => new reader shell present (`Show text`, status pills, `.pages-grid`)
+- Playwright DOM metrics => `.pages-grid` clientWidth 1296 / scrollWidth 1296, first `.page-card` clientWidth 244 / scrollWidth 244, first preview image naturalWidth 2048 but clientWidth 210
+- saved artifact => `.agent/artifacts/picture-book-hardening-01/ui-reader-previews-fixed.png`
+Notes: the user-reported screenshot issue was real but it was not a rendering-pipeline regression. Root cause was web delivery drift: wrong CloudFront path mapping first, then a stale SPA bundle still serving old reader code. Fresh CDK assertion reruns are blocked right now by the local Docker daemon timing out during lambda bundling (`docker buildx ls` => `context deadline exceeded`), so this follow-up relied on targeted tests plus live browser validation.
+Commit: pending
+
 2026-03-06T16:03:30-0500
 Task: picture-book-hardening-01
 Baseline: smoke PASS

@@ -208,7 +208,8 @@ Fixed-layout additions:
 - `pnpm openapi:generate`
 - `pnpm cdk:synth`
 - `pnpm cdk:diff`
-- `pnpm cdk:deploy:dev`
+- `pnpm cdk:deploy:dev` (deploys infra, then builds and publishes the current `apps/web` bundle to the web bucket and invalidates CloudFront)
+- `pnpm deploy:web:dev` (republish the current SPA bundle without an infra change)
 - `pnpm ops:provider-smoke`
 - `pnpm ops:picture-book-smoke`
 - `pnpm ops:stripe-smoke`

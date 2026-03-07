@@ -269,6 +269,7 @@ label {
 
 .parent-grid {
   grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  min-width: 0;
 }
 
 .full {
@@ -300,12 +301,24 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
   margin-top: 1rem;
+  min-width: 0;
+}
+
+.parent-grid > *,
+.pages-grid > *,
+.review-detail-grid > *,
+.review-page-grid > *,
+.review-metadata-grid > * {
+  min-width: 0;
 }
 
 .page-card,
 .page-panel {
   display: grid;
   gap: 0.8rem;
+  min-width: 0;
+  align-content: start;
+  overflow: hidden;
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.88);
@@ -323,7 +336,12 @@ label {
 
 .page-card img,
 .page-panel img {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  object-fit: contain;
   border-radius: calc(var(--radius-md) - 4px);
   border: 1px solid rgba(24, 50, 43, 0.08);
   background: white;
@@ -363,6 +381,7 @@ label {
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+  min-width: 0;
 }
 
 .review-sidebar {
@@ -414,12 +433,14 @@ label {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.9rem;
+  min-width: 0;
 }
 
 .review-metadata-grid {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 0.9rem;
+  min-width: 0;
 }
 
 .timeline {

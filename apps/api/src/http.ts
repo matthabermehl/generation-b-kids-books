@@ -30,7 +30,7 @@ import { execute, query } from "./lib/rds.js";
 import { json } from "./lib/response.js";
 import { isReviewerEmailAllowed } from "./lib/reviewer.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
-import { signPdfDownload } from "./lib/storage.js";
+import { publicArtifactUrl, signPdfDownload } from "./lib/storage.js";
 import { createStripeCheckoutSession, verifyStripeWebhook } from "./lib/stripe.js";
 
 const sfn = new SFNClient({});
@@ -79,22 +79,6 @@ const bookTransitions: Record<string, string[]> = {
   ready: ["failed"],
   failed: ["building"]
 };
-
-function s3ToPublicUrl(s3Url: string | null): string | null {
-  if (!s3Url) {
-    return null;
-  }
-
-  const base = process.env.ARTIFACT_PUBLIC_BASE_URL ?? "";
-  if (!base || !s3Url.startsWith("s3://")) {
-    return s3Url;
-  }
-
-  const stripped = s3Url.slice("s3://".length);
-  const firstSlash = stripped.indexOf("/");
-  const key = firstSlash >= 0 ? stripped.slice(firstSlash + 1) : stripped;
-  return `${base.replace(/\/$/, "")}/artifacts/${key}`;
-}
 
 function logWithContext(
   requestId: string,
@@ -1252,10 +1236,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           readingProfileId: reviewCase.reading_profile_id,
           moneyLessonKey: reviewCase.money_lesson_key
         },
-        pdfUrl: s3ToPublicUrl(pdfArtifact?.s3_url ?? null),
+        pdfUrl: publicArtifactUrl(pdfArtifact?.s3_url ?? null),
         artifacts: artifacts.map((artifact) => ({
           artifactType: artifact.artifact_type,
-          url: s3ToPublicUrl(artifact.s3_url),
+          url: publicArtifactUrl(artifact.s3_url),
           createdAt: artifact.created_at
         })),
         evaluations: evaluations.map((row) => ({
@@ -1284,9 +1268,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             status: page.status,
             text: page.text,
             templateId: page.template_id,
-            previewImageUrl: s3ToPublicUrl(page.preview_image_url),
-            scenePlateUrl: s3ToPublicUrl(page.scene_plate_url),
-            pageFillUrl: s3ToPublicUrl(page.page_fill_url),
+            previewImageUrl: publicArtifactUrl(page.preview_image_url),
+            scenePlateUrl: publicArtifactUrl(page.scene_plate_url),
+            pageFillUrl: publicArtifactUrl(page.page_fill_url),
             latestQaIssues: issues,
             qaMetrics: qa.metrics ?? null,
             retryCount: Math.max(Number(page.retry_count) - 1, 0)
@@ -1557,8 +1541,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           pageIndex: Number(page.page_index),
           text: page.text,
           status: page.status,
-          imageUrl: s3ToPublicUrl(page.preview_image_url ?? page.image_url),
-          previewImageUrl: s3ToPublicUrl(page.preview_image_url),
+          imageUrl: publicArtifactUrl(page.preview_image_url ?? page.image_url),
+          previewImageUrl: publicArtifactUrl(page.preview_image_url),
           templateId: page.template_id ?? undefined,
           productFamily: bookRows[0].product_family
         }))

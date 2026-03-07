@@ -24,7 +24,6 @@ import * as lambdaNode from "aws-cdk-lib/aws-lambda-nodejs";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as s3 from "aws-cdk-lib/aws-s3";
-import * as s3Deploy from "aws-cdk-lib/aws-s3-deployment";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as sfn from "aws-cdk-lib/aws-stepfunctions";
@@ -91,7 +90,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
       },
       additionalBehaviors: {
-        "artifacts/*": {
+        "books/*": {
           origin: origins.S3BucketOrigin.withOriginAccessControl(artifactBucket),
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS
         }
@@ -112,12 +111,6 @@ export class AiChildrensBookDevStack extends cdk.Stack {
           ttl: cdk.Duration.seconds(0)
         }
       ]
-    });
-
-    new s3Deploy.BucketDeployment(this, "WebPlaceholderDeploy", {
-      destinationBucket: webBucket,
-      distribution,
-      sources: [s3Deploy.Source.data("index.html", "<html><body><h1>Deploy web bundle to this bucket</h1></body></html>")]
     });
 
     const idempotencyTable = new dynamodb.Table(this, "IdempotencyTable", {
@@ -1206,6 +1199,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, "ApiUrl", { value: api.apiEndpoint });
+    new cdk.CfnOutput(this, "WebBucketName", { value: webBucket.bucketName });
+    new cdk.CfnOutput(this, "WebDistributionId", { value: distribution.distributionId });
     new cdk.CfnOutput(this, "WebDistributionUrl", { value: `https://${distribution.distributionDomainName}` });
     new cdk.CfnOutput(this, "ArtifactBucketName", { value: artifactBucket.bucketName });
     new cdk.CfnOutput(this, "IdempotencyTableName", { value: idempotencyTable.tableName });
