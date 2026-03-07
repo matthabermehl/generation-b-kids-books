@@ -1,5 +1,9 @@
 # Decision Log
 
+## 2026-03-06: Add hard-vs-soft beat critic tiers with report artifacts
+- Decision: beat-planning critics now classify issues as `hard` or `soft`; hard issues still drive rewrite/fail behavior, while soft-only outcomes persist `beat-plan-report.json` and allow story generation to continue.
+- Rationale: Montessori/SoR/narrative feedback includes both objective blockers and advisory cleanup. Capturing advisory notes without blocking the book reduces false-negative build failures while preserving a review trail.
+
 ## 2026-03-05: Make narrative beat critic advisory after bounded rewrites
 - Decision: keep deterministic + Montessori + SoR checks fail-closed, but treat `narrative_freshness` as advisory once max beat rewrites are exhausted (record warning in beat-plan audit instead of throwing).
 - Rationale: narrative critic wording quality can remain unstable despite structurally valid beat plans; this avoids blocking end-to-end delivery while preserving strict pedagogical and deterministic gates.
@@ -95,3 +99,15 @@
 ## 2026-03-04: Dev-only private beta scope
 - Decision: keep rollout in `dev` only for this phase.
 - Rationale: faster iteration with lower operational overhead before staging/prod promotion.
+
+## 2026-03-06: Fixed-layout picture-book product family
+- Decision: introduce `picture_book_fixed_layout` as the primary product family for ages `3-7`.
+- Rationale: `3-7` books share an illustration-heavy page model, while `8-10` needs a later chapter-book pipeline.
+
+## 2026-03-06: Keep canonical pages layered
+- Decision: persist page composition metadata, layered image assets, and live text instead of flattening page text into image generation.
+- Rationale: deterministic text placement is easier to guarantee in code, and the layered model is reusable for future ebook/app outputs.
+
+## 2026-03-06: Split fixed-layout image generation into scene and fill stages
+- Decision: use `Kontext` for square scene plates and `FLUX Fill` for masked page harmonization.
+- Rationale: the model handles subject/style generation, while deterministic whitespace, fade behavior, and QA remain under system control.

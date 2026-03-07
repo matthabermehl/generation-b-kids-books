@@ -57,9 +57,14 @@ describe("api runtime ssm config", () => {
         parameter("stripe_cancel_url", "https://example.com/cancel"),
         parameter("sendgrid_from_email", "noreply@example.com"),
         parameter("web_base_url", "https://example.com"),
+        parameter("reviewer_email_allowlist", "reviewer@example.com,qa@example.com"),
         parameter("enable_mock_llm", "false"),
         parameter("enable_mock_image", "false"),
         parameter("enable_mock_checkout", "false"),
+        parameter("enable_picture_book_pipeline", "true"),
+        parameter("enable_independent_8_to_10", "false"),
+        parameter("fal_endpoint_scene_plate", "fal-ai/flux-pro/kontext/max/multi"),
+        parameter("fal_endpoint_page_fill", "fal-ai/flux-pro/v1/fill"),
         parameter("auth_link_ttl_minutes", "30")
       ]
     });
@@ -68,9 +73,14 @@ describe("api runtime ssm config", () => {
 
     expect(config.authLinkTtlMinutes).toBe(30);
     expect(config.sendgridFromEmail).toBe("noreply@example.com");
+    expect(config.reviewerEmailAllowlist).toEqual(["reviewer@example.com", "qa@example.com"]);
     expect(config.featureFlags.enableMockLlm).toBe(false);
     expect(config.featureFlags.enableMockImage).toBe(false);
     expect(config.featureFlags.enableMockCheckout).toBe(false);
+    expect(config.featureFlags.enablePictureBookPipeline).toBe(true);
+    expect(config.featureFlags.enableIndependent8To10).toBe(false);
+    expect(config.falEndpoints.scenePlate).toBe("fal-ai/flux-pro/kontext/max/multi");
+    expect(config.falEndpoints.pageFill).toBe("fal-ai/flux-pro/v1/fill");
     expect(config.stripe.priceId).toBe("price_123");
 
     await getRuntimeConfig();

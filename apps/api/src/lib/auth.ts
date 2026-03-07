@@ -1,12 +1,12 @@
 import jwt from "jsonwebtoken";
 import { getRuntimeConfig } from "./ssm-config.js";
 
-interface LoginTokenPayload {
+export interface LoginTokenPayload {
   email: string;
   purpose: "login";
 }
 
-interface SessionTokenPayload {
+export interface SessionTokenPayload {
   userId: string;
   email: string;
   purpose: "session";

@@ -53,6 +53,7 @@ export interface LlmMetadata {
 }
 
 type BeatCriticName = "montessori" | "science_of_reading" | "narrative_freshness";
+type CriticIssueTier = CriticVerdict["issues"][number]["tier"];
 
 export interface BeatCriticAudit {
   critic: BeatCriticName;
@@ -71,6 +72,7 @@ export interface BeatPlanningAudit {
   rewritesApplied: number;
   passed: boolean;
   finalIssues: string[];
+  softIssues: string[];
 }
 
 export class BeatPlanningError extends Error {
@@ -130,6 +132,7 @@ const beatCriticSchema = z.object({
     z.object({
       beatIndex: z.number().int().min(0).max(40),
       problem: z.string().min(1),
+      tier: z.enum(["hard", "soft"]),
       severity: z.enum(["low", "med", "high"]),
       fix: z.string().min(1)
     })
@@ -146,10 +149,25 @@ const beatCriticLenientParser = z.preprocess((raw) => {
   const normalizedIssues = Array.isArray(record.issues) ? record.issues : [];
   const normalizedPass =
     typeof record.pass === "boolean" ? record.pass : normalizedIssues.length === 0;
+  const normalizedTier = (issue: unknown): "hard" | "soft" => {
+    if (!issue || typeof issue !== "object" || Array.isArray(issue)) {
+      return "hard";
+    }
+
+    const issueRecord = issue as Record<string, unknown>;
+    if (issueRecord.tier === "hard" || issueRecord.tier === "soft") {
+      return issueRecord.tier;
+    }
+
+    return issueRecord.severity === "high" ? "hard" : "soft";
+  };
   return {
     ...record,
     pass: normalizedPass,
-    issues: normalizedIssues,
+    issues: normalizedIssues.map((issue) => ({
+      ...(issue as Record<string, unknown>),
+      tier: normalizedTier(issue)
+    })),
     rewriteInstructions:
       typeof record.rewriteInstructions === "string" ? record.rewriteInstructions : ""
   };
@@ -194,7 +212,8 @@ function estimateCostUsd(
   completionTokens: number
 ): number {
   if (provider === "openai") {
-    return (promptTokens * 0.4 + completionTokens * 1.6) / 1_000_000;
+    // gpt-5-mini indicative pricing per 1M tokens.
+    return (promptTokens * 0.25 + completionTokens * 2) / 1_000_000;
   }
 
   return (promptTokens * 3 + completionTokens * 15) / 1_000_000;
@@ -207,6 +226,55 @@ function parseWithSchema<T>(
   return schema.parse(raw);
 }
 
+function normalizeStructuredToolInput(raw: unknown, schemaName: string): unknown {
+  let candidate = raw;
+  const seen = new Set<unknown>();
+
+  while (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+    if (seen.has(candidate)) {
+      break;
+    }
+    seen.add(candidate);
+
+    const record = candidate as Record<string, unknown>;
+    if (record[schemaName] !== undefined) {
+      candidate = record[schemaName];
+      continue;
+    }
+    if (record.output !== undefined) {
+      candidate = record.output;
+      continue;
+    }
+    if (record.data !== undefined) {
+      candidate = record.data;
+      continue;
+    }
+    break;
+  }
+
+  if (schemaName === schemaNames.beatSheet && Array.isArray(candidate)) {
+    return { beats: candidate };
+  }
+
+  return candidate;
+}
+
+function buildOpenAiTokenLimit(model: string, maxTokens: number): { max_completion_tokens: number } | { max_tokens: number } {
+  if (model.startsWith("gpt-5")) {
+    return { max_completion_tokens: maxTokens };
+  }
+
+  return { max_tokens: maxTokens };
+}
+
+function buildOpenAiSamplingOptions(model: string): { temperature?: number; reasoning_effort?: "minimal" } {
+  if (model.startsWith("gpt-5")) {
+    return { reasoning_effort: "minimal" };
+  }
+
+  return { temperature: 0.3 };
+}
+
 function providerErrorContext(stage: string, error: ProviderRequestError): Record<string, unknown> {
   return {
     stage,
@@ -217,14 +285,11 @@ function providerErrorContext(stage: string, error: ProviderRequestError): Recor
   };
 }
 
-function flattenBeatPlanningIssues(attempt: BeatPlanningAttempt): string[] {
-  const issues = attempt.deterministic.issues.map((issue) => issue.message);
-  for (const critic of attempt.critics) {
-    for (const issue of critic.verdict.issues) {
-      issues.push(`[${critic.critic}] beat ${issue.beatIndex}: ${issue.problem}`);
-    }
-  }
-  return issues;
+function formatCriticIssue(
+  critic: BeatCriticName,
+  issue: CriticVerdict["issues"][number]
+): string {
+  return `[${critic}] beat ${issue.beatIndex}: ${issue.problem}`;
 }
 
 function normalizeBeatSheetToPageCount(beatSheet: BeatSheet, pageCount: number): BeatSheet {
@@ -246,19 +311,53 @@ function normalizeBeatSheetToPageCount(beatSheet: BeatSheet, pageCount: number):
 function normalizeCriticVerdict(verdict: CriticVerdict): CriticVerdict {
   const seen = new Set<string>();
   const dedupedIssues = verdict.issues.filter((issue) => {
-    const key = `${issue.beatIndex}:${issue.problem.trim().toLowerCase()}`;
+    const key = `${issue.beatIndex}:${issue.tier}:${issue.problem.trim().toLowerCase()}`;
     if (seen.has(key)) {
       return false;
     }
     seen.add(key);
     return true;
   });
-  const cappedIssues = dedupedIssues.slice(0, 3);
+  const hardIssues = dedupedIssues.filter((issue) => issue.tier === "hard").slice(0, 2);
+  const softIssues = dedupedIssues.filter((issue) => issue.tier === "soft").slice(0, 2);
+  const cappedIssues = [...hardIssues, ...softIssues];
 
   return {
-    pass: cappedIssues.length === 0,
+    pass: hardIssues.length === 0,
     issues: cappedIssues,
     rewriteInstructions: verdict.rewriteInstructions.trim()
+  };
+}
+
+function hardCriticIssues(verdict: CriticVerdict): CriticVerdict["issues"] {
+  return verdict.issues.filter((issue) => issue.tier === "hard");
+}
+
+function collectBeatPlanningIssueSummary(
+  attempt: BeatPlanningAttempt,
+  options: { narrativeFreshnessAdvisory?: boolean } = {}
+): { hard: string[]; soft: string[] } {
+  const hard = attempt.deterministic.issues.map((issue) => issue.message);
+  const soft: string[] = [];
+
+  for (const critic of attempt.critics) {
+    for (const issue of critic.verdict.issues) {
+      const formatted = formatCriticIssue(critic.critic, issue);
+      if (
+        issue.tier === "soft" ||
+        (options.narrativeFreshnessAdvisory && critic.critic === "narrative_freshness")
+      ) {
+        soft.push(formatted);
+        continue;
+      }
+
+      hard.push(formatted);
+    }
+  }
+
+  return {
+    hard: Array.from(new Set(hard)),
+    soft: Array.from(new Set(soft))
   };
 }
 
@@ -269,16 +368,18 @@ function buildRewriteInstructions(
 ): string {
   const earlyReader =
     context.profile === "early_decoder_5_7" || (context.ageYears >= 5 && context.ageYears <= 7);
+  const youngPictureBookProfile =
+    context.profile === "read_aloud_3_4" ||
+    context.profile === "early_decoder_5_7" ||
+    context.ageYears <= 7;
   const finalTwentyPercentIndex = Math.floor(context.pageCount * 0.8);
-  const failingCritics = attempt.critics.filter(
-    (critic) => !critic.verdict.pass || critic.verdict.issues.length > 0
-  );
+  const failingCritics = attempt.critics.filter((critic) => hardCriticIssues(critic.verdict).length > 0);
   const deterministicLines = attempt.deterministic.issues.map(
     (issue) =>
       `- Deterministic (${issue.code})${issue.beatIndex !== undefined ? ` beat ${issue.beatIndex}` : ""}: ${issue.message}`
   );
   const criticLines = failingCritics.flatMap((critic) =>
-    critic.verdict.issues.map(
+    hardCriticIssues(critic.verdict).map(
       (issue) =>
         `- ${critic.critic} critic beat ${issue.beatIndex}: ${issue.problem}. Fix guidance: ${issue.fix}`
     )
@@ -301,6 +402,16 @@ function buildRewriteInstructions(
           "- Keep newWordsIntroduced length <= 2 for every beat.",
           `- Introduce taught words like Bitcoin only at index >= ${finalTwentyPercentIndex}.`,
           "- Avoid abstract economic jargon unless rewritten into concrete child-level wording."
+        ]
+      : []),
+    ...(youngPictureBookProfile
+      ? [
+          "- 3-7 profile guardrails:",
+          "- Keep the child's decisive actions physical and observable: count coins, save, wait, choose, earn, compare prices, or buy a smaller item.",
+          "- Do not use device-first or fintech-first plot mechanics such as tablet, app, digital jar, wallet, password, transfer, QR code, blockchain, or chart.",
+          "- Do not make Bitcoin the child's decoding target or a newWordsIntroduced item unless a validator explicitly requires it.",
+          "- If Bitcoin appears, keep it to one brief adult/caregiver aside in the final beats while the child-facing language stays concrete.",
+          "- Use exact, countable price-change examples instead of supply-shock, market, scarcity, or volatility explanations."
         ]
       : []),
     "Global rewrite guidance:",
@@ -353,7 +464,8 @@ class MockLlmProvider implements LlmProvider {
         ],
         rewritesApplied: 0,
         passed: deterministic.ok,
-        finalIssues: deterministic.issues.map((issue) => issue.message)
+        finalIssues: deterministic.issues.map((issue) => issue.message),
+        softIssues: []
       },
       meta: {
         provider: "mock",
@@ -473,39 +585,30 @@ class OpenAiAnthropicProvider implements LlmProvider {
 
       attempts.push({ attempt, deterministic, critics });
 
-      const criticsPass = critics.every((critic) => critic.verdict.pass);
-      const blockingCriticsPass = critics.every(
-        (critic) => critic.critic === "narrative_freshness" || critic.verdict.pass
-      );
-      if (deterministic.ok && criticsPass) {
+      const issueSummary = collectBeatPlanningIssueSummary(attempts[attempt], {
+        narrativeFreshnessAdvisory: attempt === MAX_BEAT_REWRITES
+      });
+
+      if (issueSummary.hard.length === 0) {
         return {
           beatSheet: currentBeatSheet,
           audit: {
             attempts,
             rewritesApplied: attempt,
             passed: true,
-            finalIssues: []
-          },
-          meta: latestMeta
-        };
-      }
-
-      if (deterministic.ok && blockingCriticsPass && attempt === MAX_BEAT_REWRITES) {
-        const finalIssues = flattenBeatPlanningIssues(attempts[attempt] ?? attempts[attempts.length - 1]);
-        return {
-          beatSheet: currentBeatSheet,
-          audit: {
-            attempts,
-            rewritesApplied: attempt,
-            passed: false,
-            finalIssues
+            finalIssues: [],
+            softIssues: issueSummary.soft
           },
           meta: latestMeta
         };
       }
 
       if (attempt === MAX_BEAT_REWRITES) {
-        const finalIssues = flattenBeatPlanningIssues(attempts[attempt] ?? attempts[attempts.length - 1]);
+        const latestAttempt = attempts[attempt] ?? attempts[attempts.length - 1];
+        const finalIssueSummary = collectBeatPlanningIssueSummary(latestAttempt, {
+          narrativeFreshnessAdvisory: true
+        });
+        const finalIssues = finalIssueSummary.hard;
         throw new BeatPlanningError(
           `Beat planning failed validation after rewrites: ${finalIssues.join(" | ")}`,
           currentBeatSheet,
@@ -513,7 +616,8 @@ class OpenAiAnthropicProvider implements LlmProvider {
             attempts,
             rewritesApplied: attempt,
             passed: false,
-            finalIssues
+            finalIssues,
+            softIssues: finalIssueSummary.soft
           },
           latestMeta
         );
@@ -603,7 +707,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
       schemaName: schemaNames.storyCriticVerdict,
       jsonSchema: storyCriticVerdictJsonSchema,
       parser: storyCriticSchema,
-      maxTokens: 900
+      maxTokens: 2200
     });
 
     const deterministic = runDeterministicStoryChecks(
@@ -818,8 +922,8 @@ class OpenAiAnthropicProvider implements LlmProvider {
         },
         body: JSON.stringify({
           model: input.model,
-          temperature: 0.3,
-          max_tokens: input.maxTokens,
+          ...buildOpenAiSamplingOptions(input.model),
+          ...buildOpenAiTokenLimit(input.model, input.maxTokens),
           response_format: {
             type: "json_schema",
             json_schema: {
@@ -853,13 +957,19 @@ class OpenAiAnthropicProvider implements LlmProvider {
       }
 
       const payload = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
+        choices?: Array<{ finish_reason?: string; message?: { content?: string } }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
       };
 
+      const finishReason = payload.choices?.[0]?.finish_reason ?? null;
       const content = payload.choices?.[0]?.message?.content;
       if (!content) {
-        throw new ProviderRequestError("openai", `OpenAI ${input.stage} response missing content`, null, false);
+        throw new ProviderRequestError(
+          "openai",
+          `OpenAI ${input.stage} response missing content`,
+          null,
+          finishReason === "length"
+        );
       }
 
       const parsedJson = JSON.parse(content) as unknown;
@@ -976,7 +1086,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
         );
       }
 
-      const data = parseWithSchema(toolOutput.input, input.parser);
+      const data = parseWithSchema(normalizeStructuredToolInput(toolOutput.input, input.schemaName), input.parser);
       const promptTokens = payload.usage?.input_tokens ?? 0;
       const completionTokens = payload.usage?.output_tokens ?? 0;
       const totalTokens = promptTokens + completionTokens;

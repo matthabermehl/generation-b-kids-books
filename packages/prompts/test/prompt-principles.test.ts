@@ -77,14 +77,50 @@ describe("prompt principles", () => {
     expectSignals(prompt, ["controlled_vocab", "repetition", "taught_words", ">= 0.65", "index >= 8"]);
   });
 
+  it("planner prompt adds young-profile bitcoin guardrails", () => {
+    const prompt = buildBeatPlannerPrompt(context, 12, {
+      highScoreThreshold: 0.65,
+      minHighBeats: 2,
+      maxHighBeats: 3,
+      allowedHighStartIndex: 8
+    });
+
+    expectSignals(prompt, [
+      "one brief caregiver/adult line",
+      "digital jar",
+      "transfer",
+      "same coins buy",
+      "do not add taught_words solely"
+    ]);
+  });
+
   it("sor critic preserves late-stage bitcoin invariant", () => {
     const prompt = buildScienceOfReadingCriticPrompt(context, JSON.stringify(beatSheet));
-    expectSignals(prompt, ["preserve", "bitcoin", "late-stage"]);
+    expectSignals(prompt, [
+      "preserve",
+      "bitcoin",
+      "late-stage",
+      "adult/caregiver label",
+      "do not require extra taught_words tags",
+      "must not be treated as a child taught word",
+      "at most a soft issue"
+    ]);
   });
 
   it("writer prompt preserves grounding signals", () => {
     const prompt = buildPageWriterPrompt(context, beatSheet, 1);
     const [principle] = principlesFor("writer");
     expectSignals(prompt, principle.requiredSignals);
+  });
+
+  it("writer prompt forbids device-led bitcoin exposition for young readers", () => {
+    const prompt = buildPageWriterPrompt(context, beatSheet, 1);
+    expectSignals(prompt, [
+      "device or fintech jargon",
+      "digital jar",
+      "wallet",
+      "password",
+      "one short caregiver/adult line"
+    ]);
   });
 });

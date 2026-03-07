@@ -38,7 +38,7 @@ async function loadSsmParams() {
 }
 
 async function checkOpenAi(config) {
-  const model = config.openai_model_json ?? "gpt-4.1-mini";
+  const model = config.openai_model_json ?? "gpt-5-mini-2025-08-07";
   const response = await fetch(`https://api.openai.com/v1/models/${encodeURIComponent(model)}`, {
     headers: {
       Authorization: `Bearer ${config.openai_api_key}`

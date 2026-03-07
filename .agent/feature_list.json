@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-05T22:10:30Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-06T22:30:37Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -20,8 +20,44 @@
       "Read .agent/handoff.md and active execution plan",
       "Implement next smallest verifiable slice of the pending work"
     ],
+    "passes": true,
+    "evidence": "Implemented the 3-7 fixed-layout picture-book pipeline slice with additive schema/config updates, layered image roles, preview rendering, and passing lint/test/quality checks (2026-03-06)."
+  },
+  {
+    "id": "picture-book-hardening-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Harden the fixed-layout picture-book pipeline for real-LLM dev validation and manual-review fallback",
+    "steps": [
+      "Add deterministic text-safe enforcement, smarter retry logic, and picture-book QA/manual-review routing",
+      "Add a dedicated picture-book smoke harness and validate the real-LLM dev path"
+    ],
     "passes": false,
-    "evidence": null
+    "evidence": "Prompt-layer hardening deployed on 2026-03-06: bash scripts/agent/quality.sh => PASS; pnpm ops:provider-smoke => PASS with openai model gpt-5-mini-2025-08-07; dev flags confirm enable_mock_llm=false and enable_picture_book_pipeline=true. Latest live run 6f4c68d4-3d9d-4c36-934f-12224ead9879 / book 57d6abfd-e7c4-48e3-8e70-4093300cb3fb (early_decoder_5_7 + saving_later) still fails in prepare_story with BeatPlanningError, but the failure narrowed from device/digital-jar/transfer abstractions to two SoR issues at beat 9: late taught-word Bitcoin framing and taught-word/decodability tag overload. Image generation still has not been reached in live validation."
+  },
+  {
+    "id": "review-console-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Revitalize the frontend and add an internal review console with explicit review-case workflow for needs_review books",
+    "steps": [
+      "Refactor the web app into parent and reviewer areas with typed API access and reviewer route gating",
+      "Add review-case persistence, reviewer APIs/actions, current-attempt asset selection, and resume/retry workflow so manual review is operational"
+    ],
+    "passes": true,
+    "evidence": "Implemented route-based parent/reviewer web flows, GET /v1/session and /v1/review/* APIs, review_cases/review_events persistence, current-attempt image/artifact semantics, resume/retry workflow, and reviewer docs. Verification: bash scripts/agent/smoke.sh => PASS; bash scripts/agent/quality.sh => PASS; pnpm --filter @book/web build => PASS; pnpm --filter @book/api test => PASS; pnpm --filter @book/cdk test => PASS (2026-03-06)."
+  },
+  {
+    "id": "merge-master-picture-book-01",
+    "priority": 1,
+    "category": "integration",
+    "description": "Merge master into codex/picture-book-fixed-layout without losing story-pipeline hardening or fixed-layout picture-book functionality",
+    "steps": [
+      "Merge master into codex/picture-book-fixed-layout and manually resolve overlapping API, worker, renderer, domain, and infra files",
+      "Preserve master's story-pipeline hardening and mock-run authorization alongside the picture-book fixed-layout pipeline, then verify with quality gates"
+    ],
+    "passes": true,
+    "evidence": "bash scripts/agent/quality.sh => PASS; pnpm ops:provider-smoke => PASS; master story-pipeline hardening and picture-book fixed-layout pipeline merged with mock-run authorization preserved; live mark-paid validation reached story generation but image generation is externally blocked by Fal exhausted balance"
   },
   {
     "id": "docs-source-of-truth-01",

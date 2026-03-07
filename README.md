@@ -15,7 +15,21 @@ Monorepo for the AI children's book app (web, API, workers, renderer, and AWS CD
 
 ## Current Runtime Image Pipeline
 
-This is the production path currently deployed in `dev`.
+Two image paths now exist:
+
+1. Legacy path:
+   - single-pass page-image generation
+   - stored as `images.role='page'`
+   - used when `enable_picture_book_pipeline=false`
+
+2. Picture-book fixed-layout path:
+   - only for `read_aloud_3_4` and `early_decoder_5_7`
+   - persists deterministic `composition_json` per page
+   - generates `scene_plate` -> `page_fill` -> `page_preview`
+   - renderer produces preview PNGs plus live-text PDF pages
+   - gated by `enable_picture_book_pipeline=true`
+
+The legacy flow remains the default fallback in `dev` until the flag is enabled.
 
 1. LLM generates per-page `pageText` + `illustrationBrief`, then pages are saved with `illustration_brief_json`.
    - Find it in: `apps/workers/src/providers/llm.ts`
@@ -74,6 +88,26 @@ This is the production path currently deployed in `dev`.
    - stores `model_endpoint`, `prompt`, `seed`, `fal_request_id`, dimensions, `qa_json`, `s3_url`
    - updates page/image status to `ready` or `failed`
    - Find it in: `apps/workers/src/image-worker.ts`
+
+## Fixed-Layout Picture-Book Pipeline
+
+When the picture-book flag is enabled, the flow becomes:
+
+1. LLM generates story text and illustration briefs only.
+2. Pipeline assigns a deterministic page template and stores `composition_json`.
+3. Character sheet is generated once and used as an explicit scene reference.
+4. Worker uploads static watercolor style references.
+5. `Kontext` generates a square `scene_plate` with explicit reference URLs.
+6. Worker places the scene onto a white canvas and uploads a binary fill mask.
+7. `FLUX Fill` harmonizes only the art region.
+8. Renderer applies the deterministic fade, writes preview PNGs, and builds the final PDF with live text.
+
+Primary files:
+- `apps/workers/src/pipeline.ts`
+- `apps/workers/src/image-worker.ts`
+- `apps/workers/src/providers/image.ts`
+- `apps/renderer/src/lib/render-book.ts`
+- `packages/domain/src/layouts.ts`
 
 ## Story Prompting Pipeline
 

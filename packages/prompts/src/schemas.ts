@@ -1,6 +1,7 @@
 export interface CriticIssue {
   beatIndex: number;
   problem: string;
+  tier: "hard" | "soft";
   severity: "low" | "med" | "high";
   fix: string;
 }
@@ -83,10 +84,11 @@ export const criticVerdictJsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["beatIndex", "problem", "severity", "fix"],
+        required: ["beatIndex", "problem", "tier", "severity", "fix"],
         properties: {
           beatIndex: { type: "integer", minimum: 0, maximum: 40 },
           problem: { type: "string", minLength: 1 },
+          tier: { type: "string", enum: ["hard", "soft"] },
           severity: { type: "string", enum: ["low", "med", "high"] },
           fix: { type: "string", minLength: 1 }
         }

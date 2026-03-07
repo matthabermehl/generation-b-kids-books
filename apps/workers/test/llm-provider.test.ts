@@ -99,8 +99,8 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
       stripeWebhookSecret: "whsec_123"
     },
     models: {
-      openaiJson: "gpt-4.1-mini",
-      openaiVision: "gpt-4.1-mini",
+      openaiJson: "gpt-5-mini-2025-08-07",
+      openaiVision: "gpt-5-mini-2025-08-07",
       anthropicWriter: "claude-sonnet-4-5"
     },
     stripe: {
@@ -111,13 +111,17 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
     falEndpoints: {
       base: "fal-ai/flux-2",
       lora: "fal-ai/flux-lora",
-      general: "fal-ai/flux-general"
+      general: "fal-ai/flux-general",
+      scenePlate: "fal-ai/flux-pro/kontext/max/multi",
+      pageFill: "fal-ai/flux-pro/v1/fill"
     },
     falStyleLoraUrl: null,
     featureFlags: {
       enableMockLlm,
       enableMockImage,
-      enableMockCheckout: false
+      enableMockCheckout: false,
+      enablePictureBookPipeline: false,
+      enableIndependent8To10: false
     },
     sendgridFromEmail: "noreply@example.com",
     webBaseUrl: "https://example.com"
@@ -190,6 +194,45 @@ function openAiNarrativeFailResponse(): Response {
   );
 }
 
+function openAiEmptyContentResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      choices: [
+        {
+          finish_reason: "length",
+          message: {
+            content: ""
+          }
+        }
+      ],
+      usage: { prompt_tokens: 30, completion_tokens: 10, total_tokens: 40 }
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }
+  );
+}
+
+function openAiStructuredResponse(payload: unknown): Response {
+  return new Response(
+    JSON.stringify({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify(payload)
+          }
+        }
+      ],
+      usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 }
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }
+  );
+}
+
 describe("llm provider routing", () => {
   beforeEach(() => {
     getRuntimeConfigMock.mockReset();
@@ -232,10 +275,18 @@ describe("llm provider routing", () => {
     expect(result.audit.passed).toBe(true);
 
     const openAiRequestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      max_tokens?: number;
+      max_completion_tokens?: number;
+      temperature?: number;
+      reasoning_effort?: string;
       response_format?: { type?: string; json_schema?: { strict?: boolean } };
     };
     expect(openAiRequestBody.response_format?.type).toBe("json_schema");
     expect(openAiRequestBody.response_format?.json_schema?.strict).toBe(true);
+    expect(openAiRequestBody.max_completion_tokens).toBe(2200);
+    expect(openAiRequestBody.max_tokens).toBeUndefined();
+    expect(openAiRequestBody.temperature).toBeUndefined();
+    expect(openAiRequestBody.reasoning_effort).toBe("minimal");
 
     const anthropicRequestBody = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)) as {
       tools?: unknown[];
@@ -275,6 +326,28 @@ describe("llm provider routing", () => {
     expect(firstCriticUrl).toContain("/v1/messages");
   });
 
+  it("treats empty OpenAI content with length finish as retryable and falls back", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(openAiEmptyContentResponse())
+      .mockResolvedValueOnce(openAiEmptyContentResponse())
+      .mockResolvedValueOnce(anthropicToolResponse(compliantBeatSheet))
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context);
+
+    expect(result.meta.provider).toBe("anthropic");
+    expect(result.meta.fallbackFrom).toBe("openai");
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
   it("accepts anthropic critic outputs missing optional fields and avoids retry fanout", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
@@ -298,6 +371,68 @@ describe("llm provider routing", () => {
 
     expect(result.audit.passed).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("normalizes wrapped Anthropic beat-sheet tool payloads", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse({ BeatSheet: compliantBeatSheet }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("allows soft beat-critic issues without triggering rewrites", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(openAiStructuredResponse(compliantBeatSheet))
+      .mockResolvedValueOnce(
+        openAiStructuredResponse({
+          pass: true,
+          issues: [
+            {
+              beatIndex: 3,
+              tier: "soft",
+              problem: "Optional adult aside could be shorter.",
+              severity: "med",
+              fix: "Trim the adult aside."
+            }
+          ],
+          rewriteInstructions: "Shorten the adult aside if time permits."
+        })
+      )
+      .mockResolvedValueOnce(openAiStructuredResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(openAiStructuredResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.audit.rewritesApplied).toBe(0);
+    expect(result.audit.finalIssues).toEqual([]);
+    expect(result.audit.softIssues.join(" ")).toContain("Optional adult aside could be shorter");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("hard-pins Anthropic Opus 4.6 for final story writing", async () => {
@@ -368,28 +503,57 @@ describe("llm provider routing", () => {
     expect(requestBody.model).toBe("claude-opus-4-6");
   });
 
-  it("injects explicit numeric bitcoin constraints into rewrite prompts", async () => {
-    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
-
-    const openAiStructured = (payload: unknown) =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: JSON.stringify(payload) } }],
-          usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 }
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
+  it("uses legacy max_tokens for non-gpt-5 OpenAI models", async () => {
+    const config = runtimeConfig(false);
+    config.models.openaiJson = "gpt-4.1-mini";
+    getRuntimeConfigMock.mockResolvedValue(config);
 
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(openAiStructured(noBitcoinBeatSheet))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "rate limited" }), {
+          status: 429,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "rate limited" }), {
+          status: 429,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse(compliantBeatSheet))
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    await provider.generateBeatSheet(context);
+
+    const openAiRequestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      max_tokens?: number;
+      max_completion_tokens?: number;
+      temperature?: number;
+      reasoning_effort?: string;
+    };
+    expect(openAiRequestBody.max_tokens).toBe(2200);
+    expect(openAiRequestBody.max_completion_tokens).toBeUndefined();
+    expect(openAiRequestBody.temperature).toBe(0.3);
+    expect(openAiRequestBody.reasoning_effort).toBeUndefined();
+  });
+
+  it("injects explicit numeric bitcoin constraints into rewrite prompts", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(openAiStructuredResponse(noBitcoinBeatSheet))
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse())
-      .mockResolvedValueOnce(openAiStructured(compliantBeatSheet))
+      .mockResolvedValueOnce(openAiStructuredResponse(compliantBeatSheet))
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse());
@@ -410,26 +574,17 @@ describe("llm provider routing", () => {
     expect(rewritePrompt).toContain("bitcoinRelevanceScore >= 0.65");
     expect(rewritePrompt).toContain("Only beats with index >=");
     expect(rewritePrompt).toContain("Numeric Bitcoin constraints");
+    expect(rewritePrompt).toContain("3-7 profile guardrails");
+    expect(rewritePrompt).toContain("digital jar");
+    expect(rewritePrompt).toContain("one brief adult/caregiver aside");
   });
 
   it("normalizes oversized beat sheets back to pageCount before deterministic checks", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
-    const openAiStructured = (payload: unknown) =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: JSON.stringify(payload) } }],
-          usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 }
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
-
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(openAiStructured(oversizedBeatSheet))
+      .mockResolvedValueOnce(openAiStructuredResponse(oversizedBeatSheet))
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse());
@@ -444,32 +599,20 @@ describe("llm provider routing", () => {
     expect(result.beatSheet.beats.map((beat) => beat.pageIndexEstimate)).toEqual([0, 1, 2, 3]);
   });
 
-  it("returns beat plan with warning when only narrative critic fails after max rewrites", async () => {
+  it("downgrades narrative freshness issues to warning after max rewrites", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
-
-    const openAiStructured = (payload: unknown) =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: JSON.stringify(payload) } }],
-          usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 }
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      );
 
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(openAiStructured(compliantBeatSheet))
+      .mockResolvedValueOnce(openAiStructuredResponse(compliantBeatSheet))
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiNarrativeFailResponse())
-      .mockResolvedValueOnce(openAiStructured(compliantBeatSheet))
+      .mockResolvedValueOnce(openAiStructuredResponse(compliantBeatSheet))
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiNarrativeFailResponse())
-      .mockResolvedValueOnce(openAiStructured(compliantBeatSheet))
+      .mockResolvedValueOnce(openAiStructuredResponse(compliantBeatSheet))
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiCriticResponse())
       .mockResolvedValueOnce(openAiNarrativeFailResponse());
@@ -480,8 +623,9 @@ describe("llm provider routing", () => {
     const result = await provider.generateBeatSheet(context);
 
     expect(result.audit.rewritesApplied).toBe(2);
-    expect(result.audit.passed).toBe(false);
-    expect(result.audit.finalIssues.join(" ")).toContain("Ending needs clearer payoff");
+    expect(result.audit.passed).toBe(true);
+    expect(result.audit.finalIssues).toEqual([]);
+    expect(result.audit.softIssues.join(" ")).toContain("Ending needs clearer payoff");
   });
 
   it("uses mock provider when enable_mock_llm is true", async () => {

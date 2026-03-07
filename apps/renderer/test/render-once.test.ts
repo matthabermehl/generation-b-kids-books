@@ -1,7 +1,7 @@
 import type { GetObjectCommandOutput } from "@aws-sdk/client-s3";
 import PDFDocument from "pdfkit";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadPageImageForPdf, renderPdf } from "../src/cli/render-once.js";
+import { loadPageImageForPdf, renderLegacyPdf } from "../src/lib/render-book.js";
 
 const simpleSvg = Buffer.from(
   `<?xml version="1.0" encoding="UTF-8"?>
@@ -23,7 +23,7 @@ function imageObject(buffer: Buffer, contentType: string): GetObjectCommandOutpu
   };
 }
 
-describe("render-once", () => {
+describe("render-book legacy path", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -37,7 +37,7 @@ describe("render-once", () => {
     };
 
     const imageSpy = vi.spyOn(PDFDocument.prototype, "image");
-    const pdf = await renderPdf(
+    const pdf = await renderLegacyPdf(
       {
         bookId: "book-1",
         title: "Test Story",
@@ -66,19 +66,17 @@ describe("render-once", () => {
       } satisfies GetObjectCommandOutput)
     };
 
-    await expect(loadPageImageForPdf(s3, "s3://bucket/book/page-1.png")).rejects.toThrow(
+    await expect(loadPageImageForPdf("s3://bucket/book/page-1.png", s3)).rejects.toThrow(
       "Missing image payload"
     );
   });
 
   it("does not render raw illustration source text", async () => {
     const s3 = {
-      send: vi
-        .fn()
-        .mockResolvedValueOnce(imageObject(simpleSvg, "image/svg+xml"))
+      send: vi.fn().mockResolvedValueOnce(imageObject(simpleSvg, "image/svg+xml"))
     };
 
-    const pdf = await renderPdf(
+    const pdf = await renderLegacyPdf(
       {
         bookId: "book-2",
         title: "No Raw Source Text",

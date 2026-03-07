@@ -29,6 +29,7 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
    - `/ai-childrens-book/dev/stripe_price_id`
    - `/ai-childrens-book/dev/stripe_success_url`
    - `/ai-childrens-book/dev/stripe_cancel_url`
+   - `/ai-childrens-book/dev/reviewer_email_allowlist`
    - `/ai-childrens-book/dev/enable_mock_llm`
    - `/ai-childrens-book/dev/enable_mock_image`
    - `/ai-childrens-book/dev/enable_mock_checkout`
@@ -37,14 +38,20 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
    - `/ai-childrens-book/dev/enable_mock_llm=false`
    - `/ai-childrens-book/dev/enable_mock_image=false`
    - `/ai-childrens-book/dev/enable_mock_checkout=false`
+   - `/ai-childrens-book/dev/enable_picture_book_pipeline=true`
 
 4. Validate external connectivity:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke`
 
-5. Validate payment path only:
+5. Validate fixed-layout picture-book path:
+   - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> READING_PROFILE_ID=read_aloud_3_4 pnpm ops:picture-book-smoke`
+   - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> READING_PROFILE_ID=early_decoder_5_7 pnpm ops:picture-book-smoke`
+   - Confirm artifact JSON under `.agent/artifacts/` includes `previewCount == pageCount` for `ready` books.
+
+6. Validate payment path only:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> SMOKE_EMAIL=<email> pnpm ops:stripe-smoke`
 
-6. Validate full e2e paid flow:
+7. Validate full e2e paid flow:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> SMOKE_EMAIL=<email> pnpm ops:phase2-e2e`
 
 ## 2. Rollback and Troubleshooting
@@ -67,8 +74,13 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
 
 ### Safety/review triage
 1. Check `NeedsReviewSpikeAlarm`.
-2. Search logs for `BOOK_NEEDS_REVIEW` and inspect stage values (`text_moderation`, `image_safety`, `finalize_gate`).
+2. Search logs for `BOOK_NEEDS_REVIEW` and inspect stage values (`text_moderation`, `image_safety`, `image_qa`, `finalize_gate`).
 3. Review `evaluations` rows and `images.qa_json` for flagged reasons.
+4. For picture-book books, expect exhausted page QA to resolve as `stage=image_qa` instead of a hard failed order.
+5. Use the internal review console:
+   - `/review` for queue
+   - `/review/cases/{caseId}` for detail and actions
+6. Follow [docs/runbooks/review-console.md](/Users/matthabermehl/scratch/ai-childrens-book/docs/runbooks/review-console.md) for approve/retry/reject guidance.
 
 ### Stuck order triage
 1. Check `OrderStuckAlarm` and `OrderStuckCount` metric.
@@ -79,37 +91,30 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
 1. Production security hardening:
    - WAF, tighter IAM resource conditions, threat model, log retention policy, key rotation policy docs.
 
-2. Human review operations:
-   - internal review UI for `needs_review` cases and decision/audit workflow.
-
-3. Cost controls:
+2. Cost controls:
    - enforce per-order token/image cost caps and provider budget guardrails.
 
-4. Resilience enhancements:
+3. Resilience enhancements:
    - policy-based routing and circuit breakers across model providers.
 
-5. POD integration:
+4. POD integration:
    - print-ready export (bleed/trim/300dpi), fulfillment provider integration, shipment status lifecycle.
 
 ## 4. Prioritized Backlog (Effort + Dependencies)
 
-1. Review console + adjudication workflow
-   - Effort: M
-   - Depends on: `needs_review` pipeline signals (already in place)
-
-2. Security package for production launch
+1. Security package for production launch
    - Effort: M
    - Depends on: finalized domain/origin topology
 
-3. Cost guardrails and billing analytics
+2. Cost guardrails and billing analytics
    - Effort: M
    - Depends on: provider metadata persistence and pricing policy
 
-4. Circuit breakers and failover policy routing
+3. Circuit breakers and failover policy routing
    - Effort: M
    - Depends on: baseline error metrics now live
 
-5. POD fulfillment
+4. POD fulfillment
    - Effort: L
    - Depends on: stable quality/review process
 
@@ -118,8 +123,8 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
 Use this in the next chat:
 
 ```text
-Continue from /Users/matthabermehl/scratch/ai-childrens-book on branch codex/bitcoin-book-20-pass.
-Read docs/last-20-percent-guide.md first, then implement the internal review console for needs_review books and the corresponding operator workflows.
+Continue from /Users/matthabermehl/scratch/ai-childrens-book on branch codex/frontend-review-console.
+Read docs/last-20-percent-guide.md and docs/runbooks/review-console.md first, then validate the internal review console against a real needs_review book in dev.
 Keep AWS/CDK commands prefixed with AWS_PROFILE=personal and preserve the existing Stripe + fallback checkout behavior.
-Include tests for review transitions, audit logging, and release gating.
+If validation finds gaps, prioritize fixes to review transitions, audit logging, and release gating.
 ```
