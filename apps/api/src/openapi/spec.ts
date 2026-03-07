@@ -8,6 +8,18 @@ const idempotencyHeader = {
   }
 } as const;
 
+const mockRunTagHeader = {
+  in: "header",
+  name: "X-Mock-Run-Tag",
+  required: false,
+  schema: {
+    type: "string",
+    minLength: 1
+  },
+  description:
+    "Required when mock LLM or mock image providers are enabled. Used to explicitly authorize intentional mock runs."
+} as const;
+
 const bearerAuth = [{ BearerAuth: [] }] as const;
 
 export const openApiSpec = {
@@ -66,6 +78,27 @@ export const openApiSpec = {
             properties: {
               id: { type: "string", format: "uuid" },
               email: { type: "string", format: "email" }
+            }
+          }
+        }
+      },
+      SessionResponse: {
+        type: "object",
+        required: ["user", "capabilities"],
+        properties: {
+          user: {
+            type: "object",
+            required: ["id", "email"],
+            properties: {
+              id: { type: "string", format: "uuid" },
+              email: { type: "string", format: "email" }
+            }
+          },
+          capabilities: {
+            type: "object",
+            required: ["canReview"],
+            properties: {
+              canReview: { type: "boolean" }
             }
           }
         }
@@ -209,6 +242,212 @@ export const openApiSpec = {
           }
         }
       },
+      ReviewActionRequest: {
+        type: "object",
+        properties: {
+          notes: { type: "string", minLength: 1, maxLength: 2000 }
+        }
+      },
+      ReviewQueueResponse: {
+        type: "object",
+        required: ["cases"],
+        properties: {
+          cases: {
+            type: "array",
+            items: {
+              type: "object",
+              required: [
+                "caseId",
+                "status",
+                "stage",
+                "reasonSummary",
+                "createdAt",
+                "orderId",
+                "orderStatus",
+                "bookId",
+                "bookStatus",
+                "childFirstName",
+                "readingProfileId",
+                "moneyLessonKey",
+                "pageCount"
+              ],
+              properties: {
+                caseId: { type: "string", format: "uuid" },
+                status: { type: "string", enum: ["open", "resolved", "rejected", "retrying"] },
+                stage: { type: "string", enum: ["text_moderation", "image_safety", "image_qa", "finalize_gate"] },
+                reasonSummary: { type: "string" },
+                createdAt: { type: "string" },
+                resolvedAt: { type: ["string", "null"] },
+                orderId: { type: "string", format: "uuid" },
+                orderStatus: {
+                  type: "string",
+                  enum: ["created", "checkout_pending", "paid", "building", "needs_review", "ready", "failed", "refunded"]
+                },
+                bookId: { type: "string", format: "uuid" },
+                bookStatus: { type: "string", enum: ["draft", "building", "needs_review", "ready", "failed"] },
+                childFirstName: { type: "string" },
+                readingProfileId: {
+                  type: "string",
+                  enum: ["read_aloud_3_4", "early_decoder_5_7", "independent_8_10"]
+                },
+                moneyLessonKey: {
+                  type: "string",
+                  enum: ["inflation_candy", "saving_later", "delayed_gratification"]
+                },
+                pageCount: { type: "integer", minimum: 0 },
+                latestAction: {
+                  type: ["string", "null"],
+                  enum: ["approve_continue", "reject", "retry_page", null]
+                },
+                latestReviewerEmail: { type: ["string", "null"] }
+              }
+            }
+          }
+        }
+      },
+      ReviewCaseDetailResponse: {
+        type: "object",
+        required: [
+          "caseId",
+          "status",
+          "stage",
+          "reasonSummary",
+          "reason",
+          "createdAt",
+          "order",
+          "book",
+          "artifacts",
+          "evaluations",
+          "events",
+          "pages"
+        ],
+        properties: {
+          caseId: { type: "string", format: "uuid" },
+          status: { type: "string", enum: ["open", "resolved", "rejected", "retrying"] },
+          stage: { type: "string", enum: ["text_moderation", "image_safety", "image_qa", "finalize_gate"] },
+          reasonSummary: { type: "string" },
+          reason: { type: "object", additionalProperties: true },
+          createdAt: { type: "string" },
+          resolvedAt: { type: ["string", "null"] },
+          order: {
+            type: "object",
+            required: ["orderId", "status"],
+            properties: {
+              orderId: { type: "string", format: "uuid" },
+              status: {
+                type: "string",
+                enum: ["created", "checkout_pending", "paid", "building", "needs_review", "ready", "failed", "refunded"]
+              }
+            }
+          },
+          book: {
+            type: "object",
+            required: ["bookId", "status", "childFirstName", "readingProfileId", "moneyLessonKey"],
+            properties: {
+              bookId: { type: "string", format: "uuid" },
+              status: { type: "string", enum: ["draft", "building", "needs_review", "ready", "failed"] },
+              childFirstName: { type: "string" },
+              readingProfileId: {
+                type: "string",
+                enum: ["read_aloud_3_4", "early_decoder_5_7", "independent_8_10"]
+              },
+              moneyLessonKey: {
+                type: "string",
+                enum: ["inflation_candy", "saving_later", "delayed_gratification"]
+              }
+            }
+          },
+          pdfUrl: { type: ["string", "null"] },
+          artifacts: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["artifactType", "url", "createdAt"],
+              properties: {
+                artifactType: { type: "string" },
+                url: { type: ["string", "null"] },
+                createdAt: { type: "string" }
+              }
+            }
+          },
+          evaluations: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["stage", "modelUsed", "verdict", "score", "createdAt"],
+              properties: {
+                stage: { type: "string" },
+                modelUsed: { type: "string" },
+                verdict: { type: "string" },
+                notes: { type: ["string", "null"] },
+                score: { type: "object", additionalProperties: true },
+                createdAt: { type: "string" }
+              }
+            }
+          },
+          events: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["id", "reviewerEmail", "action", "metadata", "createdAt"],
+              properties: {
+                id: { type: "string", format: "uuid" },
+                reviewerEmail: { type: "string", format: "email" },
+                action: { type: "string", enum: ["approve_continue", "reject", "retry_page"] },
+                notes: { type: ["string", "null"] },
+                pageId: { type: ["string", "null"], format: "uuid" },
+                metadata: { type: "object", additionalProperties: true },
+                createdAt: { type: "string" }
+              }
+            }
+          },
+          pages: {
+            type: "array",
+            items: {
+              type: "object",
+              required: [
+                "pageId",
+                "pageIndex",
+                "status",
+                "text",
+                "previewImageUrl",
+                "scenePlateUrl",
+                "pageFillUrl",
+                "latestQaIssues",
+                "qaMetrics",
+                "retryCount"
+              ],
+              properties: {
+                pageId: { type: "string", format: "uuid" },
+                pageIndex: { type: "integer", minimum: 0 },
+                status: { type: "string", enum: ["pending", "ready", "failed"] },
+                text: { type: "string" },
+                templateId: { type: ["string", "null"] },
+                previewImageUrl: { type: ["string", "null"] },
+                scenePlateUrl: { type: ["string", "null"] },
+                pageFillUrl: { type: ["string", "null"] },
+                latestQaIssues: { type: "array", items: { type: "string" } },
+                qaMetrics: {
+                  type: ["object", "null"],
+                  additionalProperties: true
+                },
+                retryCount: { type: "integer", minimum: 0 }
+              }
+            }
+          }
+        }
+      },
+      ReviewActionResponse: {
+        type: "object",
+        required: ["ok", "caseId", "status"],
+        properties: {
+          ok: { type: "boolean" },
+          caseId: { type: "string", format: "uuid" },
+          pageId: { type: "string", format: "uuid" },
+          status: { type: "string", enum: ["retrying", "rejected"] },
+          executionArn: { type: ["string", "null"] }
+        }
+      },
       DownloadResponse: {
         type: "object",
         required: ["url", "expiresInSeconds"],
@@ -285,6 +524,30 @@ export const openApiSpec = {
           },
           "400": {
             description: "Validation error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/session": {
+      get: {
+        summary: "Get current session and reviewer capability",
+        security: bearerAuth,
+        responses: {
+          "200": {
+            description: "Session details",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SessionResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -390,6 +653,7 @@ export const openApiSpec = {
         security: bearerAuth,
         parameters: [
           idempotencyHeader,
+          mockRunTagHeader,
           {
             in: "path",
             name: "orderId",
@@ -538,6 +802,304 @@ export const openApiSpec = {
           },
           "401": {
             description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/cases": {
+      get: {
+        summary: "List open or historical review cases",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "query",
+            name: "status",
+            required: false,
+            schema: { type: "string", enum: ["open", "resolved", "rejected", "retrying"], default: "open" }
+          },
+          {
+            in: "query",
+            name: "stage",
+            required: false,
+            schema: { type: "string", enum: ["text_moderation", "image_safety", "image_qa", "finalize_gate"] }
+          },
+          {
+            in: "query",
+            name: "limit",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 100, default: 50 }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Review case queue",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ReviewQueueResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            description: "Reviewer access required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/cases/{caseId}": {
+      get: {
+        summary: "Get one review case with page QA details",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "caseId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Review case detail",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ReviewCaseDetailResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            description: "Reviewer access required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Review case not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/cases/{caseId}/approve": {
+      post: {
+        summary: "Approve a review case and resume the pipeline",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "caseId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ReviewActionRequest" }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Review approved and pipeline resumed",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ReviewActionResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            description: "Reviewer access required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Review case not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            description: "Review case is not open",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/cases/{caseId}/reject": {
+      post: {
+        summary: "Reject a review case and fail the book",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "caseId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ReviewActionRequest" }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Review rejected",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ReviewActionResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            description: "Reviewer access required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Review case not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            description: "Review case is not open",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/cases/{caseId}/pages/{pageId}/retry": {
+      post: {
+        summary: "Retry one page image from a review case",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "caseId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          },
+          {
+            in: "path",
+            name: "pageId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ReviewActionRequest" }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Page retry queued",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ReviewActionResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "403": {
+            description: "Reviewer access required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Review case or page not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            description: "Retry not allowed",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" }

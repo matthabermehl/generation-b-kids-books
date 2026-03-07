@@ -1,4 +1,5 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { pathToFileURL } from "node:url";
 import { renderBook, type RenderInput } from "../lib/render-book.js";
 
 function required(name: string): string {
@@ -43,7 +44,15 @@ async function main(): Promise<void> {
   console.log(JSON.stringify({ ok: true, output: `s3://${artifactBucket}/${outputPdfKey}` }));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+const isDirectExecution =
+  typeof process !== "undefined" &&
+  Array.isArray(process.argv) &&
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

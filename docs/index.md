@@ -2,9 +2,10 @@
 
 ## Core
 - [PRODUCT.md](PRODUCT.md)
-- [architecture.md](architecture.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md)
 - [decision-log.md](decision-log.md)
 - [last-20-percent-guide.md](last-20-percent-guide.md)
+- [prompting-alignment.md](prompting-alignment.md)
 - [SECURITY.md](SECURITY.md)
 - [RELIABILITY.md](RELIABILITY.md)
 - [QUALITY_SCORE.md](QUALITY_SCORE.md)
@@ -17,6 +18,9 @@
 ## Design
 - [design-docs/index.md](design-docs/index.md)
 - [design-docs/core-beliefs.md](design-docs/core-beliefs.md)
+
+## Runbooks
+- [runbooks/pipeline-debug.md](runbooks/pipeline-debug.md)
 
 ## References
 - [references/README.md](references/README.md)

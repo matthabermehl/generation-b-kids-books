@@ -1,25 +1,35 @@
 # Current Task
 
-Task ID: picture-book-hardening-01
+Task ID: review-console-01
 
 ## Goal
-Harden the fixed-layout picture-book pipeline for real-LLM dev validation, deterministic text-safe regions, and manual-review fallback on picture-book QA exhaustion.
+Revitalize the web frontend and add an internal review console plus reviewer workflow for `needs_review` books, while preserving the existing parent ordering and reader flow.
 
-## Constraints
-- Keep the legacy image/render path working when `enable_picture_book_pipeline=false`.
-- Keep public APIs additive and stable.
-- Block `independent_8_10` by default.
+## Expected User-Visible Change
+- The web app has separate parent and reviewer areas in one deployable frontend.
+- Internal reviewers can sign in with the existing magic-link flow, see a review queue, inspect flagged books, and take `approve/continue`, `reject`, or `retry page` actions.
+- Parent users still see the existing order/checkout/reader flow, but `needs_review` is presented as “under internal review” rather than a dead end.
 
-## Plan (short)
-1. Add the dedicated picture-book smoke script and richer failure artifacts.
-2. Tighten shared layout geometry and deterministic text-safe protection in mask/compositor/QA code.
-3. Route exhausted picture-book QA to `needs_review`, validate with tests, deploy dev, and disable `enable_mock_llm`.
+## Files Expected To Change
+- `apps/web/src/**/*`
+- `apps/api/src/http.ts`
+- `apps/api/src/openapi/spec.ts`
+- `apps/api/src/lib/ssm-config.ts`
+- `apps/workers/src/pipeline.ts`
+- `apps/workers/src/image-worker.ts`
+- `apps/workers/src/check-images.ts`
+- `apps/workers/src/finalize.ts`
+- `apps/workers/src/migrate.ts`
+- `apps/workers/sql/001_init.sql`
+- `infra/cdk/lib/book-stack.js`
+- related tests, docs, and harness metadata
 
-## Evidence Required
-- `pnpm ops:provider-smoke`
-- `pnpm ops:picture-book-smoke`
+## Tests / Verification
+- `bash scripts/agent/test.sh`
 - `bash scripts/agent/quality.sh`
+- targeted API, worker, and web tests for review auth, review actions, and current-attempt asset selection
+- `pnpm --filter @book/web build`
 
 ## Status
-- baseline: smoke PASS
-- work: implementation complete; blocked on dev OpenAI SSM credential / `enable_mock_llm`
+- baseline: smoke PASS on branch `codex/frontend-review-console`
+- current state: implemented and validated. The web app now has separate parent and reviewer areas, reviewer APIs/actions exist, review cases/audit rows are persisted, current-attempt asset selection is deterministic, and resume/retry flows pass the harness quality gates.

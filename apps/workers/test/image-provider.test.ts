@@ -243,7 +243,10 @@ describe("image provider", () => {
       })
     );
 
-    const provider = await resolveImageProvider();
+    await expect(resolveImageProvider()).rejects.toThrow("X-Mock-Run-Tag");
+    await expect(resolvePictureBookImageProviders()).rejects.toThrow("X-Mock-Run-Tag");
+
+    const provider = await resolveImageProvider({ mockRunTag: "test-run", source: "unit-test" });
     const image = await provider.generate(
       {
         bookId: "book-1",
@@ -256,6 +259,33 @@ describe("image provider", () => {
 
     expect(image.endpoint).toBe("mock-fal");
     expect(image.contentType).toBe("image/svg+xml");
+
+    const { scenePlateProvider, pageFillProvider } = await resolvePictureBookImageProviders({
+      mockRunTag: "test-run",
+      source: "unit-test"
+    });
+    const sceneImage = await scenePlateProvider.generateScenePlate(
+      {
+        bookId: "book-1",
+        pageIndex: 0,
+        prompt: "Watercolor square scene.",
+        referenceImageUrls: []
+      },
+      1
+    );
+    const fillImage = await pageFillProvider.harmonizePageArt(
+      {
+        bookId: "book-1",
+        pageIndex: 0,
+        prompt: "Blend watercolor edges.",
+        canvasImageUrl: "https://example.com/canvas.png",
+        maskImageUrl: "https://example.com/mask.png"
+      },
+      1
+    );
+
+    expect(sceneImage.endpoint).toBe("mock-kontext");
+    expect(fillImage.endpoint).toBe("mock-fill");
   });
 
   it("classifies fill polling timeouts as retryable provider timeouts", async () => {

@@ -10,7 +10,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "format": "echo 'format: @book/api no-op'",
-    "openapi:generate": "node ./scripts/generate-openapi.mjs"
+    "openapi:generate": "pnpm run build && node ./scripts/generate-openapi.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.750.0",

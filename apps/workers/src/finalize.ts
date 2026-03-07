@@ -1,18 +1,20 @@
 import type { Handler } from "aws-lambda";
 import { execute, query } from "./lib/rds.js";
-import { makeId } from "./lib/helpers.js";
+import { insertCurrentBookArtifact } from "./lib/records.js";
+import { resolveActiveReviewCasesForBook, upsertOpenReviewCase } from "./lib/review-cases.js";
 
 interface Event {
   bookId: string;
-  outputPdfKey: string;
+  outputPdfKey?: string;
 }
 
 export const handler: Handler<Event> = async (event) => {
-  if (!event?.bookId || !event.outputPdfKey) {
-    throw new Error("bookId and outputPdfKey are required");
+  if (!event?.bookId) {
+    throw new Error("bookId is required");
   }
 
-  const s3Url = `s3://${process.env.ARTIFACT_BUCKET}/${event.outputPdfKey}`;
+  const outputPdfKey = event.outputPdfKey ?? `books/${event.bookId}/render/book.pdf`;
+  const s3Url = `s3://${process.env.ARTIFACT_BUCKET}/${outputPdfKey}`;
 
   const reviewRows = await query<{ needs_review_count: number; order_id: string | null }>(
     `
@@ -47,26 +49,29 @@ export const handler: Handler<Event> = async (event) => {
         needsReviewCount
       })
     );
+    await upsertOpenReviewCase({
+      bookId: event.bookId,
+      orderId,
+      stage: "finalize_gate",
+      reasonSummary: `Finalize gate blocked because ${needsReviewCount} review signals remain active.`,
+      reasonJson: {
+        needsReviewCount
+      }
+    });
     throw new Error("BOOK_NEEDS_REVIEW:finalize_gate");
   }
 
-  await execute(
-    `
-      INSERT INTO book_artifacts (id, book_id, artifact_type, s3_url)
-      VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), 'pdf', :s3)
-    `,
-    [
-      { name: "id", value: { stringValue: makeId() } },
-      { name: "bookId", value: { stringValue: event.bookId } },
-      { name: "s3", value: { stringValue: s3Url } }
-    ]
-  );
+  await insertCurrentBookArtifact({
+    bookId: event.bookId,
+    artifactType: "pdf",
+    s3Url
+  });
 
   await execute(
     `
       UPDATE images
       SET status = 'ready'
-      WHERE book_id = CAST(:bookId AS uuid) AND role = 'page_preview'
+      WHERE book_id = CAST(:bookId AS uuid) AND role = 'page_preview' AND is_current = TRUE
     `,
     [{ name: "bookId", value: { stringValue: event.bookId } }]
   );
@@ -88,6 +93,8 @@ export const handler: Handler<Event> = async (event) => {
     `,
     [{ name: "bookId", value: { stringValue: event.bookId } }]
   );
+
+  await resolveActiveReviewCasesForBook(event.bookId, "resolved");
 
   return {
     ok: true,

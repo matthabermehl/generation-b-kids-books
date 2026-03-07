@@ -31,17 +31,24 @@ For `picture_book_fixed_layout` books, the image/render chain is:
 ## Runtime Components
 
 ### Frontend (`apps/web`)
-- Magic-link auth
-- Order creation
-- Stripe checkout session creation
-- Order polling and failure/`needs_review` visibility
-- Reader view + PDF download
-- Privacy control to delete child profile + artifacts
+- Route-based SPA with a shared session bootstrap from `GET /v1/session`
+- Parent shell:
+  - magic-link auth
+  - order creation
+  - Stripe checkout session creation
+  - order polling and `needs_review` visibility
+  - reader view + PDF download
+  - privacy control to delete child profile + artifacts
+- Reviewer shell:
+  - internal-only `/review` queue
+  - `/review/cases/{caseId}` detail page with preview, scene plate, page fill, QA issues, and audit timeline
+  - approve/continue, reject, and retry-page actions
 
 ### API (`apps/api/src/http.ts`)
 Public routes:
 - `POST /v1/auth/request-link`
 - `POST /v1/auth/verify-link`
+- `GET /v1/session`
 - `POST /v1/orders`
 - `POST /v1/orders/{orderId}/checkout`
 - `POST /v1/orders/{orderId}/mark-paid` (fallback-only)
@@ -51,31 +58,52 @@ Public routes:
 - `GET /v1/books/{bookId}/download?format=pdf`
 - `DELETE /v1/child-profiles/{childProfileId}`
 
+Reviewer routes:
+- `GET /v1/review/cases`
+- `GET /v1/review/cases/{caseId}`
+- `POST /v1/review/cases/{caseId}/approve`
+- `POST /v1/review/cases/{caseId}/reject`
+- `POST /v1/review/cases/{caseId}/pages/{pageId}/retry`
+
 Cross-cutting:
 - JWT session auth
+- reviewer authorization via SSM allowlist (`reviewer_email_allowlist`)
 - `Idempotency-Key` on API-initiated POST routes
+- `X-Mock-Run-Tag` required on `POST /v1/orders/{orderId}/mark-paid` when mock LLM/image flags are enabled
 - status transition guards for order/book lifecycle
 - Stripe webhook replay dedupe via `payment_events`
 - runtime secrets/config from SSM (cached)
 
 ### Workers (`apps/workers`)
-- `pipeline.ts`: story generation + text moderation + render preparation
-- `image-worker.ts`: legacy page image generation or fixed-layout `scene_plate`/`page_fill` generation + QA
+- `pipeline.ts`: beat-planning pipeline (planner -> deterministic checks -> critics -> rewrite) + story drafting + moderation + render preparation
+  - fail-closed beat planning with persisted failure lineage (`beat-plan-failed.json`) before execution failure
+  - beat critics emit `hard` and `soft` issues; soft-only approvals persist `beat-plan-report.json` without blocking the book
+  - blocking beat gates: deterministic + Montessori + Science-of-Reading
+  - narrative freshness critic remains active but is advisory after max beat rewrites (captured as audit warning)
+  - final story stage runs one Opus draft + one critic pass (no blind full-redraft loop)
+  - mock-provider authorization gate based on `mockRunTag`
+- `image-worker.ts`: legacy page image generation or fixed-layout `scene_plate`/`page_fill` generation + prompt safety checks + page QA
 - `check-images.ts`: completion + image safety / picture-book QA escalation to `needs_review`
 - `finalize.ts`: final release gate before marking `ready`
 - `execution-status.ts`: Step Functions terminal failure synchronization without overriding `needs_review`
 - `privacy-purge.ts`: async S3 artifact deletion + privacy event completion
 - `order-health.ts`: scheduled metric emission for stuck `paid/building` orders
 - `migrate.ts`: schema migration custom resource
+- review lifecycle helpers:
+  - open/update `review_cases` when books enter `needs_review`
+  - resolve or reject review cases based on reviewer actions
+  - maintain current image/artifact pointers across retries
 
 ### Renderer (`apps/renderer`)
 - ECS Fargate service and one-shot render command
 - picture-book render path writes per-page preview PNGs and final live-text PDF
 - legacy render path remains supported for fallback books
+- legacy render path fetches page images from S3 and embeds binaries into PDF
+- supports PNG/JPEG directly and SVG via deterministic rasterization
 
 ### Shared Packages
 - `packages/domain`: enums/types/validators (includes Montessori realism check)
-- `packages/prompts`: prompt templates + deterministic quality checks
+- `packages/prompts`: schema-first planner/critic/rewrite/writer templates + deterministic beat/story quality checks + prompt-principle invariants
 
 ## AWS Infrastructure (CDK JavaScript)
 - API Gateway HTTP API
@@ -86,6 +114,7 @@ Cross-cutting:
 - Aurora Serverless v2 PostgreSQL with Data API
 - DynamoDB idempotency table
 - ECS/Fargate renderer cluster and task
+- Pipeline Lambda timeout: 5 minutes (sized for strict beat planning + Opus final writing latency)
 - CloudFront + S3 (web + artifacts)
 - EventBridge rules:
   - Step Functions execution status handling
@@ -124,15 +153,38 @@ Fixed-layout additions:
 - `images.parent_image_id`
 - `images.input_assets_json`
 - `images.mask_s3_url`
+- `images.is_current`
+- `book_artifacts.is_current`
+- `review_cases`
+- `review_events`
+
+## Manual Review Flow
+1. A blocking safety or QA stage sets `books.status=needs_review` and `orders.status=needs_review`.
+2. The worker opens or updates a `review_case` with:
+   - stage (`text_moderation`, `image_safety`, `image_qa`, `finalize_gate`)
+   - summary
+   - structured reason payload
+3. Reviewer UI loads the current artifact set only:
+   - `images.is_current = TRUE`
+   - `book_artifacts.is_current = TRUE`
+4. Reviewer actions:
+   - `approve_continue`: case moves to `retrying`, Step Functions resumes from the appropriate stage
+   - `reject`: case resolves as rejected and the book/order become terminal `failed`
+   - `retry_page`: current page image rows are superseded, that page is re-enqueued, and the case records the action in `review_events`
+5. If a resumed execution clears all gates, finalization resolves the active review case as `resolved`.
 
 ## Determinism, Safety, and Privacy Controls
 - Deterministic seed: `hash32(book_id + ":" + page_index + ":" + version)`
 - Deterministic page template selection for fixed-layout books
 - Story checks:
+  - strict beat sheet schema validation (planner, critics, rewrite, final writer)
   - late Bitcoin reveal (~80/20 arc)
   - banned financial claims
-  - decodability checks
-  - Montessori realism checks for `read_aloud_3_4`
+  - SoR decodability checks (beat planning + page-level checks)
+  - low-variation/repetition guard for final story pages
+  - Montessori realism checks for `read_aloud_3_4` and under-6 narratives
+  - anti–Mad Libs narrative freshness critic
+  - final story writer hard-pinned to Anthropic Opus 4.6
 - Content moderation:
   - text moderation gate pre-image stage
   - image prompt safety gate
@@ -142,6 +194,10 @@ Fixed-layout additions:
   - protected text-zone knockout behind live text
   - whitespace/luminance check in an inset text zone
   - contrast and art occupancy checks
+- Prompting evidence:
+  - `books/<bookId>/beat-plan.json` stores planner + validator + critic + rewrite lineage
+  - `books/<bookId>/beat-plan-failed.json` stores failed beat-planning lineage
+  - `evaluations.stage='beat_plan'` captures structured beat-planning audit metadata
 - Policy-triggered `needs_review` status blocks release/download path
 - Parent self-service deletion queues artifact purge and audits to `privacy_events`
 

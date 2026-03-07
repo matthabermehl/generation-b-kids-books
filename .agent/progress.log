@@ -57,3 +57,66 @@ Evidence:
 Notes: dev stack is deployed and stable; provider smoke uses the decrypted SSM openai_api_key directly with no project header; /ai-childrens-book/dev/openai_api_key metadata shows last modified 2026-03-04T21:30:35-05:00, so the remaining blocker is stale dev OpenAI credential/config rather than picture-book pipeline code
 Next: rotate /ai-childrens-book/dev/openai_api_key to a live project key, set enable_mock_llm=false, then run both read_aloud_3_4 and early_decoder_5_7 picture-book smokes
 Commit: f300ef0
+2026-03-06T13:12:00-0500
+Task: merge-master-picture-book-01
+Baseline: smoke PASS
+Change: merged master into codex/picture-book-fixed-layout, preserved story-pipeline hardening plus fixed-layout picture-book functionality, ported legacy renderer image embedding into render-book, propagated mock-run authorization across picture-book paths, and hardened OpenAI gpt-5-mini compatibility for structured calls (max_completion_tokens, no custom temperature, minimal reasoning, retryable empty-content handling)
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- bash scripts/agent/quality.sh => PASS
+- pnpm ops:provider-smoke => PASS
+- pnpm cdk:deploy:dev => PASS (deployed merged branch before final local OpenAI empty-content retry hardening)
+Notes: live mark-paid validation on dev now reaches real story generation and then fails on Fal billing exhaustion (403 User is locked / Exhausted balance); final local provider hardening for OpenAI empty-content handling is covered by worker tests and direct API probes but was not redeployed after the last patch in this session
+Next: top up Fal balance, redeploy the final llm-provider patch, then rerun one mark-paid smoke to confirm story_critic stays on OpenAI and image generation proceeds
+Commit: f3a3252
+2026-03-06T14:23:30-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: validated dev after Fal top-up; confirmed provider stack is healthy with real OpenAI gpt-5-mini and Fal, and isolated the remaining blocker to beat-planning validation before image generation
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- pnpm ops:provider-smoke => PASS
+- live mark-paid run 7c321f5f-023c-4f18-9be2-83fa64250ae3 (read_aloud_3_4 + inflation_candy) => FAILED in PrepareStory with BeatPlanningError
+- live mark-paid run 73af22e7-1a8f-4e89-b514-0386f75bb6ff (early_decoder_5_7 + inflation_candy) => FAILED in PrepareStory with BeatPlanningError
+- live mark-paid run bc4d54f4-e2e3-47c6-9c71-95120678fa10 (early_decoder_5_7 + saving_later) => FAILED in PrepareStory with BeatPlanningError
+Notes: Fal balance is no longer the blocker; the pipeline never reached character-sheet or page-image generation in these runs. Next work should target the beat-plan prompt/validator contract for 3-7 profiles.
+Commit: pending
+
+2026-03-06T14:59:10-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: tightened planner, rewrite, writer, and critic prompts to force child-safe late-Bitcoin framing for ages 3-7, deployed to dev, and reran live validation
+Evidence:
+- bash scripts/agent/quality.sh => PASS
+- pnpm vitest run packages/prompts/test/prompt-principles.test.ts packages/prompts/test/beat-quality.test.ts => PASS
+- pnpm vitest run apps/workers/test/llm-provider.test.ts => PASS
+- pnpm cdk:deploy:dev => stack UPDATE_COMPLETE
+- live mark-paid run 6f4c68d4-3d9d-4c36-934f-12224ead9879 (early_decoder_5_7 + saving_later) => FAILED in PrepareStory with narrowed BeatPlanningError
+Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
+Commit: pending
+
+2026-03-06T16:03:30-0500
+Task: picture-book-hardening-01
+Baseline: smoke PASS
+Change: added hard-vs-soft beat critic tiers, persisted soft-only beat-plan reports, downgraded narrative freshness to advisory after bounded rewrites in code, and tightened 3-7 planner/rewrite/critic prompts so adult-only late Bitcoin labels no longer block beat planning by default
+Evidence:
+- pnpm vitest run apps/workers/test/llm-provider.test.ts apps/workers/test/pipeline.test.ts packages/prompts/test/prompt-principles.test.ts => PASS
+- bash scripts/agent/quality.sh => PASS
+- pnpm cdk:deploy:dev => PASS
+- live mark-paid run 7bebe246-8934-43ba-96ee-2fdf02db769d (early_decoder_5_7 + saving_later) => FAILED in PrepareStory, but hard blockers dropped from 3 issues to 1 issue after prompt tightening
+- live mark-paid run 4e0c70b2-ce06-4e77-aede-2b411dd588de (early_decoder_5_7 + saving_later) => PASSED PrepareStory and reached picture-book image generation; current state is RUNNING/building with book e126f740-557b-44f1-8d49-101593b12382, 1 character_sheet image, 7 scene_plate images, and 6 page_fill images persisted so far
+Notes: the critic-stage blocker is no longer preventing end-to-end progress for early_decoder_5_7; remaining validation is now downstream in image generation / page QA rather than beat planning
+Commit: pending
+
+2026-03-06T17:31:31-0500
+Task: review-console-01
+Baseline: smoke PASS
+Change: replaced the single-file web app with route-based parent/reviewer shells, added typed API client generation from OpenAPI, introduced reviewer-gated session bootstrap plus `/v1/review/*` routes/actions, added `review_cases`/`review_events` and current-attempt image/artifact semantics, wired review resume/retry behavior into workers and Step Functions, and documented the operator runbook.
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- bash scripts/agent/quality.sh => PASS
+- pnpm --filter @book/web build => PASS
+- pnpm --filter @book/api test => PASS
+- pnpm --filter @book/cdk test => PASS
+Notes: reviewer route gating now waits for session bootstrap instead of redirecting early; OpenAPI/type generation is wired into the web package scripts so review-console DTOs stay in sync with API changes.
+Commit: b93c31a

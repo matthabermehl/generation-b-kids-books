@@ -1,8 +1,8 @@
 import type { SQSHandler } from "aws-lambda";
 import type { PageCompositionSpec } from "@book/domain";
-import { execute, query } from "./lib/rds.js";
+import { execute } from "./lib/rds.js";
 import { putBuffer, presignGetObjectFromS3Url } from "./lib/storage.js";
-import { fileExtensionForContentType, logStructured, makeId } from "./lib/helpers.js";
+import { fileExtensionForContentType, logStructured } from "./lib/helpers.js";
 import { blockedTermsInText } from "./lib/content-safety.js";
 import { createPlacedPageCanvas, createFadedArtBackground } from "./lib/page-canvas.js";
 import { createExpandedMaskPng } from "./lib/page-mask.js";
@@ -24,10 +24,12 @@ import {
   type ScenePlateProvider
 } from "./providers/image.js";
 import { runImageGenerationAttempts } from "./lib/image-attempts.js";
+import { clearCurrentImagesForPage, insertCurrentImageRecord } from "./lib/records.js";
 
 interface LegacyJobPayload {
   mode?: "legacy";
   bookId: string;
+  mockRunTag?: string | null;
   pageId: string;
   pageIndex: number;
   text: string;
@@ -44,6 +46,7 @@ interface PictureBookJobPayload {
   mode: "picture_book_fixed_layout";
   productFamily: "picture_book_fixed_layout";
   bookId: string;
+  mockRunTag?: string | null;
   pageId: string;
   pageIndex: number;
   text: string;
@@ -61,11 +64,6 @@ interface PictureBookJobPayload {
 }
 
 type JobPayload = LegacyJobPayload | PictureBookJobPayload;
-
-interface ImageRow {
-  id: string;
-  status: string;
-}
 
 interface PictureBookQaPayload extends Record<string, unknown> {
   passed: boolean;
@@ -86,109 +84,6 @@ function legacyImagePrompt(job: LegacyJobPayload): string {
     : "";
 
   return [styleAnchor, characterAnchor, characterSheetReference, scenePrompt].filter(Boolean).join(" ");
-}
-
-async function upsertImageRecord(input: {
-  pageId?: string;
-  role: string;
-  bookId: string;
-  endpoint: string;
-  prompt: string;
-  seed: number;
-  requestId?: string;
-  width?: number;
-  height?: number;
-  s3Url?: string | null;
-  qaJson: Record<string, unknown>;
-  status: string;
-  parentImageId?: string | null;
-  inputAssets?: Record<string, unknown>;
-  maskS3Url?: string | null;
-}): Promise<string> {
-  const whereParts = input.pageId
-    ? `book_id = CAST(:bookId AS uuid) AND page_id = CAST(:pageId AS uuid) AND role = :role`
-    : `book_id = CAST(:bookId AS uuid) AND page_id IS NULL AND role = :role`;
-
-  const existing = await query<ImageRow>(
-    `SELECT id::text AS id, status FROM images WHERE ${whereParts} LIMIT 1`,
-    [
-      { name: "bookId", value: { stringValue: input.bookId } },
-      ...(input.pageId ? [{ name: "pageId", value: { stringValue: input.pageId } }] : []),
-      { name: "role", value: { stringValue: input.role } }
-    ]
-  );
-
-  const params = [
-    { name: "endpoint", value: { stringValue: input.endpoint } },
-    { name: "prompt", value: { stringValue: input.prompt } },
-    { name: "seed", value: { longValue: input.seed } },
-    { name: "requestId", value: { stringValue: input.requestId ?? "" } },
-    { name: "width", value: { longValue: input.width ?? 2048 } },
-    { name: "height", value: { longValue: input.height ?? 2048 } },
-    { name: "s3", value: { stringValue: input.s3Url ?? "" } },
-    { name: "qa", value: { stringValue: JSON.stringify(input.qaJson) } },
-    { name: "status", value: { stringValue: input.status } },
-    { name: "parentImageId", value: { stringValue: input.parentImageId ?? "" } },
-    { name: "inputAssets", value: { stringValue: JSON.stringify(input.inputAssets ?? {}) } },
-    { name: "maskS3", value: { stringValue: input.maskS3Url ?? "" } }
-  ];
-
-  if (existing[0]) {
-    await execute(
-      `
-        UPDATE images
-        SET model_endpoint = :endpoint,
-            prompt = :prompt,
-            seed = :seed,
-            fal_request_id = :requestId,
-            width = :width,
-            height = :height,
-            s3_url = :s3,
-            qa_json = CAST(:qa AS jsonb),
-            status = :status,
-            parent_image_id = NULLIF(:parentImageId, '')::uuid,
-            input_assets_json = CAST(:inputAssets AS jsonb),
-            mask_s3_url = NULLIF(:maskS3, '')
-        WHERE id = CAST(:id AS uuid)
-      `,
-      [...params, { name: "id", value: { stringValue: existing[0].id } }]
-    );
-    return existing[0].id;
-  }
-
-  const id = makeId();
-  await execute(
-    `
-      INSERT INTO images (
-        id, book_id, page_id, role, model_endpoint, prompt, seed, fal_request_id, width, height, s3_url, qa_json, status, parent_image_id, input_assets_json, mask_s3_url
-      ) VALUES (
-        CAST(:id AS uuid),
-        CAST(:bookId AS uuid),
-        ${input.pageId ? "CAST(:pageId AS uuid)" : "NULL"},
-        :role,
-        :endpoint,
-        :prompt,
-        :seed,
-        :requestId,
-        :width,
-        :height,
-        :s3,
-        CAST(:qa AS jsonb),
-        :status,
-        NULLIF(:parentImageId, '')::uuid,
-        CAST(:inputAssets AS jsonb),
-        NULLIF(:maskS3, '')
-      )
-    `,
-    [
-      { name: "id", value: { stringValue: id } },
-      { name: "bookId", value: { stringValue: input.bookId } },
-      ...(input.pageId ? [{ name: "pageId", value: { stringValue: input.pageId } }] : []),
-      { name: "role", value: { stringValue: input.role } },
-      ...params
-    ]
-  );
-  return id;
 }
 
 async function persistPageComposition(pageId: string, composition: PageCompositionSpec): Promise<void> {
@@ -259,7 +154,10 @@ function qaCategoryFromError(error: unknown): PictureBookQaCategory {
 }
 
 async function generateLegacyPageImage(job: LegacyJobPayload): Promise<void> {
-  const provider = await resolveImageProvider();
+  const provider = await resolveImageProvider({
+    mockRunTag: job.mockRunTag,
+    source: "image_worker"
+  });
   const prompt = legacyImagePrompt(job);
   const attemptResult = await runImageGenerationAttempts(provider, {
     bookId: job.bookId,
@@ -285,7 +183,7 @@ async function generateLegacyPageImage(job: LegacyJobPayload): Promise<void> {
   const keyWithExtension = `${generatedKey}.${extension}`;
   const s3Url = await putBuffer(keyWithExtension, generated.bytes, generated.contentType);
 
-  await upsertImageRecord({
+  await insertCurrentImageRecord({
     pageId: job.pageId,
     role: "page",
     bookId: job.bookId,
@@ -316,7 +214,7 @@ async function persistScenePlate(
   const extension = fileExtensionForContentType(generated.contentType);
   const key = `books/${job.bookId}/images/page-${job.pageIndex + 1}-scene-v${attempt}.${extension}`;
   const s3Url = await putBuffer(key, generated.bytes, generated.contentType);
-  const imageId = await upsertImageRecord({
+  const imageId = await insertCurrentImageRecord({
     pageId: job.pageId,
     role: "scene_plate",
     bookId: job.bookId,
@@ -346,7 +244,10 @@ async function persistScenePlate(
 }
 
 async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void> {
-  const { scenePlateProvider, pageFillProvider } = await resolvePictureBookImageProviders();
+  const { scenePlateProvider, pageFillProvider } = await resolvePictureBookImageProviders({
+    mockRunTag: job.mockRunTag,
+    source: "image_worker_picture_book"
+  });
   const scenePrompt = job.brief.scenePrompt;
   const promptSafetyTerms = blockedTermsInText(scenePrompt);
   const referenceImageUrls = [
@@ -412,7 +313,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
       });
       const category = classifyPictureBookIssues(qaPayload.issues);
 
-      await upsertImageRecord({
+      await insertCurrentImageRecord({
         pageId: job.pageId,
         role: "page_fill",
         bookId: job.bookId,
@@ -468,7 +369,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
       const qaPayload = qaPayloadFromError(error);
       const category = qaCategoryFromError(error);
 
-      await upsertImageRecord({
+      await insertCurrentImageRecord({
         pageId: job.pageId,
         role: "page_fill",
         bookId: job.bookId,
@@ -596,7 +497,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
   ]);
 
   if (finalQa) {
-    await upsertImageRecord({
+    await insertCurrentImageRecord({
       pageId: job.pageId,
       role: "page_fill",
       bookId: job.bookId,
@@ -618,6 +519,8 @@ export const handler: SQSHandler = async (event) => {
       pageId: payload.pageId,
       pageIndex: payload.pageIndex
     });
+
+    await clearCurrentImagesForPage(payload.pageId, ["page", "scene_plate", "page_fill", "page_preview"]);
 
     if (payload.mode === "picture_book_fixed_layout") {
       await runPictureBookPipeline(payload);

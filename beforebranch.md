@@ -1,61 +1,44 @@
-# Before Branch Snapshot: Picture-Book Fixed-Layout Pipeline
+# Before Branch Snapshot
 
 ## Current State
-- Current branch: `master` tracking `Github/master`.
-- Harness baseline smoke is passing.
-- Existing production/dev pipeline is text-first plus single-pass page-image generation.
-- Pages currently persist `text` plus `illustration_brief_json` only.
-- Image generation currently uses a legacy `page` role with a single prompt and optional character-sheet reference.
-- Render input currently carries only `text` plus `imageS3Url`.
-- Renderer is a placeholder PDFKit flow that emits text-only pages with illustration source text, not composited page layouts.
-- API reader response returns page text plus a single `imageUrl`.
-- Web reader currently shows both page text and image inline.
+- Base branch: `codex/picture-book-fixed-layout`
+- Upstream: `Github/codex/picture-book-fixed-layout`
+- Baseline smoke is passing on the current head.
+- The parent-facing SPA in `apps/web` still builds, but it remains a single-file React app with inline DTO types and no reviewer workflows.
+- The backend already supports `needs_review` at the order/book level and persists review-relevant raw data (`images.qa_json`, `evaluations`, `book_artifacts`, picture-book image roles), but there is no internal review console, no explicit review-case model, no reviewer auth gate, and no review action API.
+- Latest validated picture-book dev run can reach image generation and land in `needs_review`, so the missing operator workflow is now a real blocker.
 
 ## Objective
-- Implement a new fixed-layout picture-book pipeline for ages 3-7 with live text, deterministic layout templates, layered assets, preview PNGs, and a renderer that can produce final PDF output while preserving backward compatibility.
+Implement a revitalized frontend plus internal QA/manual-review workflow in one deployable app:
+- route-based parent and reviewer areas
+- reviewer magic-link auth via allowlisted staff emails
+- explicit review case + audit trail persistence
+- reviewer queue/detail/actions (`approve_continue`, `reject`, `retry_page`)
+- retry-safe current-attempt selection for images/artifacts
+- stage-aware resume path after review approval
 
-## Why This Is Structural
-- The change crosses shared domain types, persistence schema, worker orchestration, provider abstractions, renderer architecture, API responses, and web reader behavior.
-- It introduces a new product-family path and feature-flagged rollout while preserving the legacy path.
+## Constraints
+- Keep one frontend app, not a separate reviewer deployable.
+- Preserve existing parent ordering/checkout/reader flow.
+- Reuse existing email-link auth; do not add a separate auth system.
+- Prefer direct, minimal architecture additions over broad framework churn.
+- Keep `needs_review` parent-visible but internal-review details hidden from parents.
+- Use deterministic current-attempt semantics so page retry is reliable.
 
-## Scope In
-- Product-family routing for `read_aloud_3_4` and `early_decoder_5_7`.
-- Blocking `independent_8_10` behind a feature flag.
-- Additive DB schema updates for product family, layout profile, page composition, and layered image metadata.
-- Deterministic page-template selection and composition metadata.
-- New scene-plate and fill provider abstractions/endpoints.
-- Preview PNG generation and updated render input.
-- PDF rendering with composited page art and live text.
-- Additive API/web reader changes.
-- Tests, docs, and rollout flags.
+## Risks
+- The current API and DB model do not have explicit review-case or reviewer-role concepts, so auth/data/action changes must move together.
+- Page retry touches image-worker coordination and current asset selection; partial changes would make reviewer actions unsafe.
+- The frontend currently hardcodes API response shapes, so backend additions can drift unless typed-client generation is introduced.
+- Approval semantics must resume the correct downstream stage rather than incorrectly forcing `ready`.
 
-## Scope Out
-- 8-10 chapter-book pipeline.
-- Kindle/Apple export implementation.
-- Read-aloud/audio features.
-- 300 DPI/upscaling pass.
-- POD packaging and cover/spine work.
+## Pending Decisions Locked For This Slice
+- Reviewer UI is internal only.
+- Reviewer sign-in reuses magic-link auth and is gated by SSM-configured reviewer email allowlist.
+- Reviewer actions in v1 are: approve/continue, reject, retry page.
+- No in-browser image/text editing in v1.
 
-## Key Risks
-- Renderer replacement may introduce runtime/browser/dependency complexity.
-- External provider payloads for Kontext/fill need to remain stable and testable behind abstractions.
-- QA thresholds may need tuning once real assets are generated.
-- Schema additions must stay additive to avoid breaking existing dev data.
-- The legacy pipeline must remain untouched when the picture-book flag is disabled.
-
-## Migration Notes
-- Use additive `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` updates only.
-- Bump custom-resource physical ID to force migration execution.
-- Keep existing `images.role='page'` for the legacy path.
-- New path will add `scene_plate`, `page_fill`, and `page_preview` rows.
-
-## Rollback Path
-- Disable `enable_picture_book_pipeline` and `enable_independent_8_10` in SSM.
-- Legacy image and renderer path remains the fallback until the new path is validated.
-- Schema additions are additive, so rollback is behavioral via flags rather than destructive DDL.
-
-## Assumptions
-- High-quality image generation is preferred over lower cost/latency.
-- 2048x2048 working canvas is acceptable for this phase.
-- Live text in final PDF is required.
-- Sample PDFs in repo root are disposable local artifacts and were removed before branching.
+## Expected Verification
+- `bash scripts/agent/test.sh`
+- `bash scripts/agent/quality.sh`
+- targeted web/API/worker tests for review queue/detail/actions and current-attempt selection
+- dev deploy if required for live validation after implementation

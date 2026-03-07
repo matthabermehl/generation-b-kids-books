@@ -10,15 +10,25 @@ import {
   readingProfiles,
   type BookProductFamily,
   type MoneyLessonKey,
+  type ReviewAction,
+  type ReviewCaseStatus,
+  type ReviewStage,
   type ReadingProfile
 } from "@book/domain";
-import { createLoginToken, createSessionToken, verifyLoginToken, verifySessionToken } from "./lib/auth.js";
+import {
+  createLoginToken,
+  createSessionToken,
+  verifyLoginToken,
+  verifySessionToken,
+  type SessionTokenPayload
+} from "./lib/auth.js";
 import { requiredEnv } from "./lib/env.js";
 import { sendLoginLink } from "./lib/email.js";
 import { withIdempotency } from "./lib/idempotency.js";
 import { redactText, sanitizeForLog } from "./lib/log-redaction.js";
 import { execute, query } from "./lib/rds.js";
 import { json } from "./lib/response.js";
+import { isReviewerEmailAllowed } from "./lib/reviewer.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { signPdfDownload } from "./lib/storage.js";
 import { createStripeCheckoutSession, verifyStripeWebhook } from "./lib/stripe.js";
@@ -41,6 +51,14 @@ const createOrderSchema = z.object({
   moneyLessonKey: z.enum(moneyLessonKeys),
   interestTags: z.array(z.string().min(1)).max(10),
   readingProfileId: z.enum(readingProfiles)
+});
+
+const reviewNoteSchema = z.object({
+  notes: z.string().trim().min(1).max(2000)
+});
+
+const reviewApproveSchema = z.object({
+  notes: z.string().trim().max(2000).optional()
 });
 
 const orderTransitions: Record<string, string[]> = {
@@ -122,6 +140,38 @@ function readHeader(event: APIGatewayProxyEventV2, name: string): string | null 
     }
   }
   return null;
+}
+
+function parseJsonText<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+async function requireSession(event: APIGatewayProxyEventV2): Promise<SessionTokenPayload> {
+  try {
+    return await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+  } catch (error) {
+    throw Object.assign(new Error(error instanceof Error ? error.message : "Unauthorized"), { statusCode: 401 });
+  }
+}
+
+async function requireReviewerSession(
+  event: APIGatewayProxyEventV2
+): Promise<{ auth: SessionTokenPayload; runtimeConfig: Awaited<ReturnType<typeof getRuntimeConfig>> }> {
+  const auth = await requireSession(event);
+  const runtimeConfig = await getRuntimeConfig();
+  if (!isReviewerEmailAllowed(auth.email, runtimeConfig.reviewerEmailAllowlist)) {
+    throw Object.assign(new Error("Reviewer access denied"), { statusCode: 403 });
+  }
+
+  return { auth, runtimeConfig };
 }
 
 async function upsertUser(email: string): Promise<{ id: string; email: string }> {
@@ -241,6 +291,31 @@ interface OrderContextRow {
   child_profile_id: string;
 }
 
+type ResumeStage = "text_moderation" | "prepare_render" | "retry_page" | "finalize_gate";
+
+interface ReviewCaseRow {
+  review_case_id: string;
+  review_case_status: ReviewCaseStatus;
+  review_stage: ReviewStage;
+  reason_summary: string;
+  reason_json: string;
+  created_at: string;
+  resolved_at: string | null;
+  book_id: string;
+  book_status: string;
+  order_id: string;
+  order_status: string;
+  child_first_name: string;
+  reading_profile_id: string;
+  money_lesson_key: string;
+}
+
+interface ReviewCaseQueueRow extends ReviewCaseRow {
+  page_count: number;
+  latest_action: ReviewAction | null;
+  latest_reviewer_email: string | null;
+}
+
 async function loadOrderContext(orderId: string): Promise<OrderContextRow | null> {
   const rows = await query<OrderContextRow>(
     `
@@ -282,6 +357,126 @@ async function loadOrderContextForUser(orderId: string, userId: string): Promise
   );
 
   return rows[0] ?? null;
+}
+
+async function loadReviewCase(caseId: string): Promise<ReviewCaseRow | null> {
+  const rows = await query<ReviewCaseRow>(
+    `
+      SELECT
+        rc.id::text AS review_case_id,
+        rc.status AS review_case_status,
+        rc.stage AS review_stage,
+        rc.reason_summary,
+        rc.reason_json::text AS reason_json,
+        rc.created_at::text,
+        rc.resolved_at::text,
+        b.id::text AS book_id,
+        b.status AS book_status,
+        o.id::text AS order_id,
+        o.status AS order_status,
+        cp.child_first_name,
+        b.reading_profile_id,
+        b.money_lesson_key
+      FROM review_cases rc
+      INNER JOIN books b ON b.id = rc.book_id
+      INNER JOIN orders o ON o.id = rc.order_id
+      INNER JOIN child_profiles cp ON cp.id = o.child_profile_id
+      WHERE rc.id = CAST(:caseId AS uuid)
+      LIMIT 1
+    `,
+    [{ name: "caseId", value: { stringValue: caseId } }]
+  );
+
+  return rows[0] ?? null;
+}
+
+async function insertReviewEvent(input: {
+  reviewCaseId: string;
+  bookId: string;
+  reviewerEmail: string;
+  action: ReviewAction;
+  notes?: string | null;
+  pageId?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  await execute(
+    `
+      INSERT INTO review_events (id, review_case_id, book_id, page_id, reviewer_email, action, notes, metadata_json)
+      VALUES (
+        CAST(:id AS uuid),
+        CAST(:reviewCaseId AS uuid),
+        CAST(:bookId AS uuid),
+        NULLIF(:pageId, '')::uuid,
+        :reviewerEmail,
+        :action,
+        NULLIF(:notes, ''),
+        CAST(:metadata AS jsonb)
+      )
+    `,
+    [
+      { name: "id", value: { stringValue: randomUUID() } },
+      { name: "reviewCaseId", value: { stringValue: input.reviewCaseId } },
+      { name: "bookId", value: { stringValue: input.bookId } },
+      { name: "pageId", value: { stringValue: input.pageId ?? "" } },
+      { name: "reviewerEmail", value: { stringValue: input.reviewerEmail.toLowerCase() } },
+      { name: "action", value: { stringValue: input.action } },
+      { name: "notes", value: { stringValue: input.notes ?? "" } },
+      { name: "metadata", value: { stringValue: JSON.stringify(input.metadata ?? {}) } }
+    ]
+  );
+}
+
+async function updateReviewCaseStatus(caseId: string, status: ReviewCaseStatus): Promise<void> {
+  await execute(
+    `
+      UPDATE review_cases
+      SET status = :status,
+          resolved_at = CASE WHEN :status IN ('resolved', 'rejected') THEN NOW() ELSE NULL END
+      WHERE id = CAST(:caseId AS uuid)
+    `,
+    [
+      { name: "caseId", value: { stringValue: caseId } },
+      { name: "status", value: { stringValue: status } }
+    ]
+  );
+}
+
+async function startExecution(
+  requestId: string,
+  input: {
+    orderId: string;
+    bookId: string;
+    source: string;
+    mockRunTag?: string | null;
+    resumeStage?: ResumeStage;
+    pageId?: string;
+  }
+): Promise<string | null> {
+  const stateMachineArn = requiredEnv("BOOK_BUILD_STATE_MACHINE_ARN");
+  const started = await sfn.send(
+    new StartExecutionCommand({
+      stateMachineArn,
+      name: executionName(input.orderId, input.source),
+      input: JSON.stringify({
+        orderId: input.orderId,
+        bookId: input.bookId,
+        mockRunTag: input.mockRunTag ?? null,
+        resumeStage: input.resumeStage ?? null,
+        pageId: input.pageId ?? null
+      })
+    })
+  );
+
+  logWithContext(requestId, "OrderPipelineExecutionStarted", {
+    orderId: input.orderId,
+    bookId: input.bookId,
+    executionArn: started.executionArn ?? null,
+    source: input.source,
+    resumeStage: input.resumeStage ?? null,
+    pageId: input.pageId ?? null
+  });
+
+  return started.executionArn ?? null;
 }
 
 function assertTransition(
@@ -351,7 +546,8 @@ async function startBookBuild(
   requestId: string,
   orderId: string,
   bookId: string,
-  source: string
+  source: string,
+  mockRunTag?: string
 ): Promise<{ started: boolean; executionArn: string | null }> {
   const context = await loadOrderContext(orderId);
   if (!context) {
@@ -369,26 +565,48 @@ async function startBookBuild(
   await transitionOrderStatus(orderId, "building");
   await transitionBookStatus(bookId, "building");
 
-  const stateMachineArn = requiredEnv("BOOK_BUILD_STATE_MACHINE_ARN");
-  const started = await sfn.send(
-    new StartExecutionCommand({
-      stateMachineArn,
-      name: executionName(orderId, source),
-      input: JSON.stringify({ orderId, bookId })
-    })
-  );
-
-  logWithContext(requestId, "OrderPipelineExecutionStarted", {
-    orderId,
-    bookId,
-    executionArn: started.executionArn ?? null,
-    source
-  });
-
   return {
     started: true,
-    executionArn: started.executionArn ?? null
+    executionArn: await startExecution(requestId, { orderId, bookId, source, mockRunTag })
   };
+}
+
+async function startReviewResumeExecution(
+  requestId: string,
+  input: {
+    orderId: string;
+    bookId: string;
+    source: string;
+    resumeStage: ResumeStage;
+    pageId?: string;
+  }
+): Promise<{ executionArn: string | null }> {
+  const context = await loadOrderContext(input.orderId);
+  if (!context || context.book_id !== input.bookId) {
+    throw new Error(`Order not found: ${input.orderId}`);
+  }
+
+  if (context.order_status !== "building") {
+    await transitionOrderStatus(input.orderId, "building");
+  }
+  if (context.book_status !== "building") {
+    await transitionBookStatus(input.bookId, "building");
+  }
+
+  return {
+    executionArn: await startExecution(requestId, input)
+  };
+}
+
+function resumeStageForCase(stage: ReviewStage): ResumeStage {
+  if (stage === "text_moderation") {
+    return "text_moderation";
+  }
+  if (stage === "finalize_gate") {
+    return "finalize_gate";
+  }
+
+  return "prepare_render";
 }
 
 async function hasPaymentEvent(stripeEventId: string): Promise<boolean> {
@@ -630,8 +848,22 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return json(200, response);
     }
 
+    if (method === "GET" && path === "/v1/session") {
+      const auth = await requireSession(event);
+      const runtimeConfig = await getRuntimeConfig();
+      return json(200, {
+        user: {
+          id: auth.userId,
+          email: auth.email
+        },
+        capabilities: {
+          canReview: isReviewerEmailAllowed(auth.email, runtimeConfig.reviewerEmailAllowlist)
+        }
+      });
+    }
+
     if (method === "POST" && path === "/v1/orders") {
-      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await requireSession(event);
       const idempotencyKey = readIdempotencyKey(event);
 
       if (!idempotencyKey) {
@@ -654,7 +886,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const checkoutMatch = pathMatch(path, /^\/v1\/orders\/([^/]+)\/checkout$/);
     if (method === "POST" && checkoutMatch) {
-      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await requireSession(event);
       const orderId = checkoutMatch[1];
       const idempotencyKey = readIdempotencyKey(event);
       if (!idempotencyKey) {
@@ -766,10 +998,18 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const paidMatch = pathMatch(path, /^\/v1\/orders\/([^/]+)\/mark-paid$/);
     if (method === "POST" && paidMatch) {
-      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await requireSession(event);
       const runtimeConfig = await getRuntimeConfig();
       if (!runtimeConfig.featureFlags.enableMockCheckout) {
         return json(403, { error: "Mock checkout disabled" });
+      }
+      const mockRunTag = (readHeader(event, "x-mock-run-tag") ?? "").trim();
+      const requiresMockRunTag =
+        runtimeConfig.featureFlags.enableMockLlm || runtimeConfig.featureFlags.enableMockImage;
+      if (requiresMockRunTag && mockRunTag.length === 0) {
+        return json(400, {
+          error: "X-Mock-Run-Tag header is required when mock LLM or image providers are enabled"
+        });
       }
 
       const orderId = paidMatch[1];
@@ -789,7 +1029,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         }
 
         const mockCheckoutSource: string = "mock-checkout";
-        const started = await startBookBuild(requestId, orderId, order.book_id, mockCheckoutSource);
+        const started = await startBookBuild(
+          requestId,
+          orderId,
+          order.book_id,
+          mockCheckoutSource,
+          mockRunTag
+        );
         return {
           ok: true,
           orderId,
@@ -802,9 +1048,410 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return json(200, response);
     }
 
+    if (method === "GET" && path === "/v1/review/cases") {
+      await requireReviewerSession(event);
+      const status = (event.queryStringParameters?.status ?? "open").trim().toLowerCase();
+      const stageFilter = (event.queryStringParameters?.stage ?? "").trim();
+      const limit = Math.min(Math.max(Number(event.queryStringParameters?.limit ?? "50"), 1), 100);
+      const cases = await query<ReviewCaseQueueRow>(
+        `
+          SELECT
+            rc.id::text AS review_case_id,
+            rc.status AS review_case_status,
+            rc.stage AS review_stage,
+            rc.reason_summary,
+            rc.reason_json::text AS reason_json,
+            rc.created_at::text,
+            rc.resolved_at::text,
+            b.id::text AS book_id,
+            b.status AS book_status,
+            o.id::text AS order_id,
+            o.status AS order_status,
+            cp.child_first_name,
+            b.reading_profile_id,
+            b.money_lesson_key,
+            COUNT(p.*)::int AS page_count,
+            (
+              SELECT re.action
+              FROM review_events re
+              WHERE re.review_case_id = rc.id
+              ORDER BY re.created_at DESC
+              LIMIT 1
+            ) AS latest_action,
+            (
+              SELECT re.reviewer_email
+              FROM review_events re
+              WHERE re.review_case_id = rc.id
+              ORDER BY re.created_at DESC
+              LIMIT 1
+            ) AS latest_reviewer_email
+          FROM review_cases rc
+          INNER JOIN books b ON b.id = rc.book_id
+          INNER JOIN orders o ON o.id = rc.order_id
+          INNER JOIN child_profiles cp ON cp.id = o.child_profile_id
+          LEFT JOIN pages p ON p.book_id = b.id
+          WHERE rc.status = :status
+            AND (:stage = '' OR rc.stage = :stage)
+          GROUP BY rc.id, b.id, o.id, cp.id
+          ORDER BY rc.created_at DESC
+          LIMIT ${limit}
+        `,
+        [
+          { name: "status", value: { stringValue: status } },
+          { name: "stage", value: { stringValue: stageFilter } }
+        ]
+      );
+
+      return json(200, {
+        cases: cases.map((row) => ({
+          caseId: row.review_case_id,
+          status: row.review_case_status,
+          stage: row.review_stage,
+          reasonSummary: row.reason_summary,
+          createdAt: row.created_at,
+          resolvedAt: row.resolved_at,
+          orderId: row.order_id,
+          orderStatus: row.order_status,
+          bookId: row.book_id,
+          bookStatus: row.book_status,
+          childFirstName: row.child_first_name,
+          readingProfileId: row.reading_profile_id,
+          moneyLessonKey: row.money_lesson_key,
+          pageCount: Number(row.page_count),
+          latestAction: row.latest_action,
+          latestReviewerEmail: row.latest_reviewer_email
+        }))
+      });
+    }
+
+    const reviewCaseMatch = pathMatch(path, /^\/v1\/review\/cases\/([^/]+)$/);
+    if (method === "GET" && reviewCaseMatch) {
+      await requireReviewerSession(event);
+      const caseId = reviewCaseMatch[1];
+      const reviewCase = await loadReviewCase(caseId);
+      if (!reviewCase) {
+        return json(404, { error: "Review case not found" });
+      }
+
+      const [events, evaluations, artifacts, pages] = await Promise.all([
+        query<{
+          id: string;
+          reviewer_email: string;
+          action: ReviewAction;
+          notes: string | null;
+          page_id: string | null;
+          metadata_json: string;
+          created_at: string;
+        }>(
+          `
+            SELECT
+              id::text AS id,
+              reviewer_email,
+              action,
+              notes,
+              page_id::text AS page_id,
+              metadata_json::text AS metadata_json,
+              created_at::text
+            FROM review_events
+            WHERE review_case_id = CAST(:caseId AS uuid)
+            ORDER BY created_at DESC
+          `,
+          [{ name: "caseId", value: { stringValue: caseId } }]
+        ),
+        query<{
+          stage: string;
+          model_used: string;
+          verdict: string;
+          notes: string | null;
+          score_json: string;
+          created_at: string;
+        }>(
+          `
+            SELECT stage, model_used, verdict, notes, score_json::text AS score_json, created_at::text
+            FROM evaluations
+            WHERE book_id = CAST(:bookId AS uuid)
+            ORDER BY created_at DESC
+          `,
+          [{ name: "bookId", value: { stringValue: reviewCase.book_id } }]
+        ),
+        query<{
+          artifact_type: string;
+          s3_url: string;
+          created_at: string;
+        }>(
+          `
+            SELECT artifact_type, s3_url, created_at::text
+            FROM book_artifacts
+            WHERE book_id = CAST(:bookId AS uuid)
+              AND is_current = TRUE
+              AND artifact_type IN ('pdf', 'beat_plan_report', 'beat_plan', 'prompt_pack')
+            ORDER BY created_at DESC
+          `,
+          [{ name: "bookId", value: { stringValue: reviewCase.book_id } }]
+        ),
+        query<{
+          page_id: string;
+          page_index: number;
+          status: string;
+          text: string;
+          template_id: string | null;
+          preview_image_url: string | null;
+          scene_plate_url: string | null;
+          page_fill_url: string | null;
+          qa_json: string | null;
+          retry_count: number;
+        }>(
+          `
+            SELECT
+              p.id::text AS page_id,
+              p.page_index,
+              p.status,
+              p.text,
+              p.composition_json->>'templateId' AS template_id,
+              preview.s3_url AS preview_image_url,
+              scene.s3_url AS scene_plate_url,
+              fill.s3_url AS page_fill_url,
+              fill.qa_json::text AS qa_json,
+              COALESCE(
+                (
+                  SELECT COUNT(*)
+                  FROM images history
+                  WHERE history.page_id = p.id
+                    AND history.role IN ('scene_plate', 'page_fill')
+                ),
+                0
+              )::int AS retry_count
+            FROM pages p
+            LEFT JOIN images preview ON preview.page_id = p.id AND preview.role = 'page_preview' AND preview.is_current = TRUE
+            LEFT JOIN images scene ON scene.page_id = p.id AND scene.role = 'scene_plate' AND scene.is_current = TRUE
+            LEFT JOIN images fill ON fill.page_id = p.id AND fill.role = 'page_fill' AND fill.is_current = TRUE
+            WHERE p.book_id = CAST(:bookId AS uuid)
+            ORDER BY p.page_index
+          `,
+          [{ name: "bookId", value: { stringValue: reviewCase.book_id } }]
+        )
+      ]);
+
+      const pdfArtifact = artifacts.find((artifact) => artifact.artifact_type === "pdf");
+      return json(200, {
+        caseId: reviewCase.review_case_id,
+        status: reviewCase.review_case_status,
+        stage: reviewCase.review_stage,
+        reasonSummary: reviewCase.reason_summary,
+        reason: parseJsonText<Record<string, unknown>>(reviewCase.reason_json, {}),
+        createdAt: reviewCase.created_at,
+        resolvedAt: reviewCase.resolved_at,
+        order: {
+          orderId: reviewCase.order_id,
+          status: reviewCase.order_status
+        },
+        book: {
+          bookId: reviewCase.book_id,
+          status: reviewCase.book_status,
+          childFirstName: reviewCase.child_first_name,
+          readingProfileId: reviewCase.reading_profile_id,
+          moneyLessonKey: reviewCase.money_lesson_key
+        },
+        pdfUrl: s3ToPublicUrl(pdfArtifact?.s3_url ?? null),
+        artifacts: artifacts.map((artifact) => ({
+          artifactType: artifact.artifact_type,
+          url: s3ToPublicUrl(artifact.s3_url),
+          createdAt: artifact.created_at
+        })),
+        evaluations: evaluations.map((row) => ({
+          stage: row.stage,
+          modelUsed: row.model_used,
+          verdict: row.verdict,
+          notes: row.notes,
+          score: parseJsonText<Record<string, unknown>>(row.score_json, {}),
+          createdAt: row.created_at
+        })),
+        events: events.map((row) => ({
+          id: row.id,
+          reviewerEmail: row.reviewer_email,
+          action: row.action,
+          notes: row.notes,
+          pageId: row.page_id,
+          metadata: parseJsonText<Record<string, unknown>>(row.metadata_json, {}),
+          createdAt: row.created_at
+        })),
+        pages: pages.map((page) => {
+          const qa = parseJsonText<Record<string, unknown>>(page.qa_json, {});
+          const issues = Array.isArray(qa.issues) ? qa.issues.filter((issue): issue is string => typeof issue === "string") : [];
+          return {
+            pageId: page.page_id,
+            pageIndex: Number(page.page_index),
+            status: page.status,
+            text: page.text,
+            templateId: page.template_id,
+            previewImageUrl: s3ToPublicUrl(page.preview_image_url),
+            scenePlateUrl: s3ToPublicUrl(page.scene_plate_url),
+            pageFillUrl: s3ToPublicUrl(page.page_fill_url),
+            latestQaIssues: issues,
+            qaMetrics: qa.metrics ?? null,
+            retryCount: Math.max(Number(page.retry_count) - 1, 0)
+          };
+        })
+      });
+    }
+
+    const approveReviewCaseMatch = pathMatch(path, /^\/v1\/review\/cases\/([^/]+)\/approve$/);
+    if (method === "POST" && approveReviewCaseMatch) {
+      const { auth } = await requireReviewerSession(event);
+      const payload = await parseBody(event, reviewApproveSchema);
+      const caseId = approveReviewCaseMatch[1];
+      const reviewCase = await loadReviewCase(caseId);
+      if (!reviewCase) {
+        return json(404, { error: "Review case not found" });
+      }
+      if (reviewCase.review_case_status !== "open") {
+        return json(409, { error: "Review case is not open" });
+      }
+
+      const resumeStage = resumeStageForCase(reviewCase.review_stage);
+      const started = await startReviewResumeExecution(requestId, {
+        orderId: reviewCase.order_id,
+        bookId: reviewCase.book_id,
+        source: `review-approve-${reviewCase.review_stage}`,
+        resumeStage
+      });
+      await updateReviewCaseStatus(caseId, "retrying");
+      await insertReviewEvent({
+        reviewCaseId: caseId,
+        bookId: reviewCase.book_id,
+        reviewerEmail: auth.email,
+        action: "approve_continue",
+        notes: payload.notes ?? null,
+        metadata: {
+          resumeStage,
+          executionArn: started.executionArn
+        }
+      });
+
+      return json(200, {
+        ok: true,
+        caseId,
+        status: "retrying",
+        executionArn: started.executionArn
+      });
+    }
+
+    const rejectReviewCaseMatch = pathMatch(path, /^\/v1\/review\/cases\/([^/]+)\/reject$/);
+    if (method === "POST" && rejectReviewCaseMatch) {
+      const { auth } = await requireReviewerSession(event);
+      const payload = await parseBody(event, reviewNoteSchema);
+      const caseId = rejectReviewCaseMatch[1];
+      const reviewCase = await loadReviewCase(caseId);
+      if (!reviewCase) {
+        return json(404, { error: "Review case not found" });
+      }
+      if (reviewCase.review_case_status !== "open") {
+        return json(409, { error: "Review case is not open" });
+      }
+
+      await transitionBookStatus(reviewCase.book_id, "failed");
+      await transitionOrderStatus(reviewCase.order_id, "failed");
+      await updateReviewCaseStatus(caseId, "rejected");
+      await insertReviewEvent({
+        reviewCaseId: caseId,
+        bookId: reviewCase.book_id,
+        reviewerEmail: auth.email,
+        action: "reject",
+        notes: payload.notes,
+        metadata: {
+          stage: reviewCase.review_stage
+        }
+      });
+
+      return json(200, {
+        ok: true,
+        caseId,
+        status: "rejected"
+      });
+    }
+
+    const retryPageMatch = pathMatch(path, /^\/v1\/review\/cases\/([^/]+)\/pages\/([^/]+)\/retry$/);
+    if (method === "POST" && retryPageMatch) {
+      const { auth } = await requireReviewerSession(event);
+      const payload = await parseBody(event, reviewNoteSchema);
+      const caseId = retryPageMatch[1];
+      const pageId = retryPageMatch[2];
+      const reviewCase = await loadReviewCase(caseId);
+      if (!reviewCase) {
+        return json(404, { error: "Review case not found" });
+      }
+      if (reviewCase.review_case_status !== "open") {
+        return json(409, { error: "Review case is not open" });
+      }
+      if (!["image_qa", "image_safety"].includes(reviewCase.review_stage)) {
+        return json(409, { error: "Page retry is only allowed for image review cases" });
+      }
+
+      const pageRows = await query<{ id: string }>(
+        `SELECT id::text AS id FROM pages WHERE id = CAST(:pageId AS uuid) AND book_id = CAST(:bookId AS uuid) LIMIT 1`,
+        [
+          { name: "pageId", value: { stringValue: pageId } },
+          { name: "bookId", value: { stringValue: reviewCase.book_id } }
+        ]
+      );
+      if (!pageRows[0]) {
+        return json(404, { error: "Page not found" });
+      }
+
+      const started = await startReviewResumeExecution(requestId, {
+        orderId: reviewCase.order_id,
+        bookId: reviewCase.book_id,
+        source: `review-retry-page-${pageId.slice(0, 8)}`,
+        resumeStage: "retry_page",
+        pageId
+      });
+
+      await execute(
+        `
+          UPDATE images
+          SET is_current = FALSE
+          WHERE page_id = CAST(:pageId AS uuid)
+            AND role IN ('page', 'scene_plate', 'page_fill', 'page_preview')
+            AND is_current = TRUE
+        `,
+        [{ name: "pageId", value: { stringValue: pageId } }]
+      );
+      await execute(`UPDATE pages SET status = 'pending' WHERE id = CAST(:pageId AS uuid)`, [
+        { name: "pageId", value: { stringValue: pageId } }
+      ]);
+      await execute(
+        `
+          UPDATE book_artifacts
+          SET is_current = FALSE
+          WHERE book_id = CAST(:bookId AS uuid) AND artifact_type = 'pdf' AND is_current = TRUE
+        `,
+        [{ name: "bookId", value: { stringValue: reviewCase.book_id } }]
+      );
+      await updateReviewCaseStatus(caseId, "retrying");
+      await insertReviewEvent({
+        reviewCaseId: caseId,
+        bookId: reviewCase.book_id,
+        pageId,
+        reviewerEmail: auth.email,
+        action: "retry_page",
+        notes: payload.notes,
+        metadata: {
+          executionArn: started.executionArn
+        }
+      });
+
+      return json(200, {
+        ok: true,
+        caseId,
+        pageId,
+        status: "retrying",
+        executionArn: started.executionArn
+      });
+    }
+
     const orderMatch = pathMatch(path, /^\/v1\/orders\/([^/]+)$/);
     if (method === "GET" && orderMatch) {
-      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await requireSession(event);
       const orderId = orderMatch[1];
 
       const rows = await query<{
@@ -845,7 +1492,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const bookMatch = pathMatch(path, /^\/v1\/books\/([^/]+)$/);
     if (method === "GET" && bookMatch) {
-      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await requireSession(event);
       const bookId = bookMatch[1];
 
       const bookRows = await query<{
@@ -891,8 +1538,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             preview.s3_url AS preview_image_url,
             p.composition_json->>'templateId' AS template_id
           FROM pages p
-          LEFT JOIN images i ON i.page_id = p.id AND i.role = 'page'
-          LEFT JOIN images preview ON preview.page_id = p.id AND preview.role = 'page_preview'
+          LEFT JOIN images i ON i.page_id = p.id AND i.role = 'page' AND i.is_current = TRUE
+          LEFT JOIN images preview ON preview.page_id = p.id AND preview.role = 'page_preview' AND preview.is_current = TRUE
           WHERE p.book_id = CAST(:bookId AS uuid)
           ORDER BY p.page_index
         `,
@@ -920,7 +1567,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const downloadMatch = pathMatch(path, /^\/v1\/books\/([^/]+)\/download$/);
     if (method === "GET" && downloadMatch) {
-      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await requireSession(event);
       const bookId = downloadMatch[1];
       const format = event.queryStringParameters?.format ?? "pdf";
 
@@ -934,7 +1581,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           FROM book_artifacts ba
           INNER JOIN books b ON b.id = ba.book_id
           INNER JOIN orders o ON o.id = b.order_id
-          WHERE ba.book_id = CAST(:bookId AS uuid) AND ba.artifact_type = 'pdf' AND o.user_id = CAST(:userId AS uuid)
+          WHERE ba.book_id = CAST(:bookId AS uuid)
+            AND ba.artifact_type = 'pdf'
+            AND ba.is_current = TRUE
+            AND o.user_id = CAST(:userId AS uuid)
           ORDER BY ba.created_at DESC
           LIMIT 1
         `,
@@ -961,7 +1611,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const deleteChildMatch = pathMatch(path, /^\/v1\/child-profiles\/([^/]+)$/);
     if (method === "DELETE" && deleteChildMatch) {
-      const auth = await verifySessionToken(event.headers.authorization ?? event.headers.Authorization);
+      const auth = await requireSession(event);
       const childProfileId = deleteChildMatch[1];
 
       const owned = await query<{ id: string }>(
@@ -1072,11 +1722,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     return json(404, { error: "Not found" });
   } catch (error) {
+    const statusCode =
+      typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number"
+        ? error.statusCode
+        : 500;
     console.error("API_REQUEST_FAILURE", {
       requestId,
+      statusCode,
       message: redactText(error instanceof Error ? error.message : String(error))
     });
-    return json(500, {
+    return json(statusCode, {
       error: error instanceof Error ? error.message : "Unknown error"
     });
   }

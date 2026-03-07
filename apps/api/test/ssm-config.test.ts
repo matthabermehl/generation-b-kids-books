@@ -57,6 +57,7 @@ describe("api runtime ssm config", () => {
         parameter("stripe_cancel_url", "https://example.com/cancel"),
         parameter("sendgrid_from_email", "noreply@example.com"),
         parameter("web_base_url", "https://example.com"),
+        parameter("reviewer_email_allowlist", "reviewer@example.com,qa@example.com"),
         parameter("enable_mock_llm", "false"),
         parameter("enable_mock_image", "false"),
         parameter("enable_mock_checkout", "false"),
@@ -72,6 +73,7 @@ describe("api runtime ssm config", () => {
 
     expect(config.authLinkTtlMinutes).toBe(30);
     expect(config.sendgridFromEmail).toBe("noreply@example.com");
+    expect(config.reviewerEmailAllowlist).toEqual(["reviewer@example.com", "qa@example.com"]);
     expect(config.featureFlags.enableMockLlm).toBe(false);
     expect(config.featureFlags.enableMockImage).toBe(false);
     expect(config.featureFlags.enableMockCheckout).toBe(false);
