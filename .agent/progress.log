@@ -95,6 +95,21 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-08T10:26:46-0400
+Task: clean-product-ui-system-01
+Baseline: smoke PASS
+Change: migrated `apps/web` to a Tailwind v4 + shadcn clean-product UI system, introduced a persisted `ParentFlowProvider`, split the parent journey into `/`, `/create`, `/checkout`, and `/books/current`, and restyled the verify and reviewer routes on the same primitive layer without changing backend contracts.
+Evidence:
+- bash scripts/agent/smoke.sh => PASS
+- bash scripts/agent/quality.sh => PASS
+- bash scripts/agent/e2e.sh => WARN only (`No e2e runner detected`, fallback allowed)
+- pnpm --filter @book/web test => PASS
+- pnpm --filter @book/web build => PASS
+- pnpm run deploy:web:dev => PASS
+- live CloudFront validation => https://dazfa7oc8fu6h.cloudfront.net redirects signed-in users into `/create`; desktop/mobile screenshots saved under `output/playwright/live-*.png`
+Notes: route docs now reflect the routed parent flow and shared UI foundation. Live reviewer screenshots were not possible from the personal browser session because the active account is not reviewer-allowlisted.
+Commit: pending
+
 2026-03-07T08:48:00-0500
 Task: picture-book-hardening-01
 Baseline: existing app-code/dev evidence already passing; follow-up targeted the live reader preview regression visible in the attached screenshot

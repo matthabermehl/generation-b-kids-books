@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { StatusBadge } from "@/components/StatusBadge";
 import { apiClient, type ReviewCaseDetailResponse } from "../lib/api/client";
 import { useSession } from "../lib/session";
-import { StatusPill } from "../components/StatusPill";
 
 export function ReviewCasePage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -39,7 +45,14 @@ export function ReviewCasePage() {
   );
 
   if (!caseId) {
-    return <main className="route-wrap"><p className="error">Review case id missing.</p></main>;
+    return (
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+        <Alert variant="destructive">
+          <AlertTitle>Review case id missing</AlertTitle>
+          <AlertDescription>The route needs a case id before the reviewer workspace can load.</AlertDescription>
+        </Alert>
+      </main>
+    );
   }
 
   const approve = async () => {
@@ -70,131 +83,213 @@ export function ReviewCasePage() {
   };
 
   return (
-    <main className="route-wrap review-shell">
-      <p className="breadcrumb"><Link to="/review">Review queue</Link></p>
-      {error ? <p className="error">{error}</p> : null}
-      {actionStatus ? <p className="hint">{actionStatus}</p> : null}
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <Button asChild variant="ghost" size="sm" className="w-fit px-0 text-slate-500">
+        <Link to="/review">Review queue</Link>
+      </Button>
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Unable to load review case</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+      {actionStatus ? (
+        <Alert>
+          <AlertTitle>Reviewer action queued</AlertTitle>
+          <AlertDescription>{actionStatus}</AlertDescription>
+        </Alert>
+      ) : null}
       {payload ? (
-        <section className="review-detail-grid">
-          <aside className="card review-sidebar">
-            <div className="sidebar-block">
-              <p className="eyebrow">Case</p>
-              <h2>{payload.book.childFirstName}</h2>
-              <p>{payload.book.readingProfileId}</p>
-              <p>{payload.book.moneyLessonKey}</p>
-              <StatusPill value={payload.stage} />
-            </div>
+        <section className="grid gap-6 lg:grid-cols-[0.95fr_1.25fr]">
+          <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+            <Card className="border-border/70 bg-white/95">
+              <CardHeader className="space-y-2">
+                <CardDescription>Review case</CardDescription>
+                <h1 className="text-2xl font-semibold text-slate-950">{payload.book.childFirstName}</h1>
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge value={payload.stage} />
+                  <StatusBadge value={payload.order.status} />
+                  <StatusBadge value={payload.book.status} />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-slate-600">
+                <p>Reading profile: {payload.book.readingProfileId}</p>
+                <p>Lesson: {payload.book.moneyLessonKey}</p>
+                <p>Order: {payload.order.orderId}</p>
+                <p>Book: {payload.book.bookId}</p>
+              </CardContent>
+            </Card>
 
-            <div className="sidebar-block">
-              <h3>Reason</h3>
-              <p>{payload.reasonSummary}</p>
-            </div>
+            <Card className="border-border/70 bg-white/95">
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-slate-950">Reason</h2>
+              </CardHeader>
+              <CardContent className="text-sm leading-6 text-slate-600">{payload.reasonSummary}</CardContent>
+            </Card>
 
-            <div className="sidebar-block">
-              <h3>Actions</h3>
-              <label>Approve / continue note</label>
-              <textarea value={approveNotes} onChange={(event) => setApproveNotes(event.target.value)} />
-              <button onClick={approve}>Approve and continue</button>
+            <Card className="border-border/70 bg-white/95">
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-slate-950">Reviewer actions</h2>
+                <CardDescription>Keep the resume, reject, and retry behaviors unchanged.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-900">Approve / continue note</p>
+                  <Textarea value={approveNotes} onChange={(event) => setApproveNotes(event.target.value)} />
+                  <Button onClick={approve} className="w-full">Approve and continue</Button>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-900">Reject note</p>
+                  <Textarea value={rejectNotes} onChange={(event) => setRejectNotes(event.target.value)} />
+                  <Button variant="destructive" onClick={reject} disabled={!rejectNotes.trim()} className="w-full">
+                    Reject book
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-slate-900">Retry selected page note</p>
+                  <Textarea value={retryNotes} onChange={(event) => setRetryNotes(event.target.value)} />
+                  <Button onClick={retryPage} disabled={!retryNotes.trim() || !selectedPage} variant="outline" className="w-full">
+                    Retry selected page
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
-              <label>Reject note</label>
-              <textarea value={rejectNotes} onChange={(event) => setRejectNotes(event.target.value)} />
-              <button className="danger" onClick={reject} disabled={!rejectNotes.trim()}>
-                Reject book
-              </button>
-
-              <label>Retry selected page note</label>
-              <textarea value={retryNotes} onChange={(event) => setRetryNotes(event.target.value)} />
-              <button onClick={retryPage} disabled={!retryNotes.trim() || !selectedPage}>
-                Retry selected page
-              </button>
-            </div>
-
-            <div className="sidebar-block">
-              <h3>Artifacts</h3>
-              {payload.pdfUrl ? <p><a href={payload.pdfUrl}>Current PDF</a></p> : <p>No PDF available yet.</p>}
-              {payload.artifacts.map((artifact) => (
-                <p key={`${artifact.artifactType}-${artifact.createdAt}`}>
-                  <a href={artifact.url ?? "#"}>{artifact.artifactType}</a>
-                </p>
-              ))}
-            </div>
-
-            <div className="sidebar-block">
-              <h3>Audit</h3>
-              <div className="timeline">
-                {payload.events.map((event) => (
-                  <article key={event.id} className="timeline-item">
-                    <p><strong>{event.action}</strong> by {event.reviewerEmail}</p>
-                    <p className="hint">{new Date(event.createdAt).toLocaleString()}</p>
-                    {event.notes ? <p>{event.notes}</p> : null}
-                  </article>
+            <Card className="border-border/70 bg-white/95">
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-slate-950">Artifacts</h2>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {payload.pdfUrl ? (
+                  <p><a href={payload.pdfUrl} className="font-medium text-slate-900 underline">Current PDF</a></p>
+                ) : (
+                  <p className="text-slate-500">No PDF available yet.</p>
+                )}
+                {payload.artifacts.map((artifact) => (
+                  <p key={`${artifact.artifactType}-${artifact.createdAt}`}>
+                    <a href={artifact.url ?? "#"} className="text-slate-700 underline">{artifact.artifactType}</a>
+                  </p>
                 ))}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70 bg-white/95">
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-slate-950">Audit trail</h2>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-72">
+                  <div className="space-y-4 pr-4">
+                    {payload.events.map((event) => (
+                      <article key={event.id} className="rounded-xl border border-border/80 bg-slate-50 p-4 text-sm">
+                        <p className="font-medium text-slate-900">{event.action} by {event.reviewerEmail}</p>
+                        <p className="mt-1 text-slate-500">{new Date(event.createdAt).toLocaleString()}</p>
+                        {event.notes ? <p className="mt-3 text-slate-600">{event.notes}</p> : null}
+                      </article>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
           </aside>
 
-          <section className="card review-main">
-            <header className="review-header">
-              <div>
-                <h2>Pages</h2>
-                <p className="hint">Order {payload.order.orderId} · Book {payload.book.bookId}</p>
-              </div>
-              <div className="review-header-statuses">
-                <StatusPill value={payload.order.status} />
-                <StatusPill value={payload.book.status} />
-              </div>
-            </header>
-
-            <div className="page-selector">
-              {payload.pages.map((page) => (
-                <button
-                  key={page.pageId}
-                  className={page.pageId === selectedPage?.pageId ? "page-tab selected" : "page-tab"}
-                  onClick={() => setSelectedPageId(page.pageId)}
-                >
-                  Page {page.pageIndex + 1}
-                </button>
-              ))}
-            </div>
-
-            {selectedPage ? (
-              <div className="review-page-grid">
-                <article className="page-panel">
-                  <h3>Preview</h3>
-                  {selectedPage.previewImageUrl ? <img src={selectedPage.previewImageUrl} alt="Preview" /> : <p>No page preview yet</p>}
-                </article>
-                <article className="page-panel">
-                  <h3>Scene plate</h3>
-                  {selectedPage.scenePlateUrl ? <img src={selectedPage.scenePlateUrl} alt="Scene plate" /> : <p>No scene plate</p>}
-                </article>
-                <article className="page-panel">
-                  <h3>Page fill</h3>
-                  {selectedPage.pageFillUrl ? <img src={selectedPage.pageFillUrl} alt="Page fill" /> : <p>No page fill</p>}
-                </article>
-              </div>
-            ) : null}
-
-            {selectedPage ? (
-              <div className="review-metadata-grid">
-                <article className="card muted inset-card">
-                  <h3>Text</h3>
-                  <p>{selectedPage.text}</p>
-                  <p className="hint">Template: {selectedPage.templateId ?? "n/a"}</p>
-                </article>
-                <article className="card muted inset-card">
-                  <h3>QA</h3>
-                  <p>Retry count: {selectedPage.retryCount}</p>
-                  {selectedPage.latestQaIssues.length ? (
-                    <ul className="issue-list">
-                      {selectedPage.latestQaIssues.map((issue) => (
-                        <li key={issue}>{issue}</li>
+          <section className="space-y-6">
+            <Card className="border-border/70 bg-white/95">
+              <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold text-slate-950">Page review</h2>
+                  <CardDescription>Inspect the selected page across preview, scene plate, and fill outputs.</CardDescription>
+                </div>
+                <div className="text-sm text-slate-500">Order {payload.order.orderId} · Book {payload.book.bookId}</div>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={selectedPage?.pageId} onValueChange={setSelectedPageId} className="gap-4">
+                  <ScrollArea className="w-full">
+                    <TabsList variant="line" className="min-w-max">
+                      {payload.pages.map((page) => (
+                        <TabsTrigger key={page.pageId} value={page.pageId}>
+                          Page {page.pageIndex + 1}
+                        </TabsTrigger>
                       ))}
-                    </ul>
-                  ) : (
-                    <p>No current QA issues recorded.</p>
-                  )}
-                  <pre>{JSON.stringify(selectedPage.qaMetrics, null, 2)}</pre>
-                </article>
+                    </TabsList>
+                  </ScrollArea>
+                  {payload.pages.map((page) => (
+                    <TabsContent key={page.pageId} value={page.pageId} className="space-y-6">
+                      <div className="grid gap-4 xl:grid-cols-3">
+                        <Card className="border-border/70 bg-slate-50/70">
+                          <CardHeader>
+                            <h3 className="text-base font-semibold text-slate-950">Preview</h3>
+                          </CardHeader>
+                          <CardContent>
+                            {page.previewImageUrl ? (
+                              <img src={page.previewImageUrl} alt="Preview" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No page preview yet</div>
+                            )}
+                          </CardContent>
+                        </Card>
+                        <Card className="border-border/70 bg-slate-50/70">
+                          <CardHeader>
+                            <h3 className="text-base font-semibold text-slate-950">Scene plate</h3>
+                          </CardHeader>
+                          <CardContent>
+                            {page.scenePlateUrl ? (
+                              <img src={page.scenePlateUrl} alt="Scene plate" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No scene plate</div>
+                            )}
+                          </CardContent>
+                        </Card>
+                        <Card className="border-border/70 bg-slate-50/70">
+                          <CardHeader>
+                            <h3 className="text-base font-semibold text-slate-950">Page fill</h3>
+                          </CardHeader>
+                          <CardContent>
+                            {page.pageFillUrl ? (
+                              <img src={page.pageFillUrl} alt="Page fill" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No page fill</div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {selectedPage ? (
+              <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                <Card className="border-border/70 bg-white/95">
+                  <CardHeader>
+                    <h3 className="text-lg font-semibold text-slate-950">Text and metadata</h3>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm text-slate-600">
+                    <p className="leading-6">{selectedPage.text}</p>
+                    <p>Template: {selectedPage.templateId ?? "n/a"}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/70 bg-white/95">
+                  <CardHeader>
+                    <h3 className="text-lg font-semibold text-slate-950">QA details</h3>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm text-slate-600">
+                    <p>Retry count: {selectedPage.retryCount}</p>
+                    {selectedPage.latestQaIssues.length ? (
+                      <ul className="list-disc space-y-1 pl-5">
+                        {selectedPage.latestQaIssues.map((issue) => (
+                          <li key={issue}>{issue}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No current QA issues recorded.</p>
+                    )}
+                    <pre className="overflow-auto rounded-xl border border-border bg-slate-950 p-4 text-xs text-slate-100">
+                      {JSON.stringify(selectedPage.qaMetrics, null, 2)}
+                    </pre>
+                  </CardContent>
+                </Card>
               </div>
             ) : null}
           </section>

@@ -22,8 +22,9 @@ Generate personalized, visually polished children's books that teach money conce
 - Layered page model with deterministic template selection
 - Live-text PDF output and preview PNG reader assets
 - Unified web app with:
-  - parent ordering/reader flow
+  - public landing plus parent create, checkout, and current-book routes
   - internal reviewer queue and case detail console
+- Tailwind + shadcn clean-product UI system for both parent and reviewer surfaces
 - Manual review actions:
   - approve and continue build
   - reject book

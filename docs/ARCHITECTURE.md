@@ -32,13 +32,13 @@ For `picture_book_fixed_layout` books, the image/render chain is:
 
 ### Frontend (`apps/web`)
 - Route-based SPA with a shared session bootstrap from `GET /v1/session`
+- Tailwind v4 + shadcn/Radix component system with a shared clean-product shell
 - Parent shell:
-  - magic-link auth
-  - order creation
-  - Stripe checkout session creation
-  - order polling and `needs_review` visibility
-  - reader view + PDF download
-  - privacy control to delete child profile + artifacts
+  - `/` public landing page with magic-link request and checkout callback handling
+  - `/create` authenticated order creation flow
+  - `/checkout` authenticated order summary and Stripe checkout launch
+  - `/books/current` authenticated build-status, reader, download, and privacy workspace
+  - persisted parent flow state backed by the existing localStorage keys for active order, checkout URL, book payload, and download URL
 - Reviewer shell:
   - internal-only `/review` queue
   - `/review/cases/{caseId}` detail page with preview, scene plate, page fill, QA issues, and audit timeline

@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-07T04:11:59Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-08T14:24:49Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -46,6 +46,18 @@
     ],
     "passes": true,
     "evidence": "Implemented route-based parent/reviewer web flows, GET /v1/session and /v1/review/* APIs, review_cases/review_events persistence, current-attempt image/artifact semantics, resume/retry workflow, and reviewer docs. Verification: bash scripts/agent/smoke.sh => PASS; bash scripts/agent/quality.sh => PASS; pnpm --filter @book/web build => PASS; pnpm --filter @book/api test => PASS; pnpm --filter @book/cdk test => PASS (2026-03-06)."
+  },
+  {
+    "id": "clean-product-ui-system-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Migrate the web app to a clean-product Tailwind and shadcn UI system with a route-based parent flow",
+    "steps": [
+      "Adopt Tailwind CSS plus shadcn and shared clean-product primitives across parent and reviewer screens",
+      "Replace the single parent dashboard route with routed create, checkout, and current-book flows while preserving current API contracts and persisted keys"
+    ],
+    "passes": true,
+    "evidence": "Implemented a Tailwind v4 + shadcn clean-product UI foundation for apps/web, replaced the single parent dashboard with routed /, /create, /checkout, and /books/current flows backed by a persisted ParentFlowProvider, and restyled /verify, /review, and /review/cases/:caseId on the same primitive layer without changing API contracts. Verification 2026-03-08: bash scripts/agent/smoke.sh => PASS; bash scripts/agent/quality.sh => PASS; bash scripts/agent/e2e.sh => WARN only (no runner detected, fallback allowed); pnpm --filter @book/web test => PASS; pnpm --filter @book/web build => PASS; pnpm run deploy:web:dev => PASS; live CloudFront validation on https://dazfa7oc8fu6h.cloudfront.net confirmed the new create flow on desktop/mobile and produced screenshots under output/playwright/."
   },
   {
     "id": "merge-master-picture-book-01",
