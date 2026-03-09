@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
 import { apiClient, type ReviewCaseDetailResponse } from "../lib/api/client";
+import { sanitizeReviewCaseDetail } from "../lib/safe-url";
 import { useSession } from "../lib/session";
 
 export function ReviewCasePage() {
@@ -30,7 +31,7 @@ export function ReviewCasePage() {
     void apiClient
       .getReviewCase(token, caseId)
       .then((detail) => {
-        setPayload(detail);
+        setPayload(sanitizeReviewCaseDetail(detail));
         setSelectedPageId((current) => current ?? detail.pages[0]?.pageId ?? null);
         setError(null);
       })
@@ -161,13 +162,17 @@ export function ReviewCasePage() {
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 {payload.pdfUrl ? (
-                  <p><a href={payload.pdfUrl} className="font-medium text-slate-900 underline">Current PDF</a></p>
+                  <p><a href={payload.pdfUrl} className="font-medium text-slate-900 underline" rel="noreferrer">Current PDF</a></p>
                 ) : (
                   <p className="text-slate-500">No PDF available yet.</p>
                 )}
                 {payload.artifacts.map((artifact) => (
                   <p key={`${artifact.artifactType}-${artifact.createdAt}`}>
-                    <a href={artifact.url ?? "#"} className="text-slate-700 underline">{artifact.artifactType}</a>
+                    {artifact.url ? (
+                      <a href={artifact.url} className="text-slate-700 underline" rel="noreferrer">{artifact.artifactType}</a>
+                    ) : (
+                      <span className="text-slate-500">{artifact.artifactType}</span>
+                    )}
                   </p>
                 ))}
               </CardContent>

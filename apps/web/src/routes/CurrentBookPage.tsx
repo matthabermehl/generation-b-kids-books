@@ -120,7 +120,7 @@ export function CurrentBookPage() {
                 <Alert>
                   <AlertTitle>PDF ready</AlertTitle>
                   <AlertDescription>
-                    <a href={downloadUrl} className="inline-flex items-center gap-2 font-medium text-slate-900 underline">
+                    <a href={downloadUrl} className="inline-flex items-center gap-2 font-medium text-slate-900 underline" rel="noreferrer">
                       Download the current PDF
                       <ExternalLink className="size-4" />
                     </a>

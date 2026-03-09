@@ -95,6 +95,17 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-08T21:52:32-0400
+Task: clean-product-ui-system-01
+Baseline: PR review follow-up on top of green branch
+Change: addressed valid PR feedback by hardening checkout/download/reviewer asset URL handling, sanitizing persisted/rendered book and review payload URLs, and adding explicit parent-side age validation tied to the two supported picture-book reading profiles.
+Evidence:
+- pnpm --filter @book/web test => PASS
+- pnpm --filter @book/web build => PASS
+- bash scripts/agent/quality.sh => PASS
+Notes: did not add `independent_8_10` to the parent selector because the current product scope remains picture-book-only (`read_aloud_3_4`, `early_decoder_5_7`). The polling review comment was not adopted because the existing effect tears down intervals on dependency changes and terminal states, so it was not a confirmed leak.
+Commit: pending
+
 2026-03-08T10:26:46-0400
 Task: clean-product-ui-system-01
 Baseline: smoke PASS

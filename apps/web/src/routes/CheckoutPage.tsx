@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useParentFlow } from "@/lib/parent-flow";
+import { toSafeCheckoutUrl } from "@/lib/safe-url";
 
 export function CheckoutPage() {
   const { banner, checkoutUrl, clearBanner, clearError, draft, error, fallbackMarkPaid, orderStatus, startCheckout } =
@@ -14,8 +15,9 @@ export function CheckoutPage() {
   const continueToCheckout = async () => {
     clearError();
     const url = await startCheckout();
-    if (url) {
-      window.location.assign(url);
+    const safeUrl = toSafeCheckoutUrl(url);
+    if (safeUrl) {
+      window.location.assign(safeUrl);
     }
   };
 
@@ -103,7 +105,7 @@ export function CheckoutPage() {
                 </Button>
                 {checkoutUrl ? (
                   <Button asChild variant="outline" className="w-full">
-                    <a href={checkoutUrl}>
+                    <a href={checkoutUrl} rel="noreferrer">
                       Reopen checkout link
                       <ExternalLink className="size-4" />
                     </a>

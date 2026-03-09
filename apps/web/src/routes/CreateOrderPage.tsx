@@ -13,11 +13,13 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/StatusBadge";
-import { type LessonKey, type ReadingProfile, useParentFlow } from "@/lib/parent-flow";
+import { type LessonKey, readingProfileOptions, type ReadingProfile, useParentFlow, validateAgeYears } from "@/lib/parent-flow";
 
 export function CreateOrderPage() {
   const navigate = useNavigate();
   const { createOrder, draft, error, clearError, hasActiveOrder, orderStatus, updateDraft } = useParentFlow();
+  const ageError = validateAgeYears(draft.ageYears, draft.readingProfileId);
+  const selectedProfile = readingProfileOptions.find((option) => option.value === draft.readingProfileId) ?? readingProfileOptions[0];
 
   const submit = async () => {
     clearError();
@@ -121,11 +123,16 @@ export function CreateOrderPage() {
                 <Input
                   id="age-years"
                   type="number"
-                  min={2}
-                  max={12}
-                  value={draft.ageYears}
-                  onChange={(event) => updateDraft("ageYears", Number(event.target.value))}
+                  min={selectedProfile.minAge}
+                  max={selectedProfile.maxAge}
+                  value={Number.isFinite(draft.ageYears) ? draft.ageYears : ""}
+                  onChange={(event) => {
+                    updateDraft("ageYears", event.target.value === "" ? Number.NaN : Number(event.target.value));
+                  }}
                 />
+                <p className={ageError ? "text-sm text-rose-600" : "text-sm text-slate-500"}>
+                  {ageError ?? `${selectedProfile.label} supports ages ${selectedProfile.minAge}-${selectedProfile.maxAge}.`}
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reading-profile">Reading profile</Label>
@@ -137,8 +144,11 @@ export function CreateOrderPage() {
                     <SelectValue placeholder="Choose a reading profile" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="read_aloud_3_4">Read-aloud (3-4)</SelectItem>
-                    <SelectItem value="early_decoder_5_7">Early decoder (5-7)</SelectItem>
+                    {readingProfileOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -173,7 +183,7 @@ export function CreateOrderPage() {
               <Button variant="outline" asChild>
                 <Link to="/">Back</Link>
               </Button>
-              <Button onClick={submit} className="sm:min-w-52">
+              <Button onClick={submit} className="sm:min-w-52" disabled={Boolean(ageError)}>
                 Create order
                 <ArrowRight className="size-4" />
               </Button>

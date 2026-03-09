@@ -6,10 +6,16 @@ import {
   type CreateOrderResponse,
   type OrderResponse
 } from "@/lib/api/client";
+import { sanitizeBookPayload, toSafeAssetUrl, toSafeCheckoutUrl } from "@/lib/safe-url";
 import { useSession } from "@/lib/session";
 import { storageKeys, usePersistentState, usePersistentString } from "@/lib/storage";
 
-export type ReadingProfile = "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
+export const readingProfileOptions = [
+  { value: "read_aloud_3_4", label: "Read-aloud (3-4)", minAge: 3, maxAge: 4 },
+  { value: "early_decoder_5_7", label: "Early decoder (5-7)", minAge: 5, maxAge: 7 }
+] as const;
+
+export type ReadingProfile = (typeof readingProfileOptions)[number]["value"];
 export type LessonKey = "inflation_candy" | "saving_later" | "delayed_gratification";
 
 export interface ParentDraft {
@@ -64,6 +70,24 @@ const defaultDraft: ParentDraft = {
 
 const ParentFlowContext = createContext<ParentFlowContextValue | null>(null);
 
+function readingProfileConfig(readingProfileId: ReadingProfile) {
+  return readingProfileOptions.find((option) => option.value === readingProfileId) ?? readingProfileOptions[0];
+}
+
+export function validateAgeYears(ageYears: number, readingProfileId: ReadingProfile) {
+  const { minAge, maxAge } = readingProfileConfig(readingProfileId);
+
+  if (!Number.isInteger(ageYears)) {
+    return `Enter an age between ${minAge} and ${maxAge}.`;
+  }
+
+  if (ageYears < minAge || ageYears > maxAge) {
+    return `${readingProfileConfig(readingProfileId).label} only supports ages ${minAge}-${maxAge}.`;
+  }
+
+  return null;
+}
+
 export function ParentFlowProvider({ children }: { children: React.ReactNode }) {
   const { token } = useSession();
   const [draft, setDraft] = useState<ParentDraft>(defaultDraft);
@@ -80,6 +104,9 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
   const activeBookId = orderStatus?.bookId ?? order?.bookId ?? null;
   const hasActiveOrder = Boolean(activeOrderId);
   const hasActiveBook = Boolean(activeBookId);
+  const safeCheckoutUrl = useMemo(() => toSafeCheckoutUrl(checkoutUrl), [checkoutUrl]);
+  const safeDownloadUrl = useMemo(() => toSafeAssetUrl(downloadUrl), [downloadUrl]);
+  const safeBookPayload = useMemo(() => (bookPayload ? sanitizeBookPayload(bookPayload) : null), [bookPayload]);
 
   useEffect(() => {
     if (token || !hasActiveOrder) {
@@ -92,6 +119,18 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
     setCheckoutUrl(null);
     setDownloadUrl(null);
   }, [hasActiveOrder, setBookPayload, setCheckoutUrl, setDownloadUrl, setOrder, setOrderStatus, token]);
+
+  useEffect(() => {
+    if (checkoutUrl && !safeCheckoutUrl) {
+      setCheckoutUrl(null);
+    }
+  }, [checkoutUrl, safeCheckoutUrl, setCheckoutUrl]);
+
+  useEffect(() => {
+    if (downloadUrl && !safeDownloadUrl) {
+      setDownloadUrl(null);
+    }
+  }, [downloadUrl, safeDownloadUrl, setDownloadUrl]);
 
   useEffect(() => {
     if (!token || !activeOrderId) {
@@ -143,9 +182,9 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
       },
       order,
       orderStatus,
-      bookPayload,
-      checkoutUrl,
-      downloadUrl,
+      bookPayload: safeBookPayload,
+      checkoutUrl: safeCheckoutUrl,
+      downloadUrl: safeDownloadUrl,
       error,
       privacyStatus,
       banner,
@@ -172,6 +211,12 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
 
         setError(null);
         setPrivacyStatus("");
+
+        const ageError = validateAgeYears(draft.ageYears, draft.readingProfileId);
+        if (ageError) {
+          setError(ageError);
+          return null;
+        }
 
         try {
           const payload = await apiClient.createOrder(token, {
@@ -226,10 +271,17 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
 
         try {
           const payload = await apiClient.checkoutOrder(token, activeOrderId);
-          setCheckoutUrl(payload.checkoutUrl ?? null);
+          const safeUrl = toSafeCheckoutUrl(payload.checkoutUrl);
+          if (payload.checkoutUrl && !safeUrl) {
+            setCheckoutUrl(null);
+            setError("Received an invalid checkout URL");
+            return null;
+          }
+
+          setCheckoutUrl(safeUrl);
           const freshStatus = await apiClient.getOrder(token, activeOrderId);
           setOrderStatus(freshStatus);
-          return payload.checkoutUrl ?? null;
+          return safeUrl;
         } catch (apiError) {
           setError(apiError instanceof Error ? apiError.message : "Unable to create checkout session");
           return null;
@@ -257,7 +309,7 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
 
         try {
           const payload = await apiClient.getBook(token, activeBookId);
-          setBookPayload(payload);
+          setBookPayload(sanitizeBookPayload(payload));
         } catch (apiError) {
           setError(apiError instanceof Error ? apiError.message : "Unable to load book");
         }
@@ -270,7 +322,14 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
 
         try {
           const payload = await apiClient.getBookDownload(token, activeBookId);
-          setDownloadUrl(payload.url);
+          const safeUrl = toSafeAssetUrl(payload.url);
+          if (payload.url && !safeUrl) {
+            setDownloadUrl(null);
+            setError("Received an invalid download URL");
+            return;
+          }
+
+          setDownloadUrl(safeUrl);
         } catch (apiError) {
           setError(apiError instanceof Error ? apiError.message : "Unable to get PDF link");
         }
@@ -310,6 +369,9 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
       order,
       orderStatus,
       privacyStatus,
+      safeBookPayload,
+      safeCheckoutUrl,
+      safeDownloadUrl,
       setBookPayload,
       setCheckoutUrl,
       setDownloadUrl,
