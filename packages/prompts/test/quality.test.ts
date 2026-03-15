@@ -10,6 +10,8 @@ describe("runDeterministicStoryChecks", () => {
           ? `Mia saves one coin after task ${idx + 1}.`
           : `Mia learns Bitcoin can help save value in step ${idx + 1}.`,
       illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
       newWordsIntroduced: [],
       repetitionTargets: []
     }));
@@ -23,6 +25,8 @@ describe("runDeterministicStoryChecks", () => {
       pageIndex: idx,
       pageText: "Mia notices prices changing and plans ahead.",
       illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
       newWordsIntroduced: [],
       repetitionTargets: []
     }));

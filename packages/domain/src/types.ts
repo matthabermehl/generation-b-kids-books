@@ -24,6 +24,8 @@ export interface PlannedBeat {
   purpose: string;
   conflict: string;
   sceneLocation: string;
+  sceneId: string;
+  sceneVisualDescription: string;
   emotionalTarget: string;
   pageIndexEstimate: number;
   decodabilityTags: string[];
@@ -41,6 +43,8 @@ export interface StoryPage {
   pageIndex: number;
   pageText: string;
   illustrationBrief: string;
+  sceneId: string;
+  sceneVisualDescription: string;
   newWordsIntroduced: string[];
   repetitionTargets: string[];
 }
@@ -51,6 +55,42 @@ export interface StoryPackage {
   pages: StoryPage[];
   readingProfileId: ReadingProfile;
   moneyLessonKey: MoneyLessonKey;
+}
+
+export interface ScenePlanScene {
+  sceneId: string;
+  sceneVisualDescription: string;
+  beatIndices: number[];
+  pageIndices: number[];
+}
+
+export interface ScenePlanArtifact {
+  bookId: string;
+  title: string;
+  scenes: ScenePlanScene[];
+  generatedAt: string;
+}
+
+export interface ImagePlanPromptInputs {
+  pageText: string;
+  illustrationBrief: string;
+  sceneVisualDescription: string;
+}
+
+export interface ImagePlanPage {
+  pageId: string;
+  pageIndex: number;
+  sceneId: string;
+  sceneVisualDescription: string;
+  priorSameScenePageIds: string[];
+  pageArtPromptInputs: ImagePlanPromptInputs;
+}
+
+export interface ImagePlanArtifact {
+  bookId: string;
+  title: string;
+  pages: ImagePlanPage[];
+  generatedAt: string;
 }
 
 export interface NormalizedRect {

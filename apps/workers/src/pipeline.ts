@@ -15,6 +15,7 @@ import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
 import { putJson, putBuffer, presignGetObjectFromS3Url } from "./lib/storage.js";
 import { fileExtensionForContentType, logStructured, makeId, safeJsonParse } from "./lib/helpers.js";
 import { moderateTexts } from "./lib/content-safety.js";
+import { buildImagePlanArtifact, buildScenePlanArtifact } from "./lib/scene-plans.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { selectPictureBookComposition } from "./lib/page-template-select.js";
 import { ensurePictureBookStyleReferenceUrls } from "./lib/style-assets.js";
@@ -417,12 +418,23 @@ async function prepareStory(
     ]
   );
 
+  const persistedPages: PreparedStoryPageRow[] = story.pages.map((page) => ({
+    id: makeId(),
+    pageIndex: page.pageIndex,
+    pageText: page.pageText,
+    illustrationBrief: page.illustrationBrief,
+    sceneId: page.sceneId,
+    sceneVisualDescription: page.sceneVisualDescription,
+    newWordsIntroduced: page.newWordsIntroduced,
+    repetitionTargets: page.repetitionTargets
+  }));
+
   await withTransaction(async (tx) => {
     await txExecute(tx, `DELETE FROM pages WHERE book_id = CAST(:bookId AS uuid)`, [
       { name: "bookId", value: { stringValue: bookId } }
     ]);
 
-    for (const page of story.pages) {
+    for (const page of persistedPages) {
       await txExecute(
         tx,
         `
@@ -430,11 +442,20 @@ async function prepareStory(
           VALUES (CAST(:id AS uuid), CAST(:bookId AS uuid), :pageIndex, :text, CAST(:brief AS jsonb), CAST(:checks AS jsonb), '{}'::jsonb, 'pending')
         `,
         [
-          { name: "id", value: { stringValue: makeId() } },
+          { name: "id", value: { stringValue: page.id } },
           { name: "bookId", value: { stringValue: bookId } },
           { name: "pageIndex", value: { longValue: page.pageIndex } },
           { name: "text", value: { stringValue: page.pageText } },
-          { name: "brief", value: { stringValue: JSON.stringify({ illustrationBrief: page.illustrationBrief }) } },
+          {
+            name: "brief",
+            value: {
+              stringValue: JSON.stringify({
+                illustrationBrief: page.illustrationBrief,
+                sceneId: page.sceneId,
+                sceneVisualDescription: page.sceneVisualDescription
+              })
+            }
+          },
           {
             name: "checks",
             value: {
@@ -488,20 +509,52 @@ async function prepareStory(
 
   const promptKey = `books/${bookId}/prompt-pack.json`;
   const storyKey = `books/${bookId}/story.json`;
+  const scenePlanKey = `books/${bookId}/scene-plan.json`;
+  const imagePlanKey = `books/${bookId}/image-plan.json`;
+  const generatedAt = new Date().toISOString();
 
   await putJson(promptKey, {
     bookId,
     stylePrefix: "Muted watercolor palette, matte texture, calm composition.",
     beats: beatPlanning.beatSheet.beats,
-    generatedAt: new Date().toISOString()
+    generatedAt
   });
 
   await putJson(storyKey, story);
+  await putJson(
+    scenePlanKey,
+    buildScenePlanArtifact({
+      bookId,
+      title: story.title,
+      beatSheet: beatPlanning.beatSheet,
+      pages: story.pages,
+      generatedAt
+    })
+  );
+  await putJson(
+    imagePlanKey,
+    buildImagePlanArtifact({
+      bookId,
+      title: story.title,
+      pages: persistedPages,
+      generatedAt
+    })
+  );
 
   await insertCurrentBookArtifact({
     bookId,
     artifactType: "prompt_pack",
     s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${promptKey}`
+  });
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "scene_plan",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${scenePlanKey}`
+  });
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "image_plan",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${imagePlanKey}`
   });
 
   return { bookId, pageCount: story.pages.length };
@@ -560,6 +613,17 @@ interface PageRow {
 interface CharacterSheetRow {
   prompt: string | null;
   s3_url: string | null;
+}
+
+interface PreparedStoryPageRow {
+  id: string;
+  pageIndex: number;
+  pageText: string;
+  illustrationBrief: string;
+  sceneId: string;
+  sceneVisualDescription: string;
+  newWordsIntroduced: string[];
+  repetitionTargets: string[];
 }
 
 function legacyStyleAnchor(context: BookContextRow): string {

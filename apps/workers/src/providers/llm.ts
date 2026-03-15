@@ -101,6 +101,8 @@ const plannedBeatSchema = z.object({
   purpose: z.string().min(1),
   conflict: z.string().min(1),
   sceneLocation: z.string().min(1),
+  sceneId: z.string().min(1),
+  sceneVisualDescription: z.string().min(1),
   emotionalTarget: z.string().min(1),
   pageIndexEstimate: z.number().int().min(0).max(40),
   decodabilityTags: z.array(z.string().min(1)).min(1).max(16),
@@ -116,6 +118,8 @@ const storyPageSchema = z.object({
   pageIndex: z.number().int().min(0),
   pageText: z.string().min(1),
   illustrationBrief: z.string().min(1),
+  sceneId: z.string().min(1),
+  sceneVisualDescription: z.string().min(1),
   newWordsIntroduced: z.array(z.string().min(1)),
   repetitionTargets: z.array(z.string().min(1))
 });
@@ -425,22 +429,33 @@ class MockLlmProvider implements LlmProvider {
     context: StoryContext
   ): Promise<{ beatSheet: BeatSheet; audit: BeatPlanningAudit; meta: LlmMetadata }> {
     const beatSheet: BeatSheet = {
-      beats: Array.from({ length: context.pageCount }, (_, idx) => ({
-        purpose:
+      beats: Array.from({ length: context.pageCount }, (_, idx) => {
+        const sceneNumber = Math.floor(idx / 2) + 1;
+        const sceneId = `scene_${sceneNumber}`;
+        const sceneVisualDescription =
           idx < context.pageCount - 2
-            ? `Setup/test beat ${idx + 1}`
-            : `Resolution beat ${idx + 1}`,
-        conflict:
-          idx < context.pageCount - 2
-            ? `${context.childFirstName} faces changing prices in daily life.`
-            : `${context.childFirstName} applies a long-term saving tool with confidence.`,
-        sceneLocation: context.interests[0] ?? "home",
-        emotionalTarget: idx < context.pageCount - 2 ? "curious then determined" : "relieved and proud",
-        pageIndexEstimate: idx,
-        decodabilityTags: ["controlled_vocab", "repetition", "taught_words_late"],
-        newWordsIntroduced: idx >= context.pageCount - 2 ? ["bitcoin"] : ["save"],
-        bitcoinRelevanceScore: idx >= context.pageCount - 2 ? 0.85 : 0.2
-      }))
+            ? `Warm watercolor view of ${context.childFirstName} in ${context.interests[0] ?? "home"}, with clear white paper breathing room and familiar props.`
+            : `Warm watercolor evening scene where ${context.childFirstName} sees the payoff of careful saving with calm family support.`;
+
+        return {
+          purpose:
+            idx < context.pageCount - 2
+              ? `Setup/test beat ${idx + 1}`
+              : `Resolution beat ${idx + 1}`,
+          conflict:
+            idx < context.pageCount - 2
+              ? `${context.childFirstName} faces changing prices in daily life.`
+              : `${context.childFirstName} applies a long-term saving tool with confidence.`,
+          sceneLocation: context.interests[0] ?? "home",
+          sceneId,
+          sceneVisualDescription,
+          emotionalTarget: idx < context.pageCount - 2 ? "curious then determined" : "relieved and proud",
+          pageIndexEstimate: idx,
+          decodabilityTags: ["controlled_vocab", "repetition", "taught_words_late"],
+          newWordsIntroduced: idx >= context.pageCount - 2 ? ["bitcoin"] : ["save"],
+          bitcoinRelevanceScore: idx >= context.pageCount - 2 ? 0.85 : 0.2
+        };
+      })
     };
 
     const deterministic = runDeterministicBeatChecks(
@@ -487,6 +502,8 @@ class MockLlmProvider implements LlmProvider {
           ? `${context.childFirstName} notices prices changing and plans ahead.`
           : `${context.childFirstName} learns Bitcoin can support long-term saving goals.`,
       illustrationBrief: `Calm watercolor scene for ${context.childFirstName}, page ${idx + 1}`,
+      sceneId: beat.sceneId,
+      sceneVisualDescription: beat.sceneVisualDescription,
       newWordsIntroduced: beat.newWordsIntroduced,
       repetitionTargets: ["save", "plan"]
     }));
@@ -675,6 +692,8 @@ class OpenAiAnthropicProvider implements LlmProvider {
           pageIndex: idx,
           pageText: page.pageText,
           illustrationBrief: page.illustrationBrief,
+          sceneId: page.sceneId,
+          sceneVisualDescription: page.sceneVisualDescription,
           newWordsIntroduced: page.newWordsIntroduced,
           repetitionTargets: page.repetitionTargets
         })),

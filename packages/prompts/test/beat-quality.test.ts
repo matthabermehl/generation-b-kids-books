@@ -19,6 +19,8 @@ function makeBeat(index: number, highBitcoin = false) {
     purpose: `Beat ${index}`,
     conflict: "A real-world saving challenge at the grocery store.",
     sceneLocation: "Grocery store",
+    sceneId: `scene_${Math.floor(index / 2) + 1}`,
+    sceneVisualDescription: "Watercolor grocery aisle with a small price sign and plenty of white paper.",
     emotionalTarget: "Curious",
     pageIndexEstimate: index,
     decodabilityTags: ["controlled_vocab", "repetition"],
