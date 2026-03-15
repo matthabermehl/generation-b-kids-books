@@ -25,6 +25,8 @@ const compliantBeatSheet = {
       purpose: "Setup",
       conflict: "Ava wants a game now but also a bigger goal later.",
       sceneLocation: "Toy aisle",
+      sceneId: "toy_aisle",
+      sceneVisualDescription: "Toy aisle with open shelf space and a bright yellow price tag.",
       emotionalTarget: "curious",
       pageIndexEstimate: 0,
       decodabilityTags: ["controlled_vocab", "repetition"],
@@ -35,6 +37,8 @@ const compliantBeatSheet = {
       purpose: "Setback",
       conflict: "Prices changed and Ava cannot buy both things.",
       sceneLocation: "Home kitchen table",
+      sceneId: "kitchen_table",
+      sceneVisualDescription: "Kitchen table with a blue coin jar, pencil, and price note.",
       emotionalTarget: "frustrated",
       pageIndexEstimate: 1,
       decodabilityTags: ["controlled_vocab", "repetition"],
@@ -45,6 +49,8 @@ const compliantBeatSheet = {
       purpose: "Choice",
       conflict: "Ava decides to track spending and wait.",
       sceneLocation: "Library",
+      sceneId: "library_corner",
+      sceneVisualDescription: "Quiet library corner with a notebook and warm daylight.",
       emotionalTarget: "determined",
       pageIndexEstimate: 2,
       decodabilityTags: ["controlled_vocab", "repetition"],
@@ -55,6 +61,8 @@ const compliantBeatSheet = {
       purpose: "Resolution",
       conflict: "Ava learns one tool for long-term saving.",
       sceneLocation: "Family room",
+      sceneId: "family_room",
+      sceneVisualDescription: "Family room sofa with evening light and a calm grown-up nearby.",
       emotionalTarget: "relieved",
       pageIndexEstimate: 3,
       decodabilityTags: ["controlled_vocab", "taught_words"],
@@ -78,6 +86,8 @@ const oversizedBeatSheet = {
       purpose: "Extra resolution echo",
       conflict: "Ava repeats the lesson one more time.",
       sceneLocation: "Hallway",
+      sceneId: "hallway",
+      sceneVisualDescription: "Hallway with a small lamp and soft evening shadows.",
       emotionalTarget: "confident",
       pageIndexEstimate: 4,
       decodabilityTags: ["controlled_vocab"],
@@ -93,7 +103,6 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
       sendgridApiKey: "sg",
       openaiApiKey: "oa",
       anthropicApiKey: "an",
-      falKey: "fk",
       jwtSigningSecret: "x".repeat(32),
       stripeSecretKey: "sk_test_123",
       stripeWebhookSecret: "whsec_123"
@@ -101,6 +110,7 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
     models: {
       openaiJson: "gpt-5-mini-2025-08-07",
       openaiVision: "gpt-5-mini-2025-08-07",
+      openaiImage: "gpt-image-1.5",
       anthropicWriter: "claude-sonnet-4-5"
     },
     stripe: {
@@ -108,14 +118,6 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
       successUrl: "https://example.com/success",
       cancelUrl: "https://example.com/cancel"
     },
-    falEndpoints: {
-      base: "fal-ai/flux-2",
-      lora: "fal-ai/flux-lora",
-      general: "fal-ai/flux-general",
-      scenePlate: "fal-ai/flux-pro/kontext/max/multi",
-      pageFill: "fal-ai/flux-pro/v1/fill"
-    },
-    falStyleLoraUrl: null,
     featureFlags: {
       enableMockLlm,
       enableMockImage,
@@ -453,6 +455,8 @@ describe("llm provider routing", () => {
                     pageIndex: 0,
                     pageText: "Ava sees something she wants.",
                     illustrationBrief: "Toy aisle",
+                    sceneId: "toy_aisle",
+                    sceneVisualDescription: "Toy aisle with open shelf space and a bright yellow price tag.",
                     newWordsIntroduced: ["save"],
                     repetitionTargets: ["save"]
                   },
@@ -460,6 +464,8 @@ describe("llm provider routing", () => {
                     pageIndex: 1,
                     pageText: "Ava compares prices and feels unsure.",
                     illustrationBrief: "Kitchen table",
+                    sceneId: "kitchen_table",
+                    sceneVisualDescription: "Kitchen table with a blue coin jar, pencil, and price note.",
                     newWordsIntroduced: ["plan"],
                     repetitionTargets: ["plan"]
                   },
@@ -467,6 +473,8 @@ describe("llm provider routing", () => {
                     pageIndex: 2,
                     pageText: "Ava decides to wait and plan ahead.",
                     illustrationBrief: "Library desk",
+                    sceneId: "library_corner",
+                    sceneVisualDescription: "Quiet library corner with a notebook and warm daylight.",
                     newWordsIntroduced: ["wait"],
                     repetitionTargets: ["wait"]
                   },
@@ -474,6 +482,8 @@ describe("llm provider routing", () => {
                     pageIndex: 3,
                     pageText: "Ava learns how Bitcoin can support long-term saving.",
                     illustrationBrief: "Family room",
+                    sceneId: "family_room",
+                    sceneVisualDescription: "Family room sofa with evening light and a calm grown-up nearby.",
                     newWordsIntroduced: ["bitcoin"],
                     repetitionTargets: ["save"]
                   }

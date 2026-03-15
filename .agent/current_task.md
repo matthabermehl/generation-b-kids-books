@@ -1,25 +1,27 @@
 # Current Task
-Task ID: scene-memory-01
+Task ID: review-render-image-cutover-01
 
 ## Goal
-Extend beat/page planning with stable scene memory so the OpenAI page-art pipeline can reuse same-scene references without dragging the full story into each image prompt.
+Finish the OpenAI `page_art` cutover across workers, API, web, ops scripts, and docs, then verify the branch.
 
 ## Constraints
-- Backward compatibility for Fal-era scene/image roles is intentionally out of scope.
-- Scene continuity must come from the approved beat/story artifacts, not a separate ad hoc cache.
-- The new scene plan should be explicit enough to drive `image-plan.json` generation and later review/debug work.
+- Fal-era runtime config and image-role compatibility are intentionally out of scope.
+- Full-book picture-book generation runs page-by-page in `page_index` order.
+- Live dev validation requires the current branch to be deployed before the new character approval endpoints exist remotely.
 
 ## Plan (short)
-1) Extend beat/story types and planner outputs with `sceneId` plus compact scene visual descriptors.
-2) Persist `scene-plan.json` and `image-plan.json` artifacts from the approved story package.
-3) Add tests around scene deduplication and same-scene reference resolution, then hand the worker cutover a stable prompt/reference contract.
+1) Keep `page_art` and provenance wired end to end across render/review/status paths.
+2) Verify with workers/API/web tests plus smoke and quality gates.
+3) Record the live-dev smoke blocker explicitly until this branch is deployed.
 
 ## Evidence required
 - `pnpm --filter @book/workers test`
 - `pnpm --filter @book/api test`
+- `pnpm --filter @book/web test`
 - `bash scripts/agent/smoke.sh`
+- `bash scripts/agent/quality.sh`
 
 ## Status
-- baseline: `bash scripts/agent/smoke.sh` PASS on `codex/openai-image-pipeline`
-- previous task: `character-approval-flow-01` completed with API/web/smoke/quality evidence on `codex/openai-image-pipeline`
-- work: ready to start
+- baseline: `bash scripts/agent/smoke.sh` PASS
+- work: completed locally
+- live validation: `pnpm ops:provider-smoke` PASS; `pnpm ops:picture-book-smoke` currently fails against deployed dev because `/v1/books/{bookId}/character/candidates` is not deployed there yet

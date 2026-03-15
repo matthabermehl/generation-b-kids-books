@@ -5,6 +5,7 @@ import { upsertOpenReviewCase } from "./lib/review-cases.js";
 
 interface Event {
   bookId: string;
+  pageId?: string;
 }
 
 interface Row {
@@ -31,19 +32,20 @@ export const handler: Handler<Event> = async (event) => {
           COALESCE(b.product_family, 'picture_book_fixed_layout') AS product_family,
           page_image.status AS page_image_status,
           page_image.qa_json AS page_image_qa_json,
-          fill_image.status AS fill_image_status,
-          fill_image.qa_json AS fill_image_qa_json
+          page_art.status AS page_art_status,
+          page_art.qa_json AS page_art_qa_json
         FROM pages p
         INNER JOIN books b ON b.id = p.book_id
         LEFT JOIN images page_image
           ON page_image.page_id = p.id
          AND page_image.role = 'page'
          AND page_image.is_current = TRUE
-        LEFT JOIN images fill_image
-          ON fill_image.page_id = p.id
-         AND fill_image.role = 'page_fill'
-         AND fill_image.is_current = TRUE
+        LEFT JOIN images page_art
+          ON page_art.page_id = p.id
+         AND page_art.role = 'page_art'
+         AND page_art.is_current = TRUE
         WHERE p.book_id = CAST(:bookId AS uuid)
+          ${event.pageId ? "AND p.id = CAST(:pageId AS uuid)" : ""}
       )
       SELECT
         COUNT(*)::int AS total,
@@ -51,7 +53,7 @@ export const handler: Handler<Event> = async (event) => {
           WHERE page_status = 'ready'
             AND CASE
               WHEN product_family = 'picture_book_fixed_layout'
-                THEN COALESCE(fill_image_status, '') = 'ready'
+                THEN COALESCE(page_art_status, '') = 'ready'
               ELSE COALESCE(page_image_status, '') = 'ready'
             END
         )::int AS ready,
@@ -60,7 +62,7 @@ export const handler: Handler<Event> = async (event) => {
           WHERE COALESCE(
             CASE
               WHEN product_family = 'picture_book_fixed_layout'
-                THEN fill_image_qa_json::text
+                THEN page_art_qa_json::text
               ELSE page_image_qa_json::text
             END,
             ''
@@ -70,7 +72,10 @@ export const handler: Handler<Event> = async (event) => {
         MAX(product_family) AS product_family
       FROM page_state
     `,
-    [{ name: "bookId", value: { stringValue: event.bookId } }]
+    [
+      { name: "bookId", value: { stringValue: event.bookId } },
+      ...(event.pageId ? [{ name: "pageId", value: { stringValue: event.pageId } }] : [])
+    ]
   );
 
   const row = rows[0] ?? {
@@ -101,6 +106,7 @@ export const handler: Handler<Event> = async (event) => {
         event: "BOOK_NEEDS_REVIEW",
         stage: safetyFailed > 0 ? "image_safety" : "image_qa",
         bookId: event.bookId,
+        pageId: event.pageId ?? null,
         orderId: row.order_id,
         failed,
         safetyFailed,
@@ -120,13 +126,15 @@ export const handler: Handler<Event> = async (event) => {
         safetyFailed,
         total,
         ready,
-        productFamily
+        productFamily,
+        pageId: event.pageId ?? null
       }
     });
   }
 
   return {
     bookId: event.bookId,
+    pageId: event.pageId ?? null,
     total,
     ready,
     failed,

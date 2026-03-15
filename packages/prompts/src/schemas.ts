@@ -24,6 +24,8 @@ const plannedBeatSchema = {
     "purpose",
     "conflict",
     "sceneLocation",
+    "sceneId",
+    "sceneVisualDescription",
     "emotionalTarget",
     "pageIndexEstimate",
     "decodabilityTags",
@@ -34,6 +36,8 @@ const plannedBeatSchema = {
     purpose: { type: "string", minLength: 1 },
     conflict: { type: "string", minLength: 1 },
     sceneLocation: { type: "string", minLength: 1 },
+    sceneId: { type: "string", minLength: 1 },
+    sceneVisualDescription: { type: "string", minLength: 1 },
     emotionalTarget: { type: "string", minLength: 1 },
     pageIndexEstimate: { type: "integer", minimum: 0, maximum: 40 },
     decodabilityTags: {
@@ -121,6 +125,8 @@ export const storyPackageJsonSchema = {
           "pageIndex",
           "pageText",
           "illustrationBrief",
+          "sceneId",
+          "sceneVisualDescription",
           "newWordsIntroduced",
           "repetitionTargets"
         ],
@@ -128,6 +134,8 @@ export const storyPackageJsonSchema = {
           pageIndex: { type: "integer", minimum: 0, maximum: 40 },
           pageText: { type: "string", minLength: 1 },
           illustrationBrief: { type: "string", minLength: 1 },
+          sceneId: { type: "string", minLength: 1 },
+          sceneVisualDescription: { type: "string", minLength: 1 },
           newWordsIntroduced: {
             type: "array",
             minItems: 0,

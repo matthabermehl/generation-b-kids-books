@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-15T19:43:21Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-15T20:55:10Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -44,8 +44,8 @@
       "Add sceneId and sceneVisualDescription to beat/page planning outputs and persisted types",
       "Persist scene-plan.json and image-plan.json and resolve up to 2 earlier same-scene page references for each page job"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "pnpm --filter @book/workers test (PASS); pnpm --filter @book/api test (PASS); bash scripts/agent/smoke.sh (PASS)"
   },
   {
     "id": "openai-image-provider-01",
@@ -56,8 +56,8 @@
       "Remove Fal runtime config and provider wiring in favor of an OpenAI image model defaulting to gpt-image-1.5",
       "Generate character_candidate images with images.generate and page_art with images.edit using high-fidelity same-scene references"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "pnpm --filter @book/workers test (PASS); pnpm --filter @book/api test (PASS); bash scripts/agent/smoke.sh (PASS); bash scripts/agent/quality.sh (PASS); AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke (PASS); AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke (FAIL: deployed dev API missing /v1/books/{bookId}/character/candidates, branch not yet deployed)"
   },
   {
     "id": "review-render-image-cutover-01",
@@ -68,8 +68,8 @@
       "Update check-images, finalize, reviewer payloads, and parent book payloads to use page_art and character_reference roles",
       "Update renderer inputs, docs, and tests so preview/PDF generation and manual review work end to end on the OpenAI pipeline"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "pnpm --filter @book/api test (PASS); pnpm --filter @book/web test (PASS); pnpm --filter @book/workers test (PASS); bash scripts/agent/smoke.sh (PASS); bash scripts/agent/quality.sh (PASS); reviewer payloads and render inputs now use page_art/page_preview with provenance metadata"
   },
   {
     "id": "review-console-01",
@@ -116,8 +116,8 @@
       "Update docs/PRODUCT.md docs/ARCHITECTURE.md docs/SECURITY.md docs/RELIABILITY.md",
       "Ensure docs/index.md links all relevant docs"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "Updated docs/PRODUCT.md docs/ARCHITECTURE.md docs/SECURITY.md docs/RELIABILITY.md docs/index.md docs/runbooks/review-console.md docs/last-20-percent-guide.md; bash scripts/agent/quality.sh (PASS)"
   },
   {
     "id": "first-real-feature-01",

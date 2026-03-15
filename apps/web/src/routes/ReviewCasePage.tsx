@@ -203,7 +203,7 @@ export function ReviewCasePage() {
               <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-2xl font-semibold text-slate-950">Page review</h2>
-                  <CardDescription>Inspect the selected page across preview, scene plate, and fill outputs.</CardDescription>
+                  <CardDescription>Inspect the selected page across preview and final page art outputs.</CardDescription>
                 </div>
                 <div className="text-sm text-slate-500">Order {payload.order.orderId} · Book {payload.book.bookId}</div>
               </CardHeader>
@@ -220,7 +220,7 @@ export function ReviewCasePage() {
                   </ScrollArea>
                   {payload.pages.map((page) => (
                     <TabsContent key={page.pageId} value={page.pageId} className="space-y-6">
-                      <div className="grid gap-4 xl:grid-cols-3">
+                      <div className="grid gap-4 xl:grid-cols-2">
                         <Card className="border-border/70 bg-slate-50/70">
                           <CardHeader>
                             <h3 className="text-base font-semibold text-slate-950">Preview</h3>
@@ -235,25 +235,13 @@ export function ReviewCasePage() {
                         </Card>
                         <Card className="border-border/70 bg-slate-50/70">
                           <CardHeader>
-                            <h3 className="text-base font-semibold text-slate-950">Scene plate</h3>
+                            <h3 className="text-base font-semibold text-slate-950">Page art</h3>
                           </CardHeader>
                           <CardContent>
-                            {page.scenePlateUrl ? (
-                              <img src={page.scenePlateUrl} alt="Scene plate" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
+                            {page.pageArtUrl ? (
+                              <img src={page.pageArtUrl} alt="Page art" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
                             ) : (
-                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No scene plate</div>
-                            )}
-                          </CardContent>
-                        </Card>
-                        <Card className="border-border/70 bg-slate-50/70">
-                          <CardHeader>
-                            <h3 className="text-base font-semibold text-slate-950">Page fill</h3>
-                          </CardHeader>
-                          <CardContent>
-                            {page.pageFillUrl ? (
-                              <img src={page.pageFillUrl} alt="Page fill" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
-                            ) : (
-                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No page fill</div>
+                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No page art</div>
                             )}
                           </CardContent>
                         </Card>
@@ -273,6 +261,30 @@ export function ReviewCasePage() {
                   <CardContent className="space-y-4 text-sm text-slate-600">
                     <p className="leading-6">{selectedPage.text}</p>
                     <p>Template: {selectedPage.templateId ?? "n/a"}</p>
+                    <p>Scene: {String(selectedPage.provenance?.sceneId ?? "n/a")}</p>
+                    <p>
+                      Scene plan:{" "}
+                      {payload.scenePlan?.url ? (
+                        <a href={payload.scenePlan.url} className="text-slate-700 underline" rel="noreferrer">
+                          current scene-plan.json
+                        </a>
+                      ) : (
+                        "n/a"
+                      )}
+                    </p>
+                    <p>
+                      Image plan:{" "}
+                      {payload.imagePlan?.url ? (
+                        <a href={payload.imagePlan.url} className="text-slate-700 underline" rel="noreferrer">
+                          current image-plan.json
+                        </a>
+                      ) : (
+                        "n/a"
+                      )}
+                    </p>
+                    <pre className="overflow-auto rounded-xl border border-border bg-slate-950 p-4 text-xs text-slate-100">
+                      {JSON.stringify(selectedPage.provenance, null, 2)}
+                    </pre>
                   </CardContent>
                 </Card>
                 <Card className="border-border/70 bg-white/95">

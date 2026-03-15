@@ -25,6 +25,8 @@ const beatSheet = {
       purpose: "Setup",
       conflict: "Maya wants to buy now but is saving for later.",
       sceneLocation: "Toy aisle",
+      sceneId: "toy_aisle",
+      sceneVisualDescription: "Toy aisle with open shelf space and a bright yellow price tag.",
       emotionalTarget: "Torn",
       pageIndexEstimate: 0,
       decodabilityTags: ["controlled_vocab", "repetition"],

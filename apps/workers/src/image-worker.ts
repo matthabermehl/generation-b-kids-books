@@ -1,10 +1,11 @@
 import type { SQSHandler } from "aws-lambda";
-import type { PageCompositionSpec } from "@book/domain";
+import sharp from "sharp";
+import { buildPageArtPrompt, type PageCompositionSpec } from "@book/domain";
 import { execute } from "./lib/rds.js";
 import { putBuffer, presignGetObjectFromS3Url } from "./lib/storage.js";
 import { fileExtensionForContentType, logStructured } from "./lib/helpers.js";
 import { blockedTermsInText } from "./lib/content-safety.js";
-import { createPlacedPageCanvas, createFadedArtBackground } from "./lib/page-canvas.js";
+import { createFadedArtBackground } from "./lib/page-canvas.js";
 import { createExpandedMaskPng } from "./lib/page-mask.js";
 import {
   classifyPictureBookIssues,
@@ -14,17 +15,18 @@ import {
 } from "./lib/page-qa.js";
 import { selectAlternatePictureBookComposition } from "./lib/page-template-select.js";
 import {
-  FalRequestError,
+  OpenAiImageRequestError,
   resolveImageProvider,
-  resolvePictureBookImageProviders,
+  resolvePictureBookImageProvider,
   type GenerateImageInput,
   type GeneratedImage,
   type ImageProvider,
-  type PageFillProvider,
-  type ScenePlateProvider
+  type PageArtProvider
 } from "./providers/image.js";
 import { runImageGenerationAttempts } from "./lib/image-attempts.js";
-import { clearCurrentImagesForPage, insertCurrentImageRecord } from "./lib/records.js";
+import { insertCurrentImageRecord } from "./lib/records.js";
+
+const pageArtWorkingCanvasSize = 1024;
 
 interface LegacyJobPayload {
   mode?: "legacy";
@@ -37,8 +39,7 @@ interface LegacyJobPayload {
     illustrationBrief?: string;
     styleAnchor?: string;
     characterAnchor?: string;
-    characterSheetS3Url?: string | null;
-    characterSheetReferenceUrl?: string | null;
+    characterReferenceUrl?: string | null;
   };
 }
 
@@ -53,13 +54,16 @@ interface PictureBookJobPayload {
   composition: PageCompositionSpec;
   brief: {
     illustrationBrief: string;
-    characterSheetS3Url?: string | null;
-    characterSheetReferenceUrl?: string | null;
-    styleBoardS3Url?: string | null;
-    styleBoardReferenceUrl?: string | null;
-    paperTextureS3Url?: string | null;
-    paperTextureReferenceUrl?: string | null;
-    scenePrompt: string;
+    sceneId: string;
+    sceneVisualDescription: string;
+    pageArtPrompt: string;
+    priorSameScenePageIds: string[];
+    characterReferenceImageId: string;
+    characterReferenceS3Url: string;
+    characterReferenceUrl: string;
+    sameSceneReferenceImageIds: string[];
+    sameSceneReferenceS3Urls: string[];
+    sameSceneReferenceUrls: string[];
   };
 }
 
@@ -78,12 +82,9 @@ function legacyImagePrompt(job: LegacyJobPayload): string {
     "Muted watercolor palette, matte texture, soft natural lighting, and child-friendly realism.";
   const characterAnchor =
     job.brief.characterAnchor ??
-    "Use the attached character sheet for stable clothing details, face shape, and proportions.";
-  const characterSheetReference = job.brief.characterSheetS3Url
-    ? `Reference character-sheet image: ${job.brief.characterSheetS3Url}.`
-    : "";
+    "Use the approved character reference for stable clothing details, face shape, and proportions.";
 
-  return [styleAnchor, characterAnchor, characterSheetReference, scenePrompt].filter(Boolean).join(" ");
+  return [styleAnchor, characterAnchor, scenePrompt].filter(Boolean).join(" ");
 }
 
 async function persistPageComposition(pageId: string, composition: PageCompositionSpec): Promise<void> {
@@ -91,16 +92,6 @@ async function persistPageComposition(pageId: string, composition: PageCompositi
     { name: "composition", value: { stringValue: JSON.stringify(composition) } },
     { name: "pageId", value: { stringValue: pageId } }
   ]);
-}
-
-export function pictureBookFillPrompt(illustrationBrief: string): string {
-  return [
-    "Preserve all existing blank white paper and negative space outside the masked watercolor region.",
-    "Harmonize only inside the editable watercolor region with soft edges and clean paper transitions.",
-    "Do not introduce new elements outside the editable region.",
-    "Do not render any text, letters, words, numbers, captions, labels, logos, or watermarks anywhere in the artwork.",
-    illustrationBrief
-  ].join(" ");
 }
 
 function pictureBookQaPayload(input: {
@@ -125,7 +116,7 @@ function pictureBookQaPayload(input: {
 }
 
 function qaPayloadFromError(error: unknown): PictureBookQaPayload {
-  if (error instanceof FalRequestError && error.code === "provider_timeout") {
+  if (error instanceof OpenAiImageRequestError && error.code === "provider_timeout") {
     return {
       passed: false,
       issues: ["provider_timeout"],
@@ -133,9 +124,7 @@ function qaPayloadFromError(error: unknown): PictureBookQaPayload {
       textFit: null,
       retryable: error.retryable,
       requestId: error.requestId,
-      endpoint: error.endpoint,
-      pollCount: error.pollCount,
-      elapsedMs: error.elapsedMs
+      endpoint: error.endpoint
     };
   }
 
@@ -148,7 +137,7 @@ function qaPayloadFromError(error: unknown): PictureBookQaPayload {
 }
 
 function qaCategoryFromError(error: unknown): PictureBookQaCategory {
-  if (error instanceof FalRequestError && error.code === "provider_timeout") {
+  if (error instanceof OpenAiImageRequestError && error.code === "provider_timeout") {
     return "provider_timeout";
   }
   return "other";
@@ -158,19 +147,53 @@ function qaHasTextOverflow(qaPayload: PictureBookQaPayload | null): boolean {
   return qaPayload?.issues.includes("text_overflow") ?? false;
 }
 
+function scaleCompositionForWorkingCanvas(composition: PageCompositionSpec): PageCompositionSpec {
+  return {
+    ...composition,
+    canvas: {
+      width: pageArtWorkingCanvasSize,
+      height: pageArtWorkingCanvasSize
+    }
+  };
+}
+
+async function createBlankPageCanvas(composition: PageCompositionSpec): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: composition.canvas.width,
+      height: composition.canvas.height,
+      channels: 4,
+      background: "#ffffff"
+    }
+  })
+    .png()
+    .toBuffer();
+}
+
+async function normalizePageArtToComposition(artBytes: Buffer, composition: PageCompositionSpec): Promise<Buffer> {
+  return sharp(artBytes)
+    .resize({
+      width: composition.canvas.width,
+      height: composition.canvas.height,
+      fit: "fill"
+    })
+    .png()
+    .toBuffer();
+}
+
 async function generateLegacyPageImage(job: LegacyJobPayload): Promise<void> {
   const provider = await resolveImageProvider({
     mockRunTag: job.mockRunTag,
     source: "image_worker"
   });
   const prompt = legacyImagePrompt(job);
-  const attemptResult = await runImageGenerationAttempts(provider, {
+  const input: GenerateImageInput = {
     bookId: job.bookId,
     pageIndex: job.pageIndex,
     prompt,
-    role: "page",
-    referenceImageUrl: job.brief.characterSheetReferenceUrl ?? undefined
-  });
+    role: "page"
+  };
+  const attemptResult = await runImageGenerationAttempts(provider, input);
 
   const { generated, generatedKey } = attemptResult;
   const promptSafetyTerms = blockedTermsInText(prompt);
@@ -209,57 +232,13 @@ async function generateLegacyPageImage(job: LegacyJobPayload): Promise<void> {
   ]);
 }
 
-async function persistScenePlate(
-  job: PictureBookJobPayload,
-  generated: GeneratedImage,
-  attempt: number,
-  prompt: string,
-  composition: PageCompositionSpec
-): Promise<{ imageId: string; s3Url: string }> {
-  const extension = fileExtensionForContentType(generated.contentType);
-  const key = `books/${job.bookId}/images/page-${job.pageIndex + 1}-scene-v${attempt}.${extension}`;
-  const s3Url = await putBuffer(key, generated.bytes, generated.contentType);
-  const imageId = await insertCurrentImageRecord({
-    pageId: job.pageId,
-    role: "scene_plate",
-    bookId: job.bookId,
-    endpoint: generated.endpoint,
-    prompt,
-    seed: generated.seed,
-    requestId: generated.requestId,
-    width: generated.width ?? 2048,
-    height: generated.height ?? 2048,
-    s3Url,
-    qaJson: generated.qa,
-    status: "ready",
-    inputAssets: {
-      references: [job.brief.characterSheetS3Url, job.brief.styleBoardS3Url, job.brief.paperTextureS3Url].filter(Boolean)
-    }
-  });
-
-  logStructured("PictureBookScenePlateGenerated", {
-    bookId: job.bookId,
-    pageId: job.pageId,
-    pageIndex: job.pageIndex,
-    endpoint: generated.endpoint,
-    templateId: composition.templateId
-  });
-
-  return { imageId, s3Url };
-}
-
 async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void> {
-  const { scenePlateProvider, pageFillProvider } = await resolvePictureBookImageProviders({
+  const pageArtProvider = await resolvePictureBookImageProvider({
     mockRunTag: job.mockRunTag,
     source: "image_worker_picture_book"
   });
-  const scenePrompt = job.brief.scenePrompt;
-  const promptSafetyTerms = blockedTermsInText(scenePrompt);
-  const referenceImageUrls = [
-    job.brief.characterSheetReferenceUrl,
-    job.brief.styleBoardReferenceUrl,
-    job.brief.paperTextureReferenceUrl
-  ].filter((value): value is string => Boolean(value));
+  const promptSafetyTerms = blockedTermsInText(job.brief.pageArtPrompt);
+  const referenceImageUrls = [job.brief.characterReferenceUrl, ...job.brief.sameSceneReferenceUrls];
 
   let activeComposition = job.composition;
   let finalQa: PictureBookQaPayload | null = null;
@@ -267,78 +246,90 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
 
   await persistPageComposition(job.pageId, activeComposition);
 
-  const runFillAttempt = async (input: {
-    composition: PageCompositionSpec;
-    sceneAttempt: number;
-    fillAttempt: number;
-    sceneRecord: { imageId: string; s3Url: string };
-    scenePlate: GeneratedImage;
-  }): Promise<{ passed: boolean; category: PictureBookQaCategory; qaPayload: PictureBookQaPayload }> => {
-    const placedCanvas = await createPlacedPageCanvas(input.scenePlate.bytes, input.composition);
-    const canvasKey = `books/${job.bookId}/images/page-${job.pageIndex + 1}-canvas-s${input.sceneAttempt}-f${input.fillAttempt}.png`;
-    const canvasS3Url = await putBuffer(canvasKey, placedCanvas, "image/png");
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const providerComposition = scaleCompositionForWorkingCanvas(activeComposition);
+    const canvasBytes = await createBlankPageCanvas(providerComposition);
+    const canvasKey = `books/${job.bookId}/images/page-${job.pageIndex + 1}-canvas-v${attempt}.png`;
+    const canvasS3Url = await putBuffer(canvasKey, canvasBytes, "image/png");
     const canvasReferenceUrl = await presignGetObjectFromS3Url(canvasS3Url);
     if (!canvasReferenceUrl) {
-      throw new Error("Unable to presign placed canvas image");
+      throw new Error("Unable to presign page canvas image");
     }
 
-    const mask = await createExpandedMaskPng(input.composition);
-    const maskKey = `books/${job.bookId}/images/page-${job.pageIndex + 1}-mask-s${input.sceneAttempt}-f${input.fillAttempt}.png`;
+    const mask = await createExpandedMaskPng(providerComposition);
+    const maskKey = `books/${job.bookId}/images/page-${job.pageIndex + 1}-mask-v${attempt}.png`;
     const maskS3Url = await putBuffer(maskKey, mask.bytes, "image/png");
     const maskReferenceUrl = await presignGetObjectFromS3Url(maskS3Url);
     if (!maskReferenceUrl) {
       throw new Error("Unable to presign page mask image");
     }
 
-    const fillPrompt = pictureBookFillPrompt(job.brief.illustrationBrief);
+    const inputAssets = {
+      sceneId: job.brief.sceneId,
+      sceneVisualDescription: job.brief.sceneVisualDescription,
+      characterReferenceImageId: job.brief.characterReferenceImageId,
+      characterReferenceS3Url: job.brief.characterReferenceS3Url,
+      sameSceneReferenceImageIds: job.brief.sameSceneReferenceImageIds,
+      sameSceneReferenceS3Urls: job.brief.sameSceneReferenceS3Urls,
+      priorSameScenePageIds: job.brief.priorSameScenePageIds,
+      pageArtPromptInputs: {
+        pageText: job.text,
+        illustrationBrief: job.brief.illustrationBrief,
+        sceneVisualDescription: job.brief.sceneVisualDescription
+      },
+      canvasS3Url,
+      maskS3Url,
+      maskRect: mask.rect,
+      protectedTextRect: mask.protectedTextRect,
+      previewTemplateId: activeComposition.templateId,
+      providerCanvas: providerComposition.canvas
+    };
 
     try {
-      const filled = await pageFillProvider.harmonizePageArt(
+      const pageArt = await pageArtProvider.generatePageArt(
         {
           bookId: job.bookId,
           pageIndex: job.pageIndex,
-          prompt: fillPrompt,
+          prompt: job.brief.pageArtPrompt,
           canvasImageUrl: canvasReferenceUrl,
-          maskImageUrl: maskReferenceUrl
+          maskImageUrl: maskReferenceUrl,
+          referenceImageUrls
         },
-        input.fillAttempt
+        attempt
       );
 
-      const extension = fileExtensionForContentType(filled.contentType);
-      const key = `books/${job.bookId}/images/page-${job.pageIndex + 1}-fill-s${input.sceneAttempt}-f${input.fillAttempt}.${extension}`;
-      const filledS3Url = await putBuffer(key, filled.bytes, filled.contentType);
-      const fadedBackground = await createFadedArtBackground(filled.bytes, input.composition);
-      const qa = await evaluatePictureBookPage(fadedBackground, input.composition, job.text);
+      const normalizedPageArt = await normalizePageArtToComposition(pageArt.bytes, activeComposition);
+      const pageArtS3Url = await putBuffer(
+        `books/${job.bookId}/images/page-${job.pageIndex + 1}-art-v${attempt}.png`,
+        normalizedPageArt,
+        "image/png"
+      );
+      const fadedBackground = await createFadedArtBackground(normalizedPageArt, activeComposition);
+      const qa = await evaluatePictureBookPage(fadedBackground, activeComposition, job.text);
       const qaPayload = pictureBookQaPayload({
-        generated: filled,
+        generated: pageArt,
         pageQaIssues: qa.issues,
         promptSafetyTerms,
         metrics: qa.metrics,
         textFit: qa.textFit
       });
       const category = classifyPictureBookIssues(qaPayload.issues);
+      finalQa = qaPayload;
 
       await insertCurrentImageRecord({
         pageId: job.pageId,
-        role: "page_fill",
+        role: "page_art",
         bookId: job.bookId,
-        endpoint: filled.endpoint,
-        prompt: fillPrompt,
-        seed: filled.seed,
-        requestId: filled.requestId,
-        width: filled.width ?? input.composition.canvas.width,
-        height: filled.height ?? input.composition.canvas.height,
-        s3Url: filledS3Url,
+        endpoint: pageArt.endpoint,
+        prompt: job.brief.pageArtPrompt,
+        seed: pageArt.seed,
+        requestId: pageArt.requestId,
+        width: activeComposition.canvas.width,
+        height: activeComposition.canvas.height,
+        s3Url: pageArtS3Url,
         qaJson: qaPayload,
         status: qaPayload.passed ? "ready" : "failed",
-        parentImageId: input.sceneRecord.imageId,
-        inputAssets: {
-          scenePlateS3Url: input.sceneRecord.s3Url,
-          canvasS3Url,
-          maskRect: mask.rect,
-          protectedTextRect: mask.protectedTextRect,
-          previewTemplateId: input.composition.templateId
-        },
+        inputAssets,
         maskS3Url
       });
 
@@ -348,116 +339,32 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         pageIndex: job.pageIndex,
         passed: qaPayload.passed,
         issues: qaPayload.issues,
-        templateId: input.composition.templateId
+        templateId: activeComposition.templateId
       });
 
       if (qaPayload.passed) {
-        await persistPageComposition(job.pageId, input.composition);
+        await persistPageComposition(job.pageId, activeComposition);
         await execute(`UPDATE pages SET status = 'ready' WHERE id = CAST(:pageId AS uuid)`, [
           { name: "pageId", value: { stringValue: job.pageId } }
         ]);
-        logStructured("PictureBookPageFillGenerated", {
+        logStructured("PictureBookPageArtGenerated", {
           bookId: job.bookId,
           pageId: job.pageId,
           pageIndex: job.pageIndex,
-          endpoint: filled.endpoint,
-          templateId: input.composition.templateId
+          endpoint: pageArt.endpoint,
+          templateId: activeComposition.templateId,
+          sceneId: job.brief.sceneId
         });
+        return;
       }
 
-      return {
-        passed: qaPayload.passed,
-        category,
-        qaPayload
-      };
-    } catch (error) {
-      const qaPayload = qaPayloadFromError(error);
-      const category = qaCategoryFromError(error);
-
-      await insertCurrentImageRecord({
-        pageId: job.pageId,
-        role: "page_fill",
-        bookId: job.bookId,
-        endpoint: error instanceof FalRequestError ? error.endpoint ?? "provider-timeout" : "page-fill-error",
-        prompt: fillPrompt,
-        seed: 0,
-        qaJson: qaPayload,
-        status: "failed",
-        parentImageId: input.sceneRecord.imageId
-      });
-
-      logStructured("PictureBookPageQaEvaluated", {
-        bookId: job.bookId,
-        pageId: job.pageId,
-        pageIndex: job.pageIndex,
-        passed: false,
-        issues: qaPayload.issues,
-        templateId: input.composition.templateId
-      });
-
-      if (category === "other") {
-        throw error;
-      }
-
-      return {
-        passed: false,
-        category,
-        qaPayload
-      };
-    }
-  };
-
-  for (let sceneAttempt = 1; sceneAttempt <= 2; sceneAttempt += 1) {
-    let scenePlate: GeneratedImage;
-    try {
-      scenePlate = await scenePlateProvider.generateScenePlate(
-        {
-          bookId: job.bookId,
-          pageIndex: job.pageIndex,
-          prompt: scenePrompt,
-          referenceImageUrls
-        },
-        sceneAttempt
-      );
-    } catch (error) {
-      finalQa = qaPayloadFromError(error);
-      if (qaCategoryFromError(error) === "provider_timeout" && sceneAttempt < 2) {
-        continue;
-      }
-      throw error;
-    }
-
-    const sceneRecord = await persistScenePlate(job, scenePlate, sceneAttempt, scenePrompt, activeComposition);
-    let compositionForScene = activeComposition;
-
-    const firstFill = await runFillAttempt({
-      composition: compositionForScene,
-      sceneAttempt,
-      fillAttempt: 1,
-      sceneRecord,
-      scenePlate
-    });
-    finalQa = firstFill.qaPayload;
-    if (firstFill.passed) {
-      return;
-    }
-
-    if (firstFill.category === "text_zone") {
-      if (!qaHasTextOverflow(firstFill.qaPayload)) {
-        stopAfterTextZoneFailure = true;
-        break;
-      }
-
-      let retryComposition = compositionForScene;
-      let retryScene = false;
-
-      for (let fillAttempt = 2; fillAttempt <= 3; fillAttempt += 1) {
+      if (category === "text_zone" && qaHasTextOverflow(qaPayload)) {
         const alternateComposition = selectAlternatePictureBookComposition({
           bookId: job.bookId,
           pageIndex: job.pageIndex,
           text: job.text,
-          currentTemplateId: retryComposition.templateId,
-          readingProfileId: retryComposition.textStyle.readingProfileId
+          currentTemplateId: activeComposition.templateId,
+          readingProfileId: activeComposition.textStyle.readingProfileId
         });
 
         if (!alternateComposition) {
@@ -465,58 +372,62 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
           break;
         }
 
-        retryComposition = alternateComposition;
-        compositionForScene = alternateComposition;
         activeComposition = alternateComposition;
-        await persistPageComposition(job.pageId, retryComposition);
-
+        await persistPageComposition(job.pageId, activeComposition);
         logStructured("PictureBookTemplateSelected", {
           bookId: job.bookId,
           pageId: job.pageId,
           pageIndex: job.pageIndex,
-          templateId: retryComposition.templateId,
+          templateId: activeComposition.templateId,
           reason: "qa_retry"
         });
-
-        const retryFill = await runFillAttempt({
-          composition: retryComposition,
-          sceneAttempt,
-          fillAttempt,
-          sceneRecord,
-          scenePlate
-        });
-        finalQa = retryFill.qaPayload;
-        if (retryFill.passed) {
-          return;
-        }
-
-        if (retryFill.category === "art_strength" || retryFill.category === "provider_timeout") {
-          retryScene = true;
-          break;
-        }
-
-        if (retryFill.category !== "text_zone" || !qaHasTextOverflow(retryFill.qaPayload)) {
-          stopAfterTextZoneFailure = retryFill.category === "text_zone";
-          break;
-        }
-
-        if (fillAttempt === 3) {
-          stopAfterTextZoneFailure = true;
-        }
+        continue;
       }
 
-      if (retryScene) {
+      if (category === "art_strength" || category === "provider_timeout") {
         continue;
+      }
+
+      if (category === "text_zone") {
+        stopAfterTextZoneFailure = true;
+      }
+      break;
+    } catch (error) {
+      finalQa = qaPayloadFromError(error);
+      const category = qaCategoryFromError(error);
+
+      await insertCurrentImageRecord({
+        pageId: job.pageId,
+        role: "page_art",
+        bookId: job.bookId,
+        endpoint: error instanceof OpenAiImageRequestError ? error.endpoint ?? "provider-timeout" : "page-art-error",
+        prompt: job.brief.pageArtPrompt,
+        seed: 0,
+        qaJson: finalQa,
+        status: "failed",
+        inputAssets,
+        maskS3Url
+      });
+
+      logStructured("PictureBookPageQaEvaluated", {
+        bookId: job.bookId,
+        pageId: job.pageId,
+        pageIndex: job.pageIndex,
+        passed: false,
+        issues: finalQa.issues,
+        templateId: activeComposition.templateId
+      });
+
+      if (category === "provider_timeout") {
+        continue;
+      }
+
+      if (category === "other") {
+        throw error;
       }
 
       break;
     }
-
-    if (firstFill.category === "art_strength" || firstFill.category === "provider_timeout") {
-      continue;
-    }
-
-    break;
   }
 
   await execute(`UPDATE pages SET status = 'failed' WHERE id = CAST(:pageId AS uuid)`, [
@@ -526,13 +437,25 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
   if (finalQa) {
     await insertCurrentImageRecord({
       pageId: job.pageId,
-      role: "page_fill",
+      role: "page_art",
       bookId: job.bookId,
       endpoint: stopAfterTextZoneFailure ? "qa-needs-review" : "qa-failed",
-      prompt: job.brief.illustrationBrief,
+      prompt: job.brief.pageArtPrompt,
       seed: 0,
       qaJson: finalQa,
-      status: "failed"
+      status: "failed",
+      inputAssets: {
+        sceneId: job.brief.sceneId,
+        sceneVisualDescription: job.brief.sceneVisualDescription,
+        characterReferenceImageId: job.brief.characterReferenceImageId,
+        sameSceneReferenceImageIds: job.brief.sameSceneReferenceImageIds,
+        priorSameScenePageIds: job.brief.priorSameScenePageIds,
+        pageArtPromptInputs: {
+          pageText: job.text,
+          illustrationBrief: job.brief.illustrationBrief,
+          sceneVisualDescription: job.brief.sceneVisualDescription
+        }
+      }
     });
   }
 }
@@ -547,8 +470,6 @@ export const handler: SQSHandler = async (event) => {
       pageIndex: payload.pageIndex
     });
 
-    await clearCurrentImagesForPage(payload.pageId, ["page", "scene_plate", "page_fill", "page_preview"]);
-
     if (payload.mode === "picture_book_fixed_layout") {
       await runPictureBookPipeline(payload);
       continue;
@@ -557,3 +478,11 @@ export const handler: SQSHandler = async (event) => {
     await generateLegacyPageImage(payload);
   }
 };
+
+export function pictureBookPageArtPrompt(input: {
+  pageText: string;
+  illustrationBrief: string;
+  sceneVisualDescription: string;
+}): string {
+  return buildPageArtPrompt(input);
+}

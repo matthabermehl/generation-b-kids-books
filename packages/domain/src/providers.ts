@@ -16,7 +16,7 @@ export interface LlmCallMetadata {
 }
 
 export interface ImageCallMetadata {
-  provider: "mock" | "fal";
+  provider: "mock" | "openai";
   endpoint: string;
   requestId?: string;
   width?: number;

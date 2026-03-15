@@ -157,7 +157,6 @@ describe("character approval http routes", () => {
         openaiApiKey: "oa",
         sendgridApiKey: "sg",
         anthropicApiKey: "an",
-        falKey: "fk",
         jwtSigningSecret: "x".repeat(32),
         stripeSecretKey: "sk",
         stripeWebhookSecret: "wh"

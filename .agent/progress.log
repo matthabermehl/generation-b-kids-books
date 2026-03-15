@@ -202,3 +202,31 @@ Evidence:
 - `bash scripts/agent/quality.sh` => PASS
 Notes: this completes the first OpenAI-image cutover slice. The remaining work is now concentrated in `scene-memory-01`, the worker/provider replacement, and the render/review query cutover to `page_art`.
 Commit: pending
+
+2026-03-15T16:12:54-0400
+Task: scene-memory-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: extended beat and page planning with required `sceneId` and `sceneVisualDescription` fields, updated prompt schemas/templates and the mock LLM provider to emit the new scene continuity contract, persisted scene metadata into `illustration_brief_json`, and added `scene-plan.json` plus `image-plan.json` artifacts with deduplicated scenes and capped prior same-scene page references.
+Evidence:
+- `pnpm --filter @book/workers test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/api test` => PASS
+- `bash scripts/agent/smoke.sh` => PASS
+Notes: `image-plan.json` now gives the OpenAI page-art worker a deterministic ordered reference contract, including up to two earlier same-scene page IDs for continuity.
+Commit: pending
+
+2026-03-15T16:58:26-0400
+Task: openai-image-provider-01 / review-render-image-cutover-01 / docs-source-of-truth-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: completed the OpenAI `page_art` cutover by replacing Fal runtime/config usage with provider-neutral OpenAI generation/edit flows, renaming image persistence to `provider_request_id`, removing the character-sheet pipeline phase in favor of approved `character_reference` assets, switching picture-book orchestration to sequential page-by-page `page_art` generation with shared single-page polling, retargeting API/reviewer/web/render payloads to `page_art` plus `scene_plan` / `image_plan` provenance, updating ops smokes and SSM migration scripts, and refreshing the core product/architecture/security/reliability docs for the new workflow.
+Evidence:
+- `pnpm --filter @book/workers test` => PASS
+- `pnpm --filter @book/api test` => PASS
+- `pnpm --filter @book/web test` => PASS
+- `bash scripts/agent/smoke.sh` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke` => PASS
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke` => FAIL (`POST /v1/books/{bookId}/character/candidates` returned 404 because the deployed dev API is behind this branch)
+Notes: local code, tests, and docs are complete; the only remaining live-validation blocker is deploying the branch to the shared dev stack before rerunning the end-to-end picture-book smoke.
+Commit: pending

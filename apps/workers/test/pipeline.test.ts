@@ -200,6 +200,8 @@ describe("pipeline beat-planning failure persistence", () => {
               purpose: "Setup",
               conflict: "Ava wants to save for later.",
               sceneLocation: "Kitchen table",
+              sceneId: "kitchen_table",
+              sceneVisualDescription: "Sunny kitchen table with a blue coin jar and open notebook.",
               emotionalTarget: "hopeful",
               pageIndexEstimate: 0,
               decodabilityTags: ["controlled_vocab", "repetition"],
@@ -230,6 +232,8 @@ describe("pipeline beat-planning failure persistence", () => {
             pageIndex: index,
             pageText: `Page ${index} text.`,
             illustrationBrief: `Illustration ${index}`,
+            sceneId: `scene_${Math.floor(index / 2) + 1}`,
+            sceneVisualDescription: `Scene ${Math.floor(index / 2) + 1} watercolor setting.`,
             newWordsIntroduced: ["save"],
             repetitionTargets: ["save"]
           })),
@@ -267,6 +271,34 @@ describe("pipeline beat-planning failure persistence", () => {
         softIssues: ["[science_of_reading] beat 3: Optional adult aside could be shorter."]
       })
     );
+    expect(putJsonMock).toHaveBeenCalledWith(
+      "books/book-1/scene-plan.json",
+      expect.objectContaining({
+        bookId: "book-1",
+        scenes: expect.arrayContaining([
+          expect.objectContaining({
+            sceneId: "scene_1",
+            pageIndices: [0, 1]
+          })
+        ])
+      })
+    );
+    expect(putJsonMock).toHaveBeenCalledWith(
+      "books/book-1/image-plan.json",
+      expect.objectContaining({
+        bookId: "book-1",
+        pages: expect.arrayContaining([
+          expect.objectContaining({
+            pageIndex: 1,
+            priorSameScenePageIds: ["test-id"]
+          }),
+          expect.objectContaining({
+            pageIndex: 2,
+            priorSameScenePageIds: []
+          })
+        ])
+      })
+    );
 
     const artifactInsert = txExecuteMock.mock.calls.find((call) =>
       String(call[1]).includes("INSERT INTO book_artifacts") &&
@@ -282,6 +314,24 @@ describe("pipeline beat-planning failure persistence", () => {
       )
     );
     expect(artifactInsert).toBeDefined();
+
+    const pageInsert = txExecuteMock.mock.calls.find((call) =>
+      String(call[1]).includes("INSERT INTO pages")
+    );
+    expect(pageInsert?.[2]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "brief",
+          value: {
+            stringValue: JSON.stringify({
+              illustrationBrief: "Illustration 0",
+              sceneId: "scene_1",
+              sceneVisualDescription: "Scene 1 watercolor setting."
+            })
+          }
+        })
+      ])
+    );
 
     const evaluationInsert = executeMock.mock.calls.find(
       (call) =>

@@ -34,14 +34,16 @@ Replace the Fal-based image system with an OpenAI `gpt-image-1.5` image pipeline
 ## Status update
 - Completed on this branch:
   - `character-approval-flow-01`
+  - `scene-memory-01`
+  - `openai-image-provider-01`
+  - `review-render-image-cutover-01`
   - `characterDescription` is now book-scoped on order creation
   - `GET /v1/books/{bookId}/character`, `POST /v1/books/{bookId}/character/candidates`, and `POST /v1/books/{bookId}/character/select` are implemented
   - checkout now hard-rejects until a character candidate is explicitly selected
   - the parent dashboard now owns the generate/select loop and persists character state locally between refreshes
-- Remaining high-leverage work:
-  - add scene memory to beat/story artifacts (`sceneId`, `sceneVisualDescription`, `scene-plan.json`, `image-plan.json`)
-  - replace worker/provider Fal generation with OpenAI `images.generate` + `images.edit`
-  - retarget render/review/query layers from `scene_plate` / `page_fill` to `page_art` + reference provenance
+  - beat and page planning now persist `sceneId`, `sceneVisualDescription`, `scene-plan.json`, and `image-plan.json`
+  - picture-book generation now uses OpenAI `images.generate` for character candidates and `images.edit` for `page_art`
+  - render/review/query layers now consume `page_art`, `page_preview`, and provenance metadata instead of `scene_plate` / `page_fill`
 
 ## Verification target
 - `bash scripts/agent/smoke.sh`
