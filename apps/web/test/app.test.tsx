@@ -15,11 +15,13 @@ function jsonResponse(body: unknown, status = 200) {
 function buildFetchStub({
   canReview = false,
   queueCases = [],
-  orderStatus
+  orderStatus,
+  characterState
 }: {
   canReview?: boolean;
   queueCases?: Array<Record<string, unknown>>;
   orderStatus?: Record<string, unknown>;
+  characterState?: Record<string, unknown>;
 } = {}) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -44,6 +46,29 @@ function buildFetchStub({
           childProfileId: "child-1",
           bookStatus: "building",
           createdAt: "2026-03-08T12:00:00.000Z"
+        }
+      );
+    }
+
+    if (url.includes("/v1/books/book-1/character")) {
+      return jsonResponse(
+        characterState ?? {
+          bookId: "book-1",
+          characterDescription: "A curious child with a backpack and muddy boots.",
+          selectedCharacterImageId: "image-1",
+          selectedCharacterImageUrl: "https://images.example.com/character-1.png",
+          generationCount: 1,
+          maxGenerations: 10,
+          remainingGenerations: 9,
+          canGenerateMore: true,
+          candidates: [
+            {
+              imageId: "image-1",
+              imageUrl: "https://images.example.com/character-1.png",
+              createdAt: "2026-03-08T12:00:00.000Z",
+              isSelected: true
+            }
+          ]
         }
       );
     }
@@ -86,7 +111,7 @@ describe("web app", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /create a child-safe order/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /create the order and approve the character/i })).toBeInTheDocument();
     });
     expect(screen.queryByRole("heading", { name: /manual qa queue/i })).not.toBeInTheDocument();
   });
@@ -100,7 +125,7 @@ describe("web app", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /create a child-safe order/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /create the order and approve the character/i })).toBeInTheDocument();
     });
   });
 
@@ -113,7 +138,7 @@ describe("web app", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /create a child-safe order/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /create the order and approve the character/i })).toBeInTheDocument();
     });
   });
 
@@ -157,6 +182,20 @@ describe("web app", () => {
         createdAt: "2026-03-08T12:00:00.000Z"
       })
     );
+    localStorage.setItem(
+      storageKeys.activeCharacterState,
+      JSON.stringify({
+        bookId: "book-1",
+        characterDescription: "A curious child with a backpack and muddy boots.",
+        selectedCharacterImageId: "image-1",
+        selectedCharacterImageUrl: "https://images.example.com/character-1.png",
+        generationCount: 1,
+        maxGenerations: 10,
+        remainingGenerations: 9,
+        canGenerateMore: true,
+        candidates: []
+      })
+    );
     localStorage.setItem(storageKeys.activeCheckoutUrl, "https://checkout.example.com");
     localStorage.setItem(storageKeys.activeDownloadUrl, "https://download.example.com");
     localStorage.setItem(storageKeys.activeBookPayload, JSON.stringify({ pages: [] }));
@@ -167,7 +206,7 @@ describe("web app", () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /create a child-safe order/i })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /create the order and approve the character/i })).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
@@ -183,9 +222,115 @@ describe("web app", () => {
     expect(localStorage.getItem(storageKeys.authToken)).toBeNull();
     expect(localStorage.getItem(storageKeys.activeOrder)).toBeNull();
     expect(localStorage.getItem(storageKeys.activeOrderStatus)).toBeNull();
+    expect(localStorage.getItem(storageKeys.activeCharacterState)).toBeNull();
     expect(localStorage.getItem(storageKeys.activeCheckoutUrl)).toBeNull();
     expect(localStorage.getItem(storageKeys.activeDownloadUrl)).toBeNull();
     expect(localStorage.getItem(storageKeys.activeBookPayload)).toBeNull();
+  });
+
+  it("shows the character approval workspace for draft orders", async () => {
+    localStorage.setItem(storageKeys.authToken, "session-token");
+    localStorage.setItem(storageKeys.activeOrder, JSON.stringify({ orderId: "order-1", bookId: "book-1", childProfileId: "child-1" }));
+    localStorage.setItem(
+      storageKeys.activeOrderStatus,
+      JSON.stringify({
+        orderId: "order-1",
+        status: "created",
+        bookId: "book-1",
+        childProfileId: "child-1",
+        bookStatus: "draft",
+        createdAt: "2026-03-08T12:00:00.000Z"
+      })
+    );
+    window.history.pushState({}, "", "/create");
+
+    vi.stubGlobal(
+      "fetch",
+      buildFetchStub({
+        orderStatus: {
+          orderId: "order-1",
+          status: "created",
+          bookId: "book-1",
+          childProfileId: "child-1",
+          bookStatus: "draft",
+          createdAt: "2026-03-08T12:00:00.000Z"
+        },
+        characterState: {
+          bookId: "book-1",
+          characterDescription: "A curious child with a backpack and muddy boots.",
+          selectedCharacterImageId: null,
+          selectedCharacterImageUrl: null,
+          generationCount: 0,
+          maxGenerations: 10,
+          remainingGenerations: 10,
+          canGenerateMore: true,
+          candidates: []
+        }
+      })
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/character approval/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/checkout stays blocked until one character is approved/i)).toBeInTheDocument();
+  });
+
+  it("blocks checkout UI until a character is approved", async () => {
+    localStorage.setItem(storageKeys.authToken, "session-token");
+    localStorage.setItem(storageKeys.activeOrder, JSON.stringify({ orderId: "order-1", bookId: "book-1", childProfileId: "child-1" }));
+    localStorage.setItem(
+      storageKeys.activeOrderStatus,
+      JSON.stringify({
+        orderId: "order-1",
+        status: "created",
+        bookId: "book-1",
+        childProfileId: "child-1",
+        bookStatus: "draft",
+        createdAt: "2026-03-08T12:00:00.000Z"
+      })
+    );
+    window.history.pushState({}, "", "/checkout");
+
+    vi.stubGlobal(
+      "fetch",
+      buildFetchStub({
+        orderStatus: {
+          orderId: "order-1",
+          status: "created",
+          bookId: "book-1",
+          childProfileId: "child-1",
+          bookStatus: "draft",
+          createdAt: "2026-03-08T12:00:00.000Z"
+        },
+        characterState: {
+          bookId: "book-1",
+          characterDescription: "A curious child with a backpack and muddy boots.",
+          selectedCharacterImageId: null,
+          selectedCharacterImageUrl: null,
+          generationCount: 1,
+          maxGenerations: 10,
+          remainingGenerations: 9,
+          canGenerateMore: true,
+          candidates: [
+            {
+              imageId: "image-1",
+              imageUrl: "https://images.example.com/character-1.png",
+              createdAt: "2026-03-08T12:00:00.000Z",
+              isSelected: false
+            }
+          ]
+        }
+      })
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/approve a character before checkout/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /continue to stripe checkout/i })).toBeDisabled();
   });
 
   it("loads the review queue for reviewer sessions", async () => {

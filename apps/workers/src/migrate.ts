@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS books (
   money_lesson_key TEXT NOT NULL,
   interest_tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   reading_profile_id TEXT NOT NULL,
+  character_description TEXT NOT NULL DEFAULT '',
   book_version TEXT NOT NULL,
   status TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -159,7 +160,9 @@ CREATE TABLE IF NOT EXISTS privacy_events (
 
 ALTER TABLE books
   ADD COLUMN IF NOT EXISTS product_family TEXT NOT NULL DEFAULT 'picture_book_fixed_layout',
-  ADD COLUMN IF NOT EXISTS layout_profile_id TEXT NOT NULL DEFAULT 'pb_square_8_5_v1';
+  ADD COLUMN IF NOT EXISTS layout_profile_id TEXT NOT NULL DEFAULT 'pb_square_8_5_v1',
+  ADD COLUMN IF NOT EXISTS character_description TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS selected_character_image_id UUID REFERENCES images(id) ON DELETE SET NULL;
 
 ALTER TABLE pages
   ADD COLUMN IF NOT EXISTS composition_json JSONB NOT NULL DEFAULT '{}'::JSONB;
@@ -184,6 +187,7 @@ CREATE INDEX IF NOT EXISTS idx_pages_book ON pages(book_id);
 CREATE INDEX IF NOT EXISTS idx_images_book ON images(book_id);
 CREATE INDEX IF NOT EXISTS idx_images_page ON images(page_id);
 CREATE INDEX IF NOT EXISTS idx_images_page_role_current ON images(page_id, role, is_current);
+CREATE INDEX IF NOT EXISTS idx_images_book_role_current ON images(book_id, role, is_current);
 CREATE INDEX IF NOT EXISTS idx_book_artifacts_book_type_current ON book_artifacts(book_id, artifact_type, is_current);
 CREATE INDEX IF NOT EXISTS idx_review_cases_book ON review_cases(book_id);
 CREATE INDEX IF NOT EXISTS idx_review_cases_status ON review_cases(status, created_at DESC);

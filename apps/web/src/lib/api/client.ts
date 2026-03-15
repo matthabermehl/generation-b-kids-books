@@ -23,6 +23,9 @@ export type OrderResponse = components["schemas"]["OrderResponse"];
 export type CheckoutResponse = components["schemas"]["CheckoutResponse"];
 export type MarkPaidResponse = components["schemas"]["MarkPaidResponse"];
 export type BookResponse = components["schemas"]["BookResponse"];
+export type BookCharacterResponse = components["schemas"]["BookCharacterResponse"];
+export type GenerateCharacterCandidateRequest = components["schemas"]["GenerateCharacterCandidateRequest"];
+export type SelectCharacterRequest = components["schemas"]["SelectCharacterRequest"];
 export type DownloadResponse = components["schemas"]["DownloadResponse"];
 export type DeleteChildProfileResponse = components["schemas"]["DeleteChildProfileResponse"];
 export type ReviewQueueResponse = components["schemas"]["ReviewQueueResponse"];
@@ -118,6 +121,31 @@ export const apiClient = {
   getBook(token: string, bookId: string) {
     return request<BookResponse>(`/v1/books/${bookId}`, {
       headers: authHeader(token)
+    });
+  },
+  getBookCharacter(token: string, bookId: string) {
+    return request<BookCharacterResponse>(`/v1/books/${bookId}/character`, {
+      headers: authHeader(token)
+    });
+  },
+  generateCharacterCandidate(token: string, bookId: string, body: GenerateCharacterCandidateRequest = {}) {
+    return request<BookCharacterResponse>(`/v1/books/${bookId}/character/candidates`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...authHeader(token)
+      },
+      body: JSON.stringify(body)
+    });
+  },
+  selectCharacterCandidate(token: string, bookId: string, body: SelectCharacterRequest) {
+    return request<BookCharacterResponse>(`/v1/books/${bookId}/character/select`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...authHeader(token)
+      },
+      body: JSON.stringify(body)
     });
   },
   getBookDownload(token: string, bookId: string) {

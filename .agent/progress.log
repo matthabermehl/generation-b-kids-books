@@ -190,3 +190,15 @@ Evidence:
 - DB query for fresh target-profile runs => books `c24ff2bd-9f05-4ee5-920f-017fbfabced6` and `1e2809a5-2408-4529-a80c-3bdf13e1e243` still have pending pages whose latest `page_fill` rows fail with `fal submit failed (403): {"detail": "User is locked. Reason: Exhausted balance. Top up your balance at fal.ai/dashboard/billing."}`
 Notes: the original text-overflow/manual-review blocker is fixed, and dev review-schema drift is corrected. The task remains failing only because fresh end-to-end validation for both requested profile shapes is blocked by exhausted Fal provider balance, not by the deployed application code.
 Commit: pending
+
+2026-03-15T15:45:30-0400
+Task: character-approval-flow-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: replaced the parent pre-checkout draft flow with a book-scoped character approval loop, added `characterDescription` to order creation, implemented `/v1/books/{bookId}/character` plus candidate/select endpoints, stored approved character state in the book/images schema, added transactional checkout gating on explicit character selection, and updated the routed web app to generate/select watercolor character candidates before checkout.
+Evidence:
+- `pnpm --filter @book/api test` => PASS
+- `pnpm --filter @book/web test` => PASS
+- `bash scripts/agent/smoke.sh` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Notes: this completes the first OpenAI-image cutover slice. The remaining work is now concentrated in `scene-memory-01`, the worker/provider replacement, and the render/review query cutover to `page_art`.
+Commit: pending

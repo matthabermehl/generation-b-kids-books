@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-08T14:24:49Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-15T19:43:21Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -24,16 +24,52 @@
     "evidence": "Implemented the 3-7 fixed-layout picture-book pipeline slice with additive schema/config updates, layered image roles, preview rendering, and passing lint/test/quality checks (2026-03-06)."
   },
   {
-    "id": "picture-book-hardening-01",
+    "id": "character-approval-flow-01",
     "priority": 1,
     "category": "functional",
-    "description": "Harden the fixed-layout picture-book pipeline for real-LLM dev validation and manual-review fallback",
+    "description": "Add a pre-checkout character description, generation loop, and explicit character selection flow",
     "steps": [
-      "Add deterministic text-safe enforcement, smarter retry logic, and picture-book QA/manual-review routing",
-      "Add a dedicated picture-book smoke harness and validate the real-LLM dev path"
+      "Extend order/book/API state with characterDescription plus candidate/select endpoints",
+      "Block checkout until a current character reference is approved and keep candidate generation capped at 10 attempts per book"
+    ],
+    "passes": true,
+    "evidence": "pnpm --filter @book/api test (PASS); pnpm --filter @book/web test (PASS); bash scripts/agent/smoke.sh (PASS); bash scripts/agent/quality.sh (PASS)"
+  },
+  {
+    "id": "scene-memory-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Extend beat and page planning with scene continuity metadata and persisted image planning artifacts",
+    "steps": [
+      "Add sceneId and sceneVisualDescription to beat/page planning outputs and persisted types",
+      "Persist scene-plan.json and image-plan.json and resolve up to 2 earlier same-scene page references for each page job"
     ],
     "passes": false,
-    "evidence": "Implemented shared @book/domain text-fit helpers, fit-driven template selection, tall layouts, deterministic overflow candidate walking, migration hash reruns, reviewer allowlist fallback handling, check-images readiness alignment, and renderer @book/domain packaging fixes. Verification 2026-03-06: bash scripts/agent/smoke.sh => PASS; bash scripts/agent/quality.sh => PASS; pnpm cdk:deploy:dev => UPDATE_COMPLETE; RDS query confirms review_cases and review_events exist; SSM /ai-childrens-book/dev/reviewer_email_allowlist exists; Playwright on https://dazfa7oc8fu6h.cloudfront.net loaded ready order bd2165c0-15f4-4e24-b976-2cdeededd3b2 / book f892b0ad-11e3-4310-a0c6-2f5c2b99eea3, rendered previews, and exposed a working PDF download link; saved .agent/artifacts/picture-book-hardening-01/early-decoder-ready-f892b0ad.pdf (34 MB, 12 pages). Remaining blocker: fresh target-profile runs c24ff2bd-9f05-4ee5-920f-017fbfabced6 and 1e2809a5-2408-4529-a80c-3bdf13e1e243 still have pending pages whose latest page_fill rows fail with fal submit failed (403): User is locked. Reason: Exhausted balance, so final live pass criteria remain blocked by provider billing rather than app code."
+    "evidence": null
+  },
+  {
+    "id": "openai-image-provider-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Replace Fal/Kontext/Fill image generation with OpenAI gpt-image-1.5 generate/edit workflows",
+    "steps": [
+      "Remove Fal runtime config and provider wiring in favor of an OpenAI image model defaulting to gpt-image-1.5",
+      "Generate character_candidate images with images.generate and page_art with images.edit using high-fidelity same-scene references"
+    ],
+    "passes": false,
+    "evidence": null
+  },
+  {
+    "id": "review-render-image-cutover-01",
+    "priority": 1,
+    "category": "integration",
+    "description": "Retarget render, review, and status flows to the new character_reference and page_art assets",
+    "steps": [
+      "Update check-images, finalize, reviewer payloads, and parent book payloads to use page_art and character_reference roles",
+      "Update renderer inputs, docs, and tests so preview/PDF generation and manual review work end to end on the OpenAI pipeline"
+    ],
+    "passes": false,
+    "evidence": null
   },
   {
     "id": "review-console-01",
@@ -92,7 +128,7 @@
       "Infer or collect real requirements",
       "Encode them as explicit tasks in .agent/feature_list.json"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "Replaced the obsolete Fal-focused failing task with four concrete OpenAI image-pipeline tasks in .agent/feature_list.json on 2026-03-15."
   }
 ]

@@ -17,6 +17,7 @@ export interface CreateOrderInput {
   moneyLessonKey: MoneyLessonKey;
   interestTags: string[];
   readingProfileId: ReadingProfile;
+  characterDescription: string;
 }
 
 export interface PlannedBeat {

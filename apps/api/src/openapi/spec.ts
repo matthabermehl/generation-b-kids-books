@@ -111,7 +111,8 @@ export const openApiSpec = {
           "ageYears",
           "moneyLessonKey",
           "interestTags",
-          "readingProfileId"
+          "readingProfileId",
+          "characterDescription"
         ],
         properties: {
           childFirstName: { type: "string", minLength: 1 },
@@ -129,7 +130,8 @@ export const openApiSpec = {
           readingProfileId: {
             type: "string",
             enum: ["read_aloud_3_4", "early_decoder_5_7", "independent_8_10"]
-          }
+          },
+          characterDescription: { type: "string", minLength: 1, maxLength: 1000 }
         }
       },
       CreateOrderResponse: {
@@ -156,6 +158,56 @@ export const openApiSpec = {
           checkoutUrl: { type: ["string", "null"] },
           stripeSessionId: { type: ["string", "null"] },
           message: { type: "string" }
+        }
+      },
+      GenerateCharacterCandidateRequest: {
+        type: "object",
+        properties: {
+          characterDescription: { type: "string", minLength: 1, maxLength: 1000 }
+        }
+      },
+      SelectCharacterRequest: {
+        type: "object",
+        required: ["imageId"],
+        properties: {
+          imageId: { type: "string", format: "uuid" }
+        }
+      },
+      BookCharacterResponse: {
+        type: "object",
+        required: [
+          "bookId",
+          "characterDescription",
+          "selectedCharacterImageId",
+          "selectedCharacterImageUrl",
+          "generationCount",
+          "maxGenerations",
+          "remainingGenerations",
+          "canGenerateMore",
+          "candidates"
+        ],
+        properties: {
+          bookId: { type: "string", format: "uuid" },
+          characterDescription: { type: "string" },
+          selectedCharacterImageId: { type: ["string", "null"], format: "uuid" },
+          selectedCharacterImageUrl: { type: ["string", "null"] },
+          generationCount: { type: "integer", minimum: 0 },
+          maxGenerations: { type: "integer", minimum: 1 },
+          remainingGenerations: { type: "integer", minimum: 0 },
+          canGenerateMore: { type: "boolean" },
+          candidates: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["imageId", "imageUrl", "createdAt", "isSelected"],
+              properties: {
+                imageId: { type: "string", format: "uuid" },
+                imageUrl: { type: ["string", "null"] },
+                createdAt: { type: "string" },
+                isSelected: { type: "boolean" }
+              }
+            }
+          }
         }
       },
       MarkPaidResponse: {
@@ -643,6 +695,14 @@ export const openApiSpec = {
                 schema: { $ref: "#/components/schemas/ErrorResponse" }
               }
             }
+          },
+          "409": {
+            description: "Character selection required or order not eligible for checkout",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
           }
         }
       }
@@ -802,6 +862,166 @@ export const openApiSpec = {
           },
           "401": {
             description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/books/{bookId}/character": {
+      get: {
+        summary: "Get the current character approval state for a book",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "bookId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        responses: {
+          "200": {
+            description: "Character approval state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/BookCharacterResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Book not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/books/{bookId}/character/candidates": {
+      post: {
+        summary: "Generate one more character candidate for parent review",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "bookId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/GenerateCharacterCandidateRequest" }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Updated character approval state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/BookCharacterResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Book not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            description: "Character workflow unavailable or attempt cap reached",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "422": {
+            description: "Character description required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/books/{bookId}/character/select": {
+      post: {
+        summary: "Select one character candidate as the canonical reference",
+        security: bearerAuth,
+        parameters: [
+          {
+            in: "path",
+            name: "bookId",
+            required: true,
+            schema: { type: "string", format: "uuid" }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/SelectCharacterRequest" }
+            }
+          }
+        },
+        responses: {
+          "200": {
+            description: "Updated character approval state",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/BookCharacterResponse" }
+              }
+            }
+          },
+          "401": {
+            description: "Auth required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            description: "Book or candidate not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            description: "Character workflow unavailable",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" }

@@ -4,6 +4,7 @@ export const storageKeys = {
   authToken: "book-auth-token",
   activeOrder: "book-active-order",
   activeOrderStatus: "book-active-order-status",
+  activeCharacterState: "book-active-character-state",
   activeCheckoutUrl: "book-active-checkout-url",
   activeBookPayload: "book-active-book-payload",
   activeDownloadUrl: "book-active-download-url"

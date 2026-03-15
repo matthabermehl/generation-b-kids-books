@@ -1,4 +1,4 @@
-import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { optionalEnv, requiredEnv } from "./env.js";
 
@@ -28,4 +28,19 @@ export async function signPdfDownload(objectKey: string): Promise<string> {
   });
 
   return getSignedUrl(s3, command, { expiresIn: 900 });
+}
+
+export async function putBuffer(objectKey: string, body: Buffer, contentType: string): Promise<string> {
+  const bucket = requiredEnv("ARTIFACT_BUCKET");
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: objectKey,
+      Body: body,
+      ContentType: contentType
+    })
+  );
+
+  return `s3://${bucket}/${objectKey}`;
 }
