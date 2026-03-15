@@ -6,9 +6,9 @@
   "main": "dist/http.js",
   "types": "dist/http.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "build": "pnpm --filter @book/domain build && tsc -p tsconfig.json",
+    "lint": "pnpm --filter @book/domain build && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @book/domain build && vitest run",
     "format": "echo 'format: @book/api no-op'",
     "openapi:generate": "pnpm run build && node ./scripts/generate-openapi.mjs"
   },

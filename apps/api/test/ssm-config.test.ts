@@ -79,6 +79,7 @@ describe("api runtime ssm config", () => {
     expect(config.featureFlags.enableMockCheckout).toBe(false);
     expect(config.featureFlags.enablePictureBookPipeline).toBe(true);
     expect(config.featureFlags.enableIndependent8To10).toBe(false);
+    expect(config.models.openaiImage).toBe("gpt-image-1.5");
     expect(config.falEndpoints.scenePlate).toBe("fal-ai/flux-pro/kontext/max/multi");
     expect(config.falEndpoints.pageFill).toBe("fal-ai/flux-pro/v1/fill");
     expect(config.stripe.priceId).toBe("price_123");

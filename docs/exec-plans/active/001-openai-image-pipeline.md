@@ -15,9 +15,9 @@ Replace the Fal-based image system with an OpenAI `gpt-image-1.5` image pipeline
 
 ## Workstreams
 1. Character approval flow
-   - extend order/book contracts with `characterDescription`
-   - add character candidate/select APIs
-   - gate checkout on an approved character reference
+  - extend order/book contracts with `characterDescription`
+  - add character candidate/select APIs
+  - gate checkout on an approved character reference
 2. Scene memory and prompt plan
    - extend beat/page planning with `sceneId` and `sceneVisualDescription`
    - derive `scene-plan.json` and `image-plan.json`
@@ -27,9 +27,21 @@ Replace the Fal-based image system with an OpenAI `gpt-image-1.5` image pipeline
    - generate `character_candidate` / `character_reference` / `page_art`
    - keep QA retries composition-driven
 4. Render, review, and docs cutover
-   - retarget parent/reviewer payloads and queries to `page_art`
-   - keep `page_preview`
-   - update docs, tests, and runbooks
+  - retarget parent/reviewer payloads and queries to `page_art`
+  - keep `page_preview`
+  - update docs, tests, and runbooks
+
+## Status update
+- Completed on this branch:
+  - `character-approval-flow-01`
+  - `characterDescription` is now book-scoped on order creation
+  - `GET /v1/books/{bookId}/character`, `POST /v1/books/{bookId}/character/candidates`, and `POST /v1/books/{bookId}/character/select` are implemented
+  - checkout now hard-rejects until a character candidate is explicitly selected
+  - the parent dashboard now owns the generate/select loop and persists character state locally between refreshes
+- Remaining high-leverage work:
+  - add scene memory to beat/story artifacts (`sceneId`, `sceneVisualDescription`, `scene-plan.json`, `image-plan.json`)
+  - replace worker/provider Fal generation with OpenAI `images.generate` + `images.edit`
+  - retarget render/review/query layers from `scene_plate` / `page_fill` to `page_art` + reference provenance
 
 ## Verification target
 - `bash scripts/agent/smoke.sh`

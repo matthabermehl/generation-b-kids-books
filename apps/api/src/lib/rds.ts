@@ -1,4 +1,12 @@
-import { ExecuteStatementCommand, RDSDataClient, type Field, type SqlParameter } from "@aws-sdk/client-rds-data";
+import {
+  BeginTransactionCommand,
+  CommitTransactionCommand,
+  ExecuteStatementCommand,
+  RDSDataClient,
+  RollbackTransactionCommand,
+  type Field,
+  type SqlParameter
+} from "@aws-sdk/client-rds-data";
 import { requiredEnv } from "./env.js";
 
 const client = new RDSDataClient({});
@@ -58,4 +66,53 @@ export async function execute(sql: string, parameters: SqlParameter[] = []): Pro
   );
 
   return response.numberOfRecordsUpdated ?? 0;
+}
+
+export async function withTransaction<T>(fn: (transactionId: string) => Promise<T>): Promise<T> {
+  const begin = await client.send(
+    new BeginTransactionCommand({
+      secretArn: config.secretArn,
+      resourceArn: config.clusterArn,
+      database: config.database
+    })
+  );
+
+  const transactionId = begin.transactionId;
+  if (!transactionId) {
+    throw new Error("Could not start transaction");
+  }
+
+  try {
+    const result = await fn(transactionId);
+    await client.send(
+      new CommitTransactionCommand({
+        secretArn: config.secretArn,
+        resourceArn: config.clusterArn,
+        transactionId
+      })
+    );
+    return result;
+  } catch (error) {
+    await client.send(
+      new RollbackTransactionCommand({
+        secretArn: config.secretArn,
+        resourceArn: config.clusterArn,
+        transactionId
+      })
+    );
+    throw error;
+  }
+}
+
+export async function txExecute(transactionId: string, sql: string, parameters: SqlParameter[] = []): Promise<void> {
+  await client.send(
+    new ExecuteStatementCommand({
+      secretArn: config.secretArn,
+      resourceArn: config.clusterArn,
+      database: config.database,
+      transactionId,
+      sql,
+      parameters
+    })
+  );
 }

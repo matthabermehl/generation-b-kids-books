@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-15T19:01:55Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-15T19:43:21Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -32,8 +32,8 @@
       "Extend order/book/API state with characterDescription plus candidate/select endpoints",
       "Block checkout until a current character reference is approved and keep candidate generation capped at 10 attempts per book"
     ],
-    "passes": false,
-    "evidence": null
+    "passes": true,
+    "evidence": "pnpm --filter @book/api test (PASS); pnpm --filter @book/web test (PASS); bash scripts/agent/smoke.sh (PASS); bash scripts/agent/quality.sh (PASS)"
   },
   {
     "id": "scene-memory-01",

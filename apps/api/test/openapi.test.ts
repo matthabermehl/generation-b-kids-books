@@ -6,6 +6,9 @@ describe("openapi spec", () => {
     expect(openApiSpec.paths["/v1/session"]).toBeDefined();
     expect(openApiSpec.paths["/v1/orders"]).toBeDefined();
     expect(openApiSpec.paths["/v1/books/{bookId}"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/books/{bookId}/character"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/books/{bookId}/character/candidates"]).toBeDefined();
+    expect(openApiSpec.paths["/v1/books/{bookId}/character/select"]).toBeDefined();
     expect(openApiSpec.paths["/v1/orders/{orderId}/checkout"]).toBeDefined();
     expect(openApiSpec.paths["/v1/webhooks/stripe"]).toBeDefined();
     expect(openApiSpec.paths["/v1/child-profiles/{childProfileId}"]).toBeDefined();
@@ -28,6 +31,14 @@ describe("openapi spec", () => {
     expect(pageSchema.properties.previewImageUrl).toBeDefined();
     expect(pageSchema.properties.templateId).toBeDefined();
     expect(pageSchema.properties.productFamily).toBeDefined();
+  });
+
+  it("documents character approval request and response schemas", () => {
+    const createOrderSchema = openApiSpec.components.schemas.CreateOrderRequest;
+    expect(createOrderSchema.properties.characterDescription).toBeDefined();
+    expect(createOrderSchema.required).toContain("characterDescription");
+    expect(openApiSpec.components.schemas.BookCharacterResponse).toBeDefined();
+    expect(openApiSpec.components.schemas.SelectCharacterRequest).toBeDefined();
   });
 
   it("documents optional mock run authorization header for mark-paid", () => {

@@ -1,25 +1,25 @@
 # Current Task
-Task ID: character-approval-flow-01
+Task ID: scene-memory-01
 
 ## Goal
-Add the pre-checkout character description, generation loop, and character selection flow so checkout is blocked until a parent approves a character reference.
+Extend beat/page planning with stable scene memory so the OpenAI page-art pipeline can reuse same-scene references without dragging the full story into each image prompt.
 
 ## Constraints
-- Character description is book-scoped and submitted on order creation.
-- Character generation is capped at 10 candidates per book.
-- No compatibility path for Fal-era roles or endpoints.
-- Existing parent session/order/book persistence should keep working as the flow gains character state.
+- Backward compatibility for Fal-era scene/image roles is intentionally out of scope.
+- Scene continuity must come from the approved beat/story artifacts, not a separate ad hoc cache.
+- The new scene plan should be explicit enough to drive `image-plan.json` generation and later review/debug work.
 
 ## Plan (short)
-1) Extend the schema, API, and DB state for `characterDescription`, character candidate generation, and selection.
-2) Update the parent flow and routed UI to generate/select character candidates before checkout.
-3) Add tests for the 10-attempt cap, selection persistence, and checkout gating, then move to the next image-pipeline task.
+1) Extend beat/story types and planner outputs with `sceneId` plus compact scene visual descriptors.
+2) Persist `scene-plan.json` and `image-plan.json` artifacts from the approved story package.
+3) Add tests around scene deduplication and same-scene reference resolution, then hand the worker cutover a stable prompt/reference contract.
 
 ## Evidence required
+- `pnpm --filter @book/workers test`
 - `pnpm --filter @book/api test`
-- `pnpm --filter @book/web test`
 - `bash scripts/agent/smoke.sh`
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS on `codex/openai-image-pipeline`
-- work: in progress
+- previous task: `character-approval-flow-01` completed with API/web/smoke/quality evidence on `codex/openai-image-pipeline`
+- work: ready to start

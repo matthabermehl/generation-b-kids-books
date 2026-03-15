@@ -9,8 +9,19 @@ import { useParentFlow } from "@/lib/parent-flow";
 import { toSafeCheckoutUrl } from "@/lib/safe-url";
 
 export function CheckoutPage() {
-  const { banner, checkoutUrl, clearBanner, clearError, draft, error, fallbackMarkPaid, orderStatus, startCheckout } =
-    useParentFlow();
+  const {
+    banner,
+    characterState,
+    checkoutUrl,
+    clearBanner,
+    clearError,
+    draft,
+    error,
+    fallbackMarkPaid,
+    hasApprovedCharacter,
+    orderStatus,
+    startCheckout
+  } = useParentFlow();
 
   const continueToCheckout = async () => {
     clearError();
@@ -31,7 +42,7 @@ export function CheckoutPage() {
           </div>
           <h1 className="text-2xl font-semibold text-slate-950">Review the order and start checkout</h1>
           <CardDescription className="text-base">
-            This step is focused on payment. The next screen becomes the home for live book status and downloads.
+            Payment stays behind the character approval gate so the selected illustration reference is locked first.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -49,6 +60,14 @@ export function CheckoutPage() {
               <Alert variant="destructive">
                 <AlertTitle>Unable to continue to checkout</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+            {!hasApprovedCharacter ? (
+              <Alert>
+                <AlertTitle>Approve a character before checkout</AlertTitle>
+                <AlertDescription>
+                  The checkout endpoint is intentionally blocked until one character candidate is selected on the dashboard.
+                </AlertDescription>
               </Alert>
             ) : null}
 
@@ -75,6 +94,10 @@ export function CheckoutPage() {
                   <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Interests</p>
                   <p className="mt-1 text-slate-700">{draft.interestTags}</p>
                 </div>
+                <div>
+                  <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Character brief</p>
+                  <p className="mt-1 text-slate-700">{characterState?.characterDescription ?? draft.characterDescription}</p>
+                </div>
                 {orderStatus ? (
                   <>
                     <Separator />
@@ -95,25 +118,38 @@ export function CheckoutPage() {
           <div className="space-y-4">
             <Card className="border-border/70 bg-white">
               <CardHeader>
-                <h2 className="text-lg font-semibold text-slate-950">Payment actions</h2>
-                <CardDescription>Keep the main path simple: checkout first, then come back for build progress.</CardDescription>
+                <h2 className="text-lg font-semibold text-slate-950">Approved character</h2>
+                <CardDescription>The selected reference image will be fed into every subsequent page-art edit call.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Button onClick={continueToCheckout} className="w-full">
-                  Continue to Stripe Checkout
-                  <ArrowRight className="size-4" />
-                </Button>
-                {checkoutUrl ? (
-                  <Button asChild variant="outline" className="w-full">
-                    <a href={checkoutUrl} rel="noreferrer">
-                      Reopen checkout link
-                      <ExternalLink className="size-4" />
-                    </a>
+              <CardContent className="space-y-4">
+                {characterState?.selectedCharacterImageUrl ? (
+                  <img
+                    src={characterState.selectedCharacterImageUrl}
+                    alt="Approved character reference"
+                    className="aspect-[2/3] w-full rounded-2xl border border-border/70 object-cover bg-white"
+                  />
+                ) : (
+                  <div className="flex aspect-[2/3] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-slate-50 text-sm text-slate-500">
+                    No approved character selected yet.
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Button onClick={continueToCheckout} className="w-full" disabled={!hasApprovedCharacter}>
+                    Continue to Stripe Checkout
+                    <ArrowRight className="size-4" />
                   </Button>
-                ) : null}
-                <Button asChild variant="ghost" className="w-full">
-                  <Link to="/create">Edit order details</Link>
-                </Button>
+                  {checkoutUrl ? (
+                    <Button asChild variant="outline" className="w-full">
+                      <a href={checkoutUrl} rel="noreferrer">
+                        Reopen checkout link
+                        <ExternalLink className="size-4" />
+                      </a>
+                    </Button>
+                  ) : null}
+                  <Button asChild variant="ghost" className="w-full">
+                    <Link to="/create">{hasApprovedCharacter ? "Edit character selection" : "Return to character approval"}</Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 

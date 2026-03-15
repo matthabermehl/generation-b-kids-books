@@ -22,6 +22,7 @@ export interface RuntimeConfig {
   models: {
     openaiJson: string;
     openaiVision: string;
+    openaiImage: string;
     anthropicWriter: string;
   };
   stripe: {
@@ -66,6 +67,7 @@ const runtimeConfigSchema = z.object({
   models: z.object({
     openaiJson: z.string().min(1),
     openaiVision: z.string().min(1),
+    openaiImage: z.string().min(1),
     anthropicWriter: z.string().min(1)
   }),
   stripe: z.object({
@@ -178,6 +180,7 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
     models: {
       openaiJson: byName.openai_model_json ?? "gpt-5-mini-2025-08-07",
       openaiVision: byName.openai_model_vision ?? "gpt-5-mini-2025-08-07",
+      openaiImage: byName.openai_model_image ?? "gpt-image-1.5",
       anthropicWriter: byName.anthropic_model_writer ?? "claude-sonnet-4-5"
     },
     stripe: {

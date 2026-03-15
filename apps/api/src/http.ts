@@ -5,6 +5,7 @@ import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { StartExecutionCommand, SFNClient } from "@aws-sdk/client-sfn";
 import type Stripe from "stripe";
 import {
+  maxCharacterGenerationsPerBook,
   moneyLessonKeys,
   pictureBookLayoutProfileId,
   readingProfiles,
@@ -26,12 +27,13 @@ import { requiredEnv } from "./lib/env.js";
 import { sendLoginLink } from "./lib/email.js";
 import { withIdempotency } from "./lib/idempotency.js";
 import { redactText, sanitizeForLog } from "./lib/log-redaction.js";
-import { execute, query } from "./lib/rds.js";
+import { execute, query, txExecute, withTransaction } from "./lib/rds.js";
 import { json } from "./lib/response.js";
 import { isReviewerEmailAllowed } from "./lib/reviewer.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
-import { publicArtifactUrl, signPdfDownload } from "./lib/storage.js";
+import { publicArtifactUrl, putBuffer, signPdfDownload } from "./lib/storage.js";
 import { createStripeCheckoutSession, verifyStripeWebhook } from "./lib/stripe.js";
+import { generateCharacterCandidateImage } from "./lib/character-images.js";
 
 const sfn = new SFNClient({});
 const sqs = new SQSClient({});
@@ -50,7 +52,16 @@ const createOrderSchema = z.object({
   ageYears: z.number().int().min(2).max(12),
   moneyLessonKey: z.enum(moneyLessonKeys),
   interestTags: z.array(z.string().min(1)).max(10),
-  readingProfileId: z.enum(readingProfiles)
+  readingProfileId: z.enum(readingProfiles),
+  characterDescription: z.string().trim().min(1).max(1000)
+});
+
+const generateCharacterCandidateSchema = z.object({
+  characterDescription: z.string().trim().min(1).max(1000).optional()
+});
+
+const selectCharacterSchema = z.object({
+  imageId: z.string().uuid()
 });
 
 const reviewNoteSchema = z.object({
@@ -192,6 +203,7 @@ async function createOrder(
     moneyLessonKey: MoneyLessonKey;
     interestTags: string[];
     readingProfileId: ReadingProfile;
+    characterDescription: string;
   },
   bookConfig: { productFamily: BookProductFamily; layoutProfileId: string | null }
 ): Promise<{ orderId: string; bookId: string; childProfileId: string; status: string; checkoutMode: string }> {
@@ -199,48 +211,76 @@ async function createOrder(
   const orderId = randomUUID();
   const bookId = randomUUID();
 
-  await execute(
-    `
-      INSERT INTO child_profiles (id, user_id, child_first_name, pronouns, age_years, reading_profile_id)
-      VALUES (CAST(:id AS uuid), CAST(:userId AS uuid), :name, :pronouns, :age, :profile)
-    `,
-    [
-      { name: "id", value: { stringValue: childProfileId } },
-      { name: "userId", value: { stringValue: userId } },
-      { name: "name", value: { stringValue: input.childFirstName } },
-      { name: "pronouns", value: { stringValue: input.pronouns } },
-      { name: "age", value: { longValue: input.ageYears } },
-      { name: "profile", value: { stringValue: input.readingProfileId } }
-    ]
-  );
+  await withTransaction(async (transactionId) => {
+    await txExecute(
+      transactionId,
+      `
+        INSERT INTO child_profiles (id, user_id, child_first_name, pronouns, age_years, reading_profile_id)
+        VALUES (CAST(:id AS uuid), CAST(:userId AS uuid), :name, :pronouns, :age, :profile)
+      `,
+      [
+        { name: "id", value: { stringValue: childProfileId } },
+        { name: "userId", value: { stringValue: userId } },
+        { name: "name", value: { stringValue: input.childFirstName } },
+        { name: "pronouns", value: { stringValue: input.pronouns } },
+        { name: "age", value: { longValue: input.ageYears } },
+        { name: "profile", value: { stringValue: input.readingProfileId } }
+      ]
+    );
 
-  await execute(
-    `
-      INSERT INTO orders (id, user_id, child_profile_id, status, price_cents, currency)
-      VALUES (CAST(:id AS uuid), CAST(:userId AS uuid), CAST(:childProfileId AS uuid), 'created', 2999, 'USD')
-    `,
-    [
-      { name: "id", value: { stringValue: orderId } },
-      { name: "userId", value: { stringValue: userId } },
-      { name: "childProfileId", value: { stringValue: childProfileId } }
-    ]
-  );
+    await txExecute(
+      transactionId,
+      `
+        INSERT INTO orders (id, user_id, child_profile_id, status, price_cents, currency)
+        VALUES (CAST(:id AS uuid), CAST(:userId AS uuid), CAST(:childProfileId AS uuid), 'created', 2999, 'USD')
+      `,
+      [
+        { name: "id", value: { stringValue: orderId } },
+        { name: "userId", value: { stringValue: userId } },
+        { name: "childProfileId", value: { stringValue: childProfileId } }
+      ]
+    );
 
-  await execute(
-    `
-      INSERT INTO books (id, order_id, money_lesson_key, interest_tags, reading_profile_id, product_family, layout_profile_id, book_version, status)
-      VALUES (CAST(:id AS uuid), CAST(:orderId AS uuid), :lesson, string_to_array(:interests, ','), :profile, :productFamily, :layoutProfileId, 'v1', 'draft')
-    `,
-    [
-      { name: "id", value: { stringValue: bookId } },
-      { name: "orderId", value: { stringValue: orderId } },
-      { name: "lesson", value: { stringValue: input.moneyLessonKey } },
-      { name: "interests", value: { stringValue: input.interestTags.join(",") } },
-      { name: "profile", value: { stringValue: input.readingProfileId } },
-      { name: "productFamily", value: { stringValue: bookConfig.productFamily } },
-      { name: "layoutProfileId", value: { stringValue: bookConfig.layoutProfileId ?? "" } }
-    ]
-  );
+    await txExecute(
+      transactionId,
+      `
+        INSERT INTO books (
+          id,
+          order_id,
+          money_lesson_key,
+          interest_tags,
+          reading_profile_id,
+          product_family,
+          layout_profile_id,
+          character_description,
+          book_version,
+          status
+        )
+        VALUES (
+          CAST(:id AS uuid),
+          CAST(:orderId AS uuid),
+          :lesson,
+          string_to_array(:interests, ','),
+          :profile,
+          :productFamily,
+          :layoutProfileId,
+          :characterDescription,
+          'v1',
+          'draft'
+        )
+      `,
+      [
+        { name: "id", value: { stringValue: bookId } },
+        { name: "orderId", value: { stringValue: orderId } },
+        { name: "lesson", value: { stringValue: input.moneyLessonKey } },
+        { name: "interests", value: { stringValue: input.interestTags.join(",") } },
+        { name: "profile", value: { stringValue: input.readingProfileId } },
+        { name: "productFamily", value: { stringValue: bookConfig.productFamily } },
+        { name: "layoutProfileId", value: { stringValue: bookConfig.layoutProfileId ?? "" } },
+        { name: "characterDescription", value: { stringValue: input.characterDescription.trim() } }
+      ]
+    );
+  });
 
   return {
     orderId,
@@ -273,6 +313,22 @@ interface OrderContextRow {
   book_id: string;
   book_status: string;
   child_profile_id: string;
+  selected_character_image_id: string | null;
+}
+
+interface CharacterContextRow {
+  book_id: string;
+  book_status: string;
+  order_id: string;
+  order_status: string;
+  character_description: string;
+  selected_character_image_id: string | null;
+}
+
+interface CharacterCandidateRow {
+  image_id: string;
+  s3_url: string | null;
+  created_at: string;
 }
 
 type ResumeStage = "text_moderation" | "prepare_render" | "retry_page" | "finalize_gate";
@@ -308,7 +364,8 @@ async function loadOrderContext(orderId: string): Promise<OrderContextRow | null
         o.status AS order_status,
         b.id AS book_id,
         b.status AS book_status,
-        o.child_profile_id::text AS child_profile_id
+        o.child_profile_id::text AS child_profile_id,
+        b.selected_character_image_id::text AS selected_character_image_id
       FROM orders o
       INNER JOIN books b ON b.order_id = o.id
       WHERE o.id = CAST(:orderId AS uuid)
@@ -328,7 +385,8 @@ async function loadOrderContextForUser(orderId: string, userId: string): Promise
         o.status AS order_status,
         b.id AS book_id,
         b.status AS book_status,
-        o.child_profile_id::text AS child_profile_id
+        o.child_profile_id::text AS child_profile_id,
+        b.selected_character_image_id::text AS selected_character_image_id
       FROM orders o
       INNER JOIN books b ON b.order_id = o.id
       WHERE o.id = CAST(:orderId AS uuid) AND o.user_id = CAST(:userId AS uuid)
@@ -341,6 +399,88 @@ async function loadOrderContextForUser(orderId: string, userId: string): Promise
   );
 
   return rows[0] ?? null;
+}
+
+async function loadCharacterContextForUser(bookId: string, userId: string): Promise<CharacterContextRow | null> {
+  const rows = await query<CharacterContextRow>(
+    `
+      SELECT
+        b.id::text AS book_id,
+        b.status AS book_status,
+        o.id::text AS order_id,
+        o.status AS order_status,
+        COALESCE(b.character_description, '') AS character_description,
+        b.selected_character_image_id::text AS selected_character_image_id
+      FROM books b
+      INNER JOIN orders o ON o.id = b.order_id
+      WHERE b.id = CAST(:bookId AS uuid)
+        AND o.user_id = CAST(:userId AS uuid)
+      LIMIT 1
+    `,
+    [
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "userId", value: { stringValue: userId } }
+    ]
+  );
+
+  return rows[0] ?? null;
+}
+
+async function loadCharacterCandidateRows(bookId: string): Promise<CharacterCandidateRow[]> {
+  return query<CharacterCandidateRow>(
+    `
+      SELECT id::text AS image_id, s3_url, created_at::text AS created_at
+      FROM images
+      WHERE book_id = CAST(:bookId AS uuid)
+        AND role = 'character_candidate'
+        AND is_current = TRUE
+      ORDER BY created_at DESC
+    `,
+    [{ name: "bookId", value: { stringValue: bookId } }]
+  );
+}
+
+async function loadCharacterStateForUser(bookId: string, userId: string): Promise<{
+  bookId: string;
+  characterDescription: string;
+  selectedCharacterImageId: string | null;
+  selectedCharacterImageUrl: string | null;
+  generationCount: number;
+  maxGenerations: number;
+  remainingGenerations: number;
+  canGenerateMore: boolean;
+  candidates: Array<{
+    imageId: string;
+    imageUrl: string | null;
+    createdAt: string;
+    isSelected: boolean;
+  }>;
+} | null> {
+  const context = await loadCharacterContextForUser(bookId, userId);
+  if (!context) {
+    return null;
+  }
+
+  const candidates = await loadCharacterCandidateRows(bookId);
+  const selectedCandidate = candidates.find((candidate) => candidate.image_id === context.selected_character_image_id) ?? null;
+  const generationCount = candidates.length;
+
+  return {
+    bookId: context.book_id,
+    characterDescription: context.character_description,
+    selectedCharacterImageId: context.selected_character_image_id,
+    selectedCharacterImageUrl: publicArtifactUrl(selectedCandidate?.s3_url ?? null),
+    generationCount,
+    maxGenerations: maxCharacterGenerationsPerBook,
+    remainingGenerations: Math.max(maxCharacterGenerationsPerBook - generationCount, 0),
+    canGenerateMore: generationCount < maxCharacterGenerationsPerBook,
+    candidates: candidates.map((candidate) => ({
+      imageId: candidate.image_id,
+      imageUrl: publicArtifactUrl(candidate.s3_url),
+      createdAt: candidate.created_at,
+      isSelected: candidate.image_id === context.selected_character_image_id
+    }))
+  };
 }
 
 async function loadReviewCase(caseId: string): Promise<ReviewCaseRow | null> {
@@ -868,6 +1008,292 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return json(200, created);
     }
 
+    const bookCharacterMatch = pathMatch(path, /^\/v1\/books\/([^/]+)\/character$/);
+    if (method === "GET" && bookCharacterMatch) {
+      const auth = await requireSession(event);
+      const bookId = bookCharacterMatch[1];
+      const state = await loadCharacterStateForUser(bookId, auth.userId);
+      if (!state) {
+        return json(404, { error: "Book not found" });
+      }
+
+      return json(200, state);
+    }
+
+    const characterCandidatesMatch = pathMatch(path, /^\/v1\/books\/([^/]+)\/character\/candidates$/);
+    if (method === "POST" && characterCandidatesMatch) {
+      const auth = await requireSession(event);
+      const bookId = characterCandidatesMatch[1];
+      const bookContext = await loadCharacterContextForUser(bookId, auth.userId);
+      if (!bookContext) {
+        return json(404, { error: "Book not found" });
+      }
+      if (bookContext.book_status !== "draft" || !["created", "checkout_pending"].includes(bookContext.order_status)) {
+        return json(409, { error: "Character approval is only available before the book build starts" });
+      }
+
+      const payload = await parseBody(event, generateCharacterCandidateSchema);
+      const characterDescription = (payload.characterDescription ?? bookContext.character_description).trim();
+      if (!characterDescription) {
+        return json(422, { error: "Character description is required" });
+      }
+
+      const existingCandidates = await loadCharacterCandidateRows(bookId);
+      if (existingCandidates.length >= maxCharacterGenerationsPerBook) {
+        return json(409, {
+          error: `Character generation is limited to ${maxCharacterGenerationsPerBook} attempts per book`
+        });
+      }
+
+      const attemptNumber = existingCandidates.length + 1;
+      const runtimeConfig = await getRuntimeConfig();
+      const generated = await generateCharacterCandidateImage({
+        apiKey: runtimeConfig.secrets.openaiApiKey,
+        model: runtimeConfig.models.openaiImage,
+        characterDescription,
+        bookId,
+        userId: auth.userId,
+        attemptNumber,
+        useMock: runtimeConfig.featureFlags.enableMockImage
+      });
+      const extension = generated.contentType === "image/svg+xml" ? "svg" : "png";
+      const s3Url = await putBuffer(
+        `books/${bookId}/characters/candidate-${String(attemptNumber).padStart(2, "0")}.${extension}`,
+        generated.bytes,
+        generated.contentType
+      );
+
+      await withTransaction(async (transactionId) => {
+        await txExecute(
+          transactionId,
+          `
+            UPDATE books
+            SET character_description = :characterDescription
+            WHERE id = CAST(:bookId AS uuid)
+          `,
+          [
+            { name: "bookId", value: { stringValue: bookId } },
+            { name: "characterDescription", value: { stringValue: characterDescription } }
+          ]
+        );
+
+        await txExecute(
+          transactionId,
+          `
+            INSERT INTO images (
+              id,
+              book_id,
+              page_id,
+              role,
+              model_endpoint,
+              prompt,
+              seed,
+              fal_request_id,
+              width,
+              height,
+              s3_url,
+              qa_json,
+              status,
+              input_assets_json,
+              is_current
+            )
+            VALUES (
+              CAST(:id AS uuid),
+              CAST(:bookId AS uuid),
+              NULL,
+              'character_candidate',
+              :endpoint,
+              :prompt,
+              :seed,
+              :requestId,
+              :width,
+              :height,
+              :s3Url,
+              CAST(:qaJson AS jsonb),
+              'ready',
+              CAST(:inputAssets AS jsonb),
+              TRUE
+            )
+          `,
+          [
+            { name: "id", value: { stringValue: randomUUID() } },
+            { name: "bookId", value: { stringValue: bookId } },
+            { name: "endpoint", value: { stringValue: generated.endpoint } },
+            { name: "prompt", value: { stringValue: generated.prompt } },
+            { name: "seed", value: { longValue: attemptNumber } },
+            { name: "requestId", value: { stringValue: generated.providerRequestId ?? "" } },
+            { name: "width", value: { longValue: generated.width } },
+            { name: "height", value: { longValue: generated.height } },
+            { name: "s3Url", value: { stringValue: s3Url } },
+            { name: "qaJson", value: { stringValue: JSON.stringify({ passed: true, issues: [] }) } },
+            {
+              name: "inputAssets",
+              value: {
+                stringValue: JSON.stringify({
+                  characterDescription,
+                  attemptNumber
+                })
+              }
+            }
+          ]
+        );
+      });
+
+      const state = await loadCharacterStateForUser(bookId, auth.userId);
+      return json(200, state);
+    }
+
+    const selectCharacterMatch = pathMatch(path, /^\/v1\/books\/([^/]+)\/character\/select$/);
+    if (method === "POST" && selectCharacterMatch) {
+      const auth = await requireSession(event);
+      const bookId = selectCharacterMatch[1];
+      const bookContext = await loadCharacterContextForUser(bookId, auth.userId);
+      if (!bookContext) {
+        return json(404, { error: "Book not found" });
+      }
+      if (bookContext.book_status !== "draft" || !["created", "checkout_pending"].includes(bookContext.order_status)) {
+        return json(409, { error: "Character approval is only available before the book build starts" });
+      }
+
+      const payload = await parseBody(event, selectCharacterSchema);
+      const candidateRows = await query<{
+        image_id: string;
+        model_endpoint: string;
+        prompt: string;
+        seed: number;
+        provider_request_id: string | null;
+        width: number | null;
+        height: number | null;
+        s3_url: string | null;
+        qa_json: string | null;
+        status: string;
+      }>(
+        `
+          SELECT
+            id::text AS image_id,
+            model_endpoint,
+            prompt,
+            seed,
+            fal_request_id AS provider_request_id,
+            width,
+            height,
+            s3_url,
+            qa_json::text AS qa_json,
+            status
+          FROM images
+          WHERE id = CAST(:imageId AS uuid)
+            AND book_id = CAST(:bookId AS uuid)
+            AND role = 'character_candidate'
+            AND is_current = TRUE
+          LIMIT 1
+        `,
+        [
+          { name: "imageId", value: { stringValue: payload.imageId } },
+          { name: "bookId", value: { stringValue: bookId } }
+        ]
+      );
+
+      const candidate = candidateRows[0];
+      if (!candidate) {
+        return json(404, { error: "Character candidate not found" });
+      }
+
+      await withTransaction(async (transactionId) => {
+        await txExecute(
+          transactionId,
+          `
+            UPDATE books
+            SET selected_character_image_id = CAST(:imageId AS uuid)
+            WHERE id = CAST(:bookId AS uuid)
+          `,
+          [
+            { name: "bookId", value: { stringValue: bookId } },
+            { name: "imageId", value: { stringValue: candidate.image_id } }
+          ]
+        );
+
+        await txExecute(
+          transactionId,
+          `
+            UPDATE images
+            SET is_current = FALSE
+            WHERE book_id = CAST(:bookId AS uuid)
+              AND page_id IS NULL
+              AND role = 'character_reference'
+              AND is_current = TRUE
+          `,
+          [{ name: "bookId", value: { stringValue: bookId } }]
+        );
+
+        await txExecute(
+          transactionId,
+          `
+            INSERT INTO images (
+              id,
+              book_id,
+              page_id,
+              role,
+              model_endpoint,
+              prompt,
+              seed,
+              fal_request_id,
+              width,
+              height,
+              s3_url,
+              qa_json,
+              status,
+              parent_image_id,
+              input_assets_json,
+              is_current
+            )
+            VALUES (
+              CAST(:id AS uuid),
+              CAST(:bookId AS uuid),
+              NULL,
+              'character_reference',
+              :endpoint,
+              :prompt,
+              :seed,
+              :requestId,
+              :width,
+              :height,
+              :s3Url,
+              CAST(:qaJson AS jsonb),
+              :status,
+              CAST(:parentImageId AS uuid),
+              CAST(:inputAssets AS jsonb),
+              TRUE
+            )
+          `,
+          [
+            { name: "id", value: { stringValue: randomUUID() } },
+            { name: "bookId", value: { stringValue: bookId } },
+            { name: "endpoint", value: { stringValue: candidate.model_endpoint } },
+            { name: "prompt", value: { stringValue: candidate.prompt } },
+            { name: "seed", value: { longValue: Number(candidate.seed) } },
+            { name: "requestId", value: { stringValue: candidate.provider_request_id ?? "" } },
+            { name: "width", value: { longValue: Number(candidate.width ?? 1024) } },
+            { name: "height", value: { longValue: Number(candidate.height ?? 1536) } },
+            { name: "s3Url", value: { stringValue: candidate.s3_url ?? "" } },
+            { name: "qaJson", value: { stringValue: candidate.qa_json ?? "{}" } },
+            { name: "status", value: { stringValue: candidate.status } },
+            { name: "parentImageId", value: { stringValue: candidate.image_id } },
+            {
+              name: "inputAssets",
+              value: {
+                stringValue: JSON.stringify({
+                  selectedFromCandidateImageId: candidate.image_id
+                })
+              }
+            }
+          ]
+        );
+      });
+
+      const state = await loadCharacterStateForUser(bookId, auth.userId);
+      return json(200, state);
+    }
+
     const checkoutMatch = pathMatch(path, /^\/v1\/orders\/([^/]+)\/checkout$/);
     if (method === "POST" && checkoutMatch) {
       const auth = await requireSession(event);
@@ -880,6 +1306,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       const order = await loadOrderContextForUser(orderId, auth.userId);
       if (!order) {
         return json(404, { error: "Order not found" });
+      }
+      if (!order.selected_character_image_id) {
+        return json(409, { error: "Select a character before checkout" });
       }
 
       const response = await withIdempotency(auth.userId, idempotencyKey, async () => {

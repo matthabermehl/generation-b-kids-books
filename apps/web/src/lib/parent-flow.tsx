@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
   apiClient,
+  type BookCharacterResponse,
   type BookResponse,
   type CreateOrderResponse,
   type OrderResponse
@@ -25,6 +26,7 @@ export interface ParentDraft {
   moneyLessonKey: LessonKey;
   interestTags: string;
   readingProfileId: ReadingProfile;
+  characterDescription: string;
 }
 
 export interface FlowBanner {
@@ -38,6 +40,7 @@ interface ParentFlowContextValue {
   updateDraft: <K extends keyof ParentDraft>(key: K, value: ParentDraft[K]) => void;
   order: CreateOrderResponse | null;
   orderStatus: OrderResponse | null;
+  characterState: BookCharacterResponse | null;
   bookPayload: BookResponse | null;
   checkoutUrl: string | null;
   downloadUrl: string | null;
@@ -46,12 +49,18 @@ interface ParentFlowContextValue {
   banner: FlowBanner | null;
   hasActiveOrder: boolean;
   hasActiveBook: boolean;
+  hasApprovedCharacter: boolean;
+  isGeneratingCharacter: boolean;
+  isSelectingCharacter: boolean;
   clearError: () => void;
   clearBanner: () => void;
   setBanner: (banner: FlowBanner | null) => void;
   clearFlowState: () => void;
   createOrder: () => Promise<CreateOrderResponse | null>;
   refreshOrder: () => Promise<OrderResponse | null>;
+  loadCharacter: () => Promise<BookCharacterResponse | null>;
+  generateCharacterCandidate: () => Promise<BookCharacterResponse | null>;
+  selectCharacterCandidate: (imageId: string) => Promise<BookCharacterResponse | null>;
   startCheckout: () => Promise<string | null>;
   fallbackMarkPaid: () => Promise<void>;
   loadBook: () => Promise<void>;
@@ -65,13 +74,29 @@ const defaultDraft: ParentDraft = {
   ageYears: 6,
   moneyLessonKey: "saving_later",
   interestTags: "baking,forest,bikes",
-  readingProfileId: "early_decoder_5_7"
+  readingProfileId: "early_decoder_5_7",
+  characterDescription:
+    "A curious six-year-old girl with warm brown skin, dark wavy hair in a loose bob, bright observant eyes, and practical clothes for outdoor exploring."
 };
 
 const ParentFlowContext = createContext<ParentFlowContextValue | null>(null);
 
 function readingProfileConfig(readingProfileId: ReadingProfile) {
   return readingProfileOptions.find((option) => option.value === readingProfileId) ?? readingProfileOptions[0];
+}
+
+function emptyCharacterState(bookId: string, characterDescription: string): BookCharacterResponse {
+  return {
+    bookId,
+    characterDescription,
+    selectedCharacterImageId: null,
+    selectedCharacterImageUrl: null,
+    generationCount: 0,
+    maxGenerations: 10,
+    remainingGenerations: 10,
+    canGenerateMore: true,
+    candidates: []
+  };
 }
 
 export function validateAgeYears(ageYears: number, readingProfileId: ReadingProfile) {
@@ -93,17 +118,21 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
   const [draft, setDraft] = useState<ParentDraft>(defaultDraft);
   const [order, setOrder] = usePersistentState<CreateOrderResponse>(storageKeys.activeOrder, null);
   const [orderStatus, setOrderStatus] = usePersistentState<OrderResponse>(storageKeys.activeOrderStatus, null);
+  const [characterState, setCharacterState] = usePersistentState<BookCharacterResponse>(storageKeys.activeCharacterState, null);
   const [bookPayload, setBookPayload] = usePersistentState<BookResponse>(storageKeys.activeBookPayload, null);
   const [checkoutUrl, setCheckoutUrl] = usePersistentString(storageKeys.activeCheckoutUrl);
   const [downloadUrl, setDownloadUrl] = usePersistentString(storageKeys.activeDownloadUrl);
   const [error, setError] = useState<string | null>(null);
   const [privacyStatus, setPrivacyStatus] = useState("");
   const [banner, setBanner] = useState<FlowBanner | null>(null);
+  const [isGeneratingCharacter, setIsGeneratingCharacter] = useState(false);
+  const [isSelectingCharacter, setIsSelectingCharacter] = useState(false);
 
   const activeOrderId = orderStatus?.orderId ?? order?.orderId ?? null;
   const activeBookId = orderStatus?.bookId ?? order?.bookId ?? null;
   const hasActiveOrder = Boolean(activeOrderId);
   const hasActiveBook = Boolean(activeBookId);
+  const hasApprovedCharacter = Boolean(characterState?.selectedCharacterImageId);
   const safeCheckoutUrl = useMemo(() => toSafeCheckoutUrl(checkoutUrl), [checkoutUrl]);
   const safeDownloadUrl = useMemo(() => toSafeAssetUrl(downloadUrl), [downloadUrl]);
   const safeBookPayload = useMemo(() => (bookPayload ? sanitizeBookPayload(bookPayload) : null), [bookPayload]);
@@ -115,10 +144,20 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
 
     setOrder(null);
     setOrderStatus(null);
+    setCharacterState(null);
     setBookPayload(null);
     setCheckoutUrl(null);
     setDownloadUrl(null);
-  }, [hasActiveOrder, setBookPayload, setCheckoutUrl, setDownloadUrl, setOrder, setOrderStatus, token]);
+  }, [
+    hasActiveOrder,
+    setBookPayload,
+    setCharacterState,
+    setCheckoutUrl,
+    setDownloadUrl,
+    setOrder,
+    setOrderStatus,
+    token
+  ]);
 
   useEffect(() => {
     if (checkoutUrl && !safeCheckoutUrl) {
@@ -148,6 +187,23 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
         }
       });
   }, [activeOrderId, setOrderStatus, token]);
+
+  useEffect(() => {
+    if (!token || !activeBookId) {
+      return;
+    }
+
+    void apiClient
+      .getBookCharacter(token, activeBookId)
+      .then((payload) => {
+        setCharacterState(payload);
+      })
+      .catch((apiError) => {
+        if (!(apiError instanceof ApiError && apiError.status === 404)) {
+          setError(apiError instanceof Error ? apiError.message : "Unable to load character state");
+        }
+      });
+  }, [activeBookId, setCharacterState, token]);
 
   useEffect(() => {
     if (!orderStatus || !token) {
@@ -182,6 +238,7 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
       },
       order,
       orderStatus,
+      characterState,
       bookPayload: safeBookPayload,
       checkoutUrl: safeCheckoutUrl,
       downloadUrl: safeDownloadUrl,
@@ -190,12 +247,16 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
       banner,
       hasActiveOrder,
       hasActiveBook,
+      hasApprovedCharacter,
+      isGeneratingCharacter,
+      isSelectingCharacter,
       clearError: () => setError(null),
       clearBanner: () => setBanner(null),
       setBanner,
       clearFlowState: () => {
         setOrder(null);
         setOrderStatus(null);
+        setCharacterState(null);
         setBookPayload(null);
         setCheckoutUrl(null);
         setDownloadUrl(null);
@@ -228,7 +289,8 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
               .split(",")
               .map((tag) => tag.trim())
               .filter(Boolean),
-            readingProfileId: draft.readingProfileId
+            readingProfileId: draft.readingProfileId,
+            characterDescription: draft.characterDescription
           });
 
           setOrder(payload);
@@ -240,6 +302,7 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
             bookStatus: "draft",
             createdAt: new Date().toISOString()
           });
+          setCharacterState(emptyCharacterState(payload.bookId, draft.characterDescription));
           setCheckoutUrl(null);
           setBookPayload(null);
           setDownloadUrl(null);
@@ -261,6 +324,60 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
         } catch (apiError) {
           setError(apiError instanceof Error ? apiError.message : "Unable to load order status");
           return null;
+        }
+      },
+      loadCharacter: async () => {
+        if (!token || !activeBookId) {
+          return null;
+        }
+
+        try {
+          const payload = await apiClient.getBookCharacter(token, activeBookId);
+          setCharacterState(payload);
+          return payload;
+        } catch (apiError) {
+          setError(apiError instanceof Error ? apiError.message : "Unable to load character state");
+          return null;
+        }
+      },
+      generateCharacterCandidate: async () => {
+        if (!token || !activeBookId) {
+          setError("Create an order before generating a character");
+          return null;
+        }
+
+        setError(null);
+        setIsGeneratingCharacter(true);
+        try {
+          const payload = await apiClient.generateCharacterCandidate(token, activeBookId, {
+            characterDescription: draft.characterDescription
+          });
+          setCharacterState(payload);
+          return payload;
+        } catch (apiError) {
+          setError(apiError instanceof Error ? apiError.message : "Unable to generate a character");
+          return null;
+        } finally {
+          setIsGeneratingCharacter(false);
+        }
+      },
+      selectCharacterCandidate: async (imageId: string) => {
+        if (!token || !activeBookId) {
+          setError("Create an order before selecting a character");
+          return null;
+        }
+
+        setError(null);
+        setIsSelectingCharacter(true);
+        try {
+          const payload = await apiClient.selectCharacterCandidate(token, activeBookId, { imageId });
+          setCharacterState(payload);
+          return payload;
+        } catch (apiError) {
+          setError(apiError instanceof Error ? apiError.message : "Unable to select this character");
+          return null;
+        } finally {
+          setIsSelectingCharacter(false);
         }
       },
       startCheckout: async () => {
@@ -347,6 +464,7 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
           );
           setOrder(null);
           setOrderStatus(null);
+          setCharacterState(null);
           setBookPayload(null);
           setCheckoutUrl(null);
           setDownloadUrl(null);
@@ -360,12 +478,16 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
       activeOrderId,
       banner,
       bookPayload,
+      characterState,
       checkoutUrl,
       downloadUrl,
       draft,
       error,
       hasActiveBook,
       hasActiveOrder,
+      hasApprovedCharacter,
+      isGeneratingCharacter,
+      isSelectingCharacter,
       order,
       orderStatus,
       privacyStatus,
@@ -373,6 +495,7 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
       safeCheckoutUrl,
       safeDownloadUrl,
       setBookPayload,
+      setCharacterState,
       setCheckoutUrl,
       setDownloadUrl,
       setOrder,

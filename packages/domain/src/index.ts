@@ -5,3 +5,4 @@ export * from "./validators.js";
 export * from "./providers.js";
 export * from "./layouts.js";
 export * from "./text-layout.js";
+export * from "./image-prompts.js";
