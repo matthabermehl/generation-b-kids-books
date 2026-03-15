@@ -12,6 +12,7 @@ Escalate to human review when:
 - `bash scripts/agent/quality.sh` has been run (or equivalent documented exception)
 - `.agent/progress.log` updated with timestamped session block
 - Commit created with scoped description
+- If a task changes a live integration flow, attempt the repo smoke scripts and record any environment drift or deploy blockers explicitly
 
 ## Session Cadence
 1. Reconstruct context from `.agent/progress.log`, `.agent/feature_list.json`, git history.

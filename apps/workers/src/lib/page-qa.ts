@@ -71,7 +71,7 @@ export function classifyPictureBookIssues(issues: string[]): PictureBookQaCatego
   if (issues.some((issue) => textZoneIssues.has(issue))) {
     return "text_zone";
   }
-  if (issues.some((issue) => issue === "provider_timeout" || issue.includes("fal poll timed out"))) {
+  if (issues.some((issue) => issue === "provider_timeout" || issue.toLowerCase().includes("timed out"))) {
     return "provider_timeout";
   }
   if (issues.some((issue) => issue === "weak_art")) {

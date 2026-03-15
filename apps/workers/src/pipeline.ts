@@ -3,6 +3,7 @@ import type { Handler } from "aws-lambda";
 import {
   pictureBookLayoutProfileId,
   pictureBookReadingProfiles,
+  buildPageArtPrompt,
   type BookProductFamily,
   type MoneyLessonKey,
   type PageCompositionSpec,
@@ -12,16 +13,14 @@ import {
   type ReadingProfile
 } from "@book/domain";
 import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
-import { putJson, putBuffer, presignGetObjectFromS3Url } from "./lib/storage.js";
-import { fileExtensionForContentType, logStructured, makeId, safeJsonParse } from "./lib/helpers.js";
+import { putJson, presignGetObjectFromS3Url } from "./lib/storage.js";
+import { logStructured, makeId, safeJsonParse } from "./lib/helpers.js";
 import { moderateTexts } from "./lib/content-safety.js";
 import { buildImagePlanArtifact, buildScenePlanArtifact } from "./lib/scene-plans.js";
 import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { selectPictureBookComposition } from "./lib/page-template-select.js";
-import { ensurePictureBookStyleReferenceUrls } from "./lib/style-assets.js";
 import { insertCurrentBookArtifact, insertCurrentImageRecord } from "./lib/records.js";
 import { upsertOpenReviewCase } from "./lib/review-cases.js";
-import { resolveImageProvider } from "./providers/image.js";
 import { BeatPlanningError, resolveLlmProvider } from "./providers/llm.js";
 
 const sqs = new SQSClient({});
@@ -29,8 +28,7 @@ const sqs = new SQSClient({});
 interface PipelineEvent {
   action:
     | "prepare_story"
-    | "generate_character_sheet"
-    | "enqueue_page_images"
+    | "enqueue_next_page_image"
     | "enqueue_page_image"
     | "prepare_render_input";
   bookId: string;
@@ -560,58 +558,24 @@ async function prepareStory(
   return { bookId, pageCount: story.pages.length };
 }
 
-async function generateCharacterSheet(
-  bookId: string,
-  mockRunTag?: string | null
-): Promise<{ bookId: string; key: string }> {
-  const context = await loadBookContext(bookId);
-  const runtimeConfig = await getRuntimeConfig();
-  const imageProvider = await resolveImageProvider({
-    mockRunTag,
-    source: "generate_character_sheet"
-  });
-  const image = await imageProvider.generate(
-    {
-      bookId,
-      pageIndex: 0,
-      prompt: `Character sheet for ${context.child_first_name}. Keep outfit colors, facial features, and proportions consistent.`,
-      role: "character_sheet"
-    },
-    1
-  );
-
-  const extension = fileExtensionForContentType(image.contentType);
-  const key = `books/${bookId}/images/character-sheet.${extension}`;
-  const s3Url = await putBuffer(key, image.bytes, image.contentType);
-
-  await insertCurrentImageRecord({
-    bookId,
-    role: "character_sheet",
-    endpoint: image.endpoint,
-    prompt: `Character sheet for ${context.child_first_name}. Keep outfit colors, hair, and proportions consistent.`,
-    seed: image.seed,
-    requestId: image.requestId,
-    width: image.width ?? 1536,
-    height: image.height ?? 1024,
-    s3Url,
-    qaJson: image.qa,
-    status: "ready",
-    inputAssets: { styleLora: runtimeConfig.falStyleLoraUrl ?? null }
-  });
-
-  return { bookId, key };
-}
-
 interface PageRow {
   id: string;
   page_index: number;
   text: string;
+  status: string;
   illustration_brief_json: string;
   composition_json?: string;
 }
 
-interface CharacterSheetRow {
+interface CharacterReferenceRow {
+  image_id: string;
   prompt: string | null;
+  s3_url: string | null;
+}
+
+interface PageArtReferenceRow {
+  page_id: string;
+  image_id: string;
   s3_url: string | null;
 }
 
@@ -629,25 +593,22 @@ interface PreparedStoryPageRow {
 function legacyStyleAnchor(context: BookContextRow): string {
   return [
     "Children's picture-book illustration in muted watercolor with matte texture and soft natural lighting.",
-    `Use the attached character sheet for ${context.child_first_name}'s hair, face shape, skin tone, outfit colors, and proportions.`,
+    `Use the approved character reference for ${context.child_first_name}'s hair, face shape, skin tone, outfit colors, and proportions.`,
     "Keep a calm, uncluttered composition suitable for a child-friendly storybook."
   ].join(" ");
 }
 
-function scenePrompt(sceneBrief: string): string {
-  return [
-    sceneBrief,
-    "Watercolor on white paper.",
-    "Soft matte texture and calm children's picture-book illustration style.",
-    "Leave surrounding paper feeling airy and clean."
-  ].join(" ");
-}
-
-async function enqueuePageImages(
+async function enqueuePageImage(
   bookId: string,
   mockRunTag?: string | null,
   onlyPageId?: string
-): Promise<{ queued: number; productFamily: BookProductFamily }> {
+): Promise<{
+  queued: number;
+  done: boolean;
+  productFamily: BookProductFamily;
+  pageId?: string;
+  pageIndex?: number;
+}> {
   const queueUrl = process.env.IMAGE_QUEUE_URL;
   if (!queueUrl) {
     throw new Error("IMAGE_QUEUE_URL is required");
@@ -660,121 +621,290 @@ async function enqueuePageImages(
     context.product_family === "picture_book_fixed_layout" &&
     isPictureBookReadingProfile(context.reading_profile_id);
 
-  const characterSheetRows = await query<CharacterSheetRow>(
+  const imageRole = usePictureBookPipeline ? "page_art" : "page";
+  const pendingRows = await query<{ page_id: string; page_index: number }>(
     `
-      SELECT prompt, s3_url
+      SELECT p.id::text AS page_id, p.page_index
+      FROM pages p
+      INNER JOIN images i
+        ON i.page_id = p.id
+       AND i.role = :role
+       AND i.is_current = TRUE
+       AND i.status = 'pending'
+      WHERE p.book_id = CAST(:bookId AS uuid)
+        ${onlyPageId ? "AND p.id = CAST(:pageId AS uuid)" : ""}
+      ORDER BY p.page_index
+      LIMIT 1
+    `,
+    [
+      { name: "bookId", value: { stringValue: bookId } },
+      { name: "role", value: { stringValue: imageRole } },
+      ...(onlyPageId ? [{ name: "pageId", value: { stringValue: onlyPageId } }] : [])
+    ]
+  );
+  const pendingRow = pendingRows[0];
+  if (pendingRow) {
+    return {
+      queued: 0,
+      done: false,
+      productFamily: context.product_family,
+      pageId: pendingRow.page_id,
+      pageIndex: Number(pendingRow.page_index)
+    };
+  }
+
+  const characterReferenceRows = await query<CharacterReferenceRow>(
+    `
+      SELECT id::text AS image_id, prompt, s3_url
       FROM images
-      WHERE book_id = CAST(:bookId AS uuid) AND role = 'character_sheet' AND is_current = TRUE
+      WHERE book_id = CAST(:bookId AS uuid) AND role = 'character_reference' AND is_current = TRUE
       ORDER BY created_at DESC
       LIMIT 1
     `,
     [{ name: "bookId", value: { stringValue: bookId } }]
   );
-  const characterSheet = characterSheetRows[0] ?? { prompt: null, s3_url: null };
-  const characterSheetReferenceUrl = characterSheet.s3_url
-    ? await presignGetObjectFromS3Url(characterSheet.s3_url)
+  const characterReference = characterReferenceRows[0] ?? { image_id: "", prompt: null, s3_url: null };
+  const characterReferenceUrl = characterReference.s3_url
+    ? await presignGetObjectFromS3Url(characterReference.s3_url)
     : null;
 
   const pages = await query<PageRow>(
     `
-      SELECT id, page_index, text, illustration_brief_json, composition_json
+      SELECT id, page_index, text, status, illustration_brief_json, composition_json
       FROM pages
       WHERE book_id = CAST(:bookId AS uuid)
-        ${onlyPageId ? "AND id = CAST(:pageId AS uuid)" : ""}
       ORDER BY page_index
     `,
     [
-      { name: "bookId", value: { stringValue: bookId } },
-      ...(onlyPageId ? [{ name: "pageId", value: { stringValue: onlyPageId } }] : [])
+      { name: "bookId", value: { stringValue: bookId } }
     ]
   );
 
-  const styleReferences = usePictureBookPipeline ? await ensurePictureBookStyleReferenceUrls() : null;
+  const preparedPages: PreparedStoryPageRow[] = pages.map((page) => {
+    const brief = safeJsonParse<Record<string, unknown>>(page.illustration_brief_json ?? "{}", {});
+    const defaultIllustrationBrief = `Calm watercolor scene for ${context.child_first_name}`;
+    const illustrationBrief = String(brief.illustrationBrief ?? defaultIllustrationBrief);
+    const sceneId = String(brief.sceneId ?? `scene_${Number(page.page_index) + 1}`);
+    const sceneVisualDescription = String(brief.sceneVisualDescription ?? illustrationBrief);
+    return {
+      id: page.id,
+      pageIndex: Number(page.page_index),
+      pageText: page.text,
+      illustrationBrief,
+      sceneId,
+      sceneVisualDescription,
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    };
+  });
+  const imagePlanPages = buildImagePlanArtifact({
+    bookId,
+    title: "",
+    pages: preparedPages,
+    generatedAt: new Date().toISOString()
+  }).pages;
+
+  const queuedPage = onlyPageId
+    ? pages.find((page) => page.id === onlyPageId)
+    : pages.find((page) => page.status !== "ready");
+  if (!queuedPage) {
+    return {
+      queued: 0,
+      done: true,
+      productFamily: context.product_family
+    };
+  }
+
   let previousTemplateId: PageTemplateId | null = null;
   const pictureBookProfile = isPictureBookReadingProfile(context.reading_profile_id)
     ? context.reading_profile_id
     : null;
 
   for (const page of pages) {
-    const brief = safeJsonParse<Record<string, unknown>>(page.illustration_brief_json ?? "{}", {});
-    if (usePictureBookPipeline) {
-      const composition = selectPictureBookComposition({
-        bookId,
-        pageIndex: Number(page.page_index),
-        text: page.text,
-        readingProfileId: pictureBookProfile ?? "early_decoder_5_7",
-        previousTemplateId
-      });
-      previousTemplateId = composition.templateId;
-
-      await execute(
-        `UPDATE pages SET composition_json = CAST(:composition AS jsonb) WHERE id = CAST(:pageId AS uuid)`,
-        [
-          { name: "composition", value: { stringValue: JSON.stringify(composition) } },
-          { name: "pageId", value: { stringValue: page.id } }
-        ]
-      );
-
-      logStructured("PictureBookTemplateSelected", {
-        bookId,
-        pageId: page.id,
-        pageIndex: Number(page.page_index),
-        templateId: composition.templateId
-      });
-
-      await sqs.send(
-        new SendMessageCommand({
-          QueueUrl: queueUrl,
-          MessageBody: JSON.stringify({
-            mode: "picture_book_fixed_layout",
-            productFamily: context.product_family,
-            bookId,
-            mockRunTag: mockRunTag ?? null,
-            pageId: page.id,
-            pageIndex: Number(page.page_index),
-            text: page.text,
-            composition,
-            brief: {
-              illustrationBrief: String(brief.illustrationBrief ?? `Calm watercolor scene for ${context.child_first_name}`),
-              characterSheetS3Url: characterSheet.s3_url,
-              characterSheetReferenceUrl,
-              styleBoardS3Url: styleReferences?.styleBoardS3Url ?? null,
-              styleBoardReferenceUrl: styleReferences?.styleBoardReferenceUrl ?? null,
-              paperTextureS3Url: styleReferences?.paperTextureS3Url ?? null,
-              paperTextureReferenceUrl: styleReferences?.paperTextureReferenceUrl ?? null,
-              scenePrompt: scenePrompt(String(brief.illustrationBrief ?? `Calm watercolor scene for ${context.child_first_name}`))
-            }
-          })
-        })
-      );
-      continue;
+    if (Number(page.page_index) >= Number(queuedPage.page_index)) {
+      break;
     }
+    if (page.composition_json) {
+      const composition = safeJsonParse<PageCompositionSpec | null>(page.composition_json, null);
+      previousTemplateId = composition?.templateId ?? previousTemplateId;
+    }
+  }
+
+  const queuedPreparedPage = preparedPages.find((page) => page.id === queuedPage.id);
+  if (!queuedPreparedPage) {
+    throw new Error(`Prepared page not found for ${queuedPage.id}`);
+  }
+
+  if (usePictureBookPipeline) {
+    if (!characterReference.image_id || !characterReference.s3_url || !characterReferenceUrl) {
+      throw new Error(`Missing approved character_reference for book ${bookId}`);
+    }
+
+    const imagePlanPage = imagePlanPages.find((page) => page.pageId === queuedPage.id);
+    if (!imagePlanPage) {
+      throw new Error(`Image plan page not found for ${queuedPage.id}`);
+    }
+
+    const composition = selectPictureBookComposition({
+      bookId,
+      pageIndex: Number(queuedPage.page_index),
+      text: queuedPage.text,
+      readingProfileId: pictureBookProfile ?? "early_decoder_5_7",
+      previousTemplateId
+    });
+    await execute(
+      `UPDATE pages SET composition_json = CAST(:composition AS jsonb) WHERE id = CAST(:pageId AS uuid)`,
+      [
+        { name: "composition", value: { stringValue: JSON.stringify(composition) } },
+        { name: "pageId", value: { stringValue: queuedPage.id } }
+      ]
+    );
+    logStructured("PictureBookTemplateSelected", {
+      bookId,
+      pageId: queuedPage.id,
+      pageIndex: Number(queuedPage.page_index),
+      templateId: composition.templateId
+    });
+
+    const priorSameScenePageIds = imagePlanPage.priorSameScenePageIds;
+    const pageArtReferenceRows =
+      priorSameScenePageIds.length === 0
+        ? []
+        : await query<PageArtReferenceRow>(
+            `
+              SELECT page_id::text AS page_id, id::text AS image_id, s3_url
+              FROM images
+              WHERE page_id = ANY(string_to_array(:pageIds, ',')::uuid[])
+                AND role = 'page_art'
+                AND is_current = TRUE
+                AND status = 'ready'
+            `,
+            [{ name: "pageIds", value: { stringValue: priorSameScenePageIds.join(",") } }]
+          );
+    const pageArtReferenceByPageId = new Map(pageArtReferenceRows.map((row) => [row.page_id, row]));
+    const orderedPageArtReferences = priorSameScenePageIds
+      .map((pageId) => pageArtReferenceByPageId.get(pageId))
+      .filter((row): row is PageArtReferenceRow => Boolean(row));
+    const sameSceneReferenceUrls = (
+      await Promise.all(
+        orderedPageArtReferences.map(async (row) =>
+          row.s3_url ? presignGetObjectFromS3Url(row.s3_url) : null
+        )
+      )
+    ).filter((value): value is string => Boolean(value));
+
+    const pageArtPrompt = buildPageArtPrompt(imagePlanPage.pageArtPromptInputs);
+    await insertCurrentImageRecord({
+      bookId,
+      pageId: queuedPage.id,
+      role: "page_art",
+      endpoint: "queued:image-worker",
+      prompt: pageArtPrompt,
+      seed: 0,
+      width: composition.canvas.width,
+      height: composition.canvas.height,
+      qaJson: {},
+      status: "pending",
+      inputAssets: {
+        sceneId: imagePlanPage.sceneId,
+        sceneVisualDescription: imagePlanPage.sceneVisualDescription,
+        characterReferenceImageId: characterReference.image_id,
+        sameSceneReferenceImageIds: orderedPageArtReferences.map((row) => row.image_id),
+        priorSameScenePageIds,
+        pageArtPromptInputs: imagePlanPage.pageArtPromptInputs
+      }
+    });
 
     await sqs.send(
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify({
-          mode: "legacy",
+          mode: "picture_book_fixed_layout",
+          productFamily: context.product_family,
           bookId,
           mockRunTag: mockRunTag ?? null,
-          pageId: page.id,
-          pageIndex: Number(page.page_index),
-          text: page.text,
+          pageId: queuedPage.id,
+          pageIndex: Number(queuedPage.page_index),
+          text: queuedPage.text,
+          composition,
           brief: {
-            ...brief,
-            styleAnchor: legacyStyleAnchor(context),
-            characterAnchor:
-              characterSheet.prompt ??
-              `Use the attached character sheet for ${context.child_first_name}'s stable clothing and facial features.`,
-            characterSheetS3Url: characterSheet.s3_url,
-            characterSheetReferenceUrl
+            illustrationBrief: queuedPreparedPage.illustrationBrief,
+            sceneId: imagePlanPage.sceneId,
+            sceneVisualDescription: imagePlanPage.sceneVisualDescription,
+            pageArtPrompt,
+            priorSameScenePageIds,
+            characterReferenceImageId: characterReference.image_id,
+            characterReferenceS3Url: characterReference.s3_url,
+            characterReferenceUrl,
+            sameSceneReferenceImageIds: orderedPageArtReferences.map((row) => row.image_id),
+            sameSceneReferenceS3Urls: orderedPageArtReferences
+              .map((row) => row.s3_url)
+              .filter((value): value is string => Boolean(value)),
+            sameSceneReferenceUrls
           }
         })
       })
     );
+
+    return {
+      queued: 1,
+      done: false,
+      productFamily: context.product_family,
+      pageId: queuedPage.id,
+      pageIndex: Number(queuedPage.page_index)
+    };
   }
 
-  return { queued: pages.length, productFamily: context.product_family };
+  const brief = safeJsonParse<Record<string, unknown>>(queuedPage.illustration_brief_json ?? "{}", {});
+  const prompt = [
+    legacyStyleAnchor(context),
+    characterReference.prompt ??
+      `Use the approved character reference for ${context.child_first_name}'s stable clothing and facial features.`,
+    String(brief.illustrationBrief ?? `Calm watercolor scene for ${context.child_first_name}`)
+  ]
+    .filter(Boolean)
+    .join(" ");
+  await insertCurrentImageRecord({
+    bookId,
+    pageId: queuedPage.id,
+    role: "page",
+    endpoint: "queued:image-worker",
+    prompt,
+    seed: 0,
+    width: 1536,
+    height: 1024,
+    qaJson: {},
+    status: "pending"
+  });
+  await sqs.send(
+    new SendMessageCommand({
+      QueueUrl: queueUrl,
+      MessageBody: JSON.stringify({
+        mode: "legacy",
+        bookId,
+        mockRunTag: mockRunTag ?? null,
+        pageId: queuedPage.id,
+        pageIndex: Number(queuedPage.page_index),
+        text: queuedPage.text,
+        brief: {
+          ...brief,
+          styleAnchor: legacyStyleAnchor(context),
+          characterAnchor:
+            characterReference.prompt ??
+            `Use the approved character reference for ${context.child_first_name}'s stable clothing and facial features.`,
+          characterReferenceUrl
+        }
+      })
+    })
+  );
+
+  return {
+    queued: 1,
+    done: false,
+    productFamily: context.product_family,
+    pageId: queuedPage.id,
+    pageIndex: Number(queuedPage.page_index)
+  };
 }
 
 interface PageWithImageStatus {
@@ -808,7 +938,7 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
     context.product_family === "picture_book_fixed_layout" &&
     isPictureBookReadingProfile(context.reading_profile_id);
 
-  const imageRole = usePictureBookPipeline ? "page_fill" : "page";
+  const imageRole = usePictureBookPipeline ? "page_art" : "page";
   const rows = await query<PageWithImageStatus>(
     `
       SELECT p.id, p.page_index, i.status as image_status
@@ -890,7 +1020,7 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
     `
       SELECT p.id::text AS page_id, p.page_index, p.text, p.composition_json::text AS composition_json, i.s3_url AS image_url
       FROM pages p
-      INNER JOIN images i ON i.page_id = p.id AND i.role = 'page_fill' AND i.is_current = TRUE
+      INNER JOIN images i ON i.page_id = p.id AND i.role = 'page_art' AND i.is_current = TRUE
       WHERE p.book_id = CAST(:bookId AS uuid)
       ORDER BY p.page_index
     `,
@@ -966,15 +1096,13 @@ export const handler: Handler<PipelineEvent> = async (event) => {
   switch (event.action) {
     case "prepare_story":
       return prepareStory(event.bookId, event.mockRunTag);
-    case "generate_character_sheet":
-      return generateCharacterSheet(event.bookId, event.mockRunTag);
-    case "enqueue_page_images":
-      return enqueuePageImages(event.bookId, event.mockRunTag);
+    case "enqueue_next_page_image":
+      return enqueuePageImage(event.bookId, event.mockRunTag);
     case "enqueue_page_image":
       if (!event.pageId) {
         throw new Error("pageId is required for enqueue_page_image");
       }
-      return enqueuePageImages(event.bookId, event.mockRunTag, event.pageId);
+      return enqueuePageImage(event.bookId, event.mockRunTag, event.pageId);
     case "prepare_render_input":
       return prepareRenderInput(event.bookId);
     default:

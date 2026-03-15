@@ -27,3 +27,36 @@ export function buildCharacterCandidatePrompt(characterDescription: string): str
     "No text, no lettering, no watermarks, no logos, and no frame. Keep the character centered and fully visible."
   ].join("\n");
 }
+
+export function buildPageArtPrompt(input: {
+  pageText: string;
+  illustrationBrief: string;
+  sceneVisualDescription: string;
+}): string {
+  const illustrationBrief = cleanPromptSection(input.illustrationBrief);
+  const pageText = cleanPromptSection(input.pageText);
+  const sceneVisualDescription = cleanPromptSection(input.sceneVisualDescription);
+
+  return [
+    "Task:",
+    "Edit the masked watercolor region so it becomes the finished book illustration for this page.",
+    "",
+    "Scene continuity:",
+    sceneVisualDescription,
+    "",
+    "Page moment:",
+    illustrationBrief,
+    "",
+    "Reading text for context only:",
+    pageText,
+    "",
+    "Style:",
+    watercolorStyleGuide,
+    "",
+    "Constraints:",
+    "Match the approved character reference and any same-scene reference images for costume, proportions, palette, props, and camera continuity.",
+    "Paint only inside the editable masked watercolor region.",
+    "Keep all white paper, margins, and negative space outside the mask untouched.",
+    "No text, no lettering, no captions, no page numbers, no logos, and no watermarks anywhere in the image."
+  ].join("\n");
+}

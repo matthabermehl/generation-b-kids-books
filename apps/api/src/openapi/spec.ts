@@ -368,6 +368,9 @@ export const openApiSpec = {
           "createdAt",
           "order",
           "book",
+          "pdfUrl",
+          "scenePlan",
+          "imagePlan",
           "artifacts",
           "evaluations",
           "events",
@@ -410,6 +413,22 @@ export const openApiSpec = {
             }
           },
           pdfUrl: { type: ["string", "null"] },
+          scenePlan: {
+            type: ["object", "null"],
+            required: ["url", "createdAt"],
+            properties: {
+              url: { type: ["string", "null"] },
+              createdAt: { type: "string" }
+            }
+          },
+          imagePlan: {
+            type: ["object", "null"],
+            required: ["url", "createdAt"],
+            properties: {
+              url: { type: ["string", "null"] },
+              createdAt: { type: "string" }
+            }
+          },
           artifacts: {
             type: "array",
             items: {
@@ -463,10 +482,10 @@ export const openApiSpec = {
                 "status",
                 "text",
                 "previewImageUrl",
-                "scenePlateUrl",
-                "pageFillUrl",
+                "pageArtUrl",
                 "latestQaIssues",
                 "qaMetrics",
+                "provenance",
                 "retryCount"
               ],
               properties: {
@@ -476,11 +495,14 @@ export const openApiSpec = {
                 text: { type: "string" },
                 templateId: { type: ["string", "null"] },
                 previewImageUrl: { type: ["string", "null"] },
-                scenePlateUrl: { type: ["string", "null"] },
-                pageFillUrl: { type: ["string", "null"] },
+                pageArtUrl: { type: ["string", "null"] },
                 latestQaIssues: { type: "array", items: { type: "string" } },
                 qaMetrics: {
                   type: ["object", "null"],
+                  additionalProperties: true
+                },
+                provenance: {
+                  type: "object",
                   additionalProperties: true
                 },
                 retryCount: { type: "integer", minimum: 0 }

@@ -6,9 +6,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "build": "pnpm --filter @book/domain build && pnpm --filter @book/prompts build && tsc -p tsconfig.json",
+    "lint": "pnpm --filter @book/domain build && pnpm --filter @book/prompts build && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @book/domain build && pnpm --filter @book/prompts build && vitest run",
     "format": "echo 'format: @book/workers no-op'"
   },
   "dependencies": {

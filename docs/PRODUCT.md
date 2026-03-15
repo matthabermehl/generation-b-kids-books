@@ -19,6 +19,7 @@ Generate personalized, visually polished children's books that teach money conce
 ## Scope
 ### In scope
 - `picture_book_fixed_layout` pipeline for `read_aloud_3_4` and `early_decoder_5_7`
+- Book-scoped character approval before checkout, with a selected character reference reused across page art generation
 - Layered page model with deterministic template selection
 - Live-text PDF output and preview PNG reader assets
 - Unified web app with:
@@ -45,6 +46,7 @@ Primary behavioral acceptance criteria must live in `.agent/feature_list.json`.
 - `needs_review` means the book is paused for operator adjudication, not automatically failed.
 - `approve` resumes the build; it does not skip release gating.
 - `retry page` is limited to image-stage review in this phase.
+- Reviewer page inspection is metadata-first: preview, final `page_art`, current scene/image plans, and provenance should be enough to decide without exposing extra operator-only tooling.
 
 <!-- HARNESS-INFERRED:START -->
 ## Inferred Snapshot

@@ -7,7 +7,6 @@ export interface RuntimeSecrets {
   sendgridApiKey: string;
   openaiApiKey: string;
   anthropicApiKey: string;
-  falKey: string;
   jwtSigningSecret: string;
   stripeSecretKey: string;
   stripeWebhookSecret: string;
@@ -30,14 +29,6 @@ export interface RuntimeConfig {
     successUrl: string;
     cancelUrl: string;
   };
-  falEndpoints: {
-    base: string;
-    lora: string;
-    general: string;
-    scenePlate: string;
-    pageFill: string;
-  };
-  falStyleLoraUrl: string | null;
   featureFlags: {
     enableMockLlm: boolean;
     enableMockImage: boolean;
@@ -55,7 +46,6 @@ const runtimeConfigSchema = z.object({
     sendgridApiKey: z.string().min(1),
     openaiApiKey: z.string().min(1),
     anthropicApiKey: z.string().min(1),
-    falKey: z.string().min(1),
     jwtSigningSecret: z.string().min(32),
     stripeSecretKey: z.string().min(1),
     stripeWebhookSecret: z.string().min(1)
@@ -75,14 +65,6 @@ const runtimeConfigSchema = z.object({
     successUrl: z.string().url(),
     cancelUrl: z.string().url()
   }),
-  falEndpoints: z.object({
-    base: z.string().min(1),
-    lora: z.string().min(1),
-    general: z.string().min(1),
-    scenePlate: z.string().min(1),
-    pageFill: z.string().min(1)
-  }),
-  falStyleLoraUrl: z.string().url().nullable(),
   featureFlags: z.object({
     enableMockLlm: z.boolean(),
     enableMockImage: z.boolean(),
@@ -165,7 +147,6 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
       sendgridApiKey: requiredParam(byName, "sendgrid_api_key"),
       openaiApiKey: requiredParam(byName, "openai_api_key"),
       anthropicApiKey: requiredParam(byName, "anthropic_api_key"),
-      falKey: requiredParam(byName, "fal_key"),
       jwtSigningSecret: requiredParam(byName, "jwt_signing_secret"),
       stripeSecretKey: requiredParam(byName, "stripe_secret_key"),
       stripeWebhookSecret: requiredParam(byName, "stripe_webhook_secret")
@@ -188,14 +169,6 @@ async function loadRuntimeConfig(): Promise<RuntimeConfig> {
       successUrl: requiredParam(byName, "stripe_success_url"),
       cancelUrl: requiredParam(byName, "stripe_cancel_url")
     },
-    falEndpoints: {
-      base: byName.fal_endpoint_base ?? "fal-ai/flux-2",
-      lora: byName.fal_endpoint_lora ?? "fal-ai/flux-lora",
-      general: byName.fal_endpoint_general ?? "fal-ai/flux-general",
-      scenePlate: byName.fal_endpoint_scene_plate ?? "fal-ai/flux-pro/kontext/max/multi",
-      pageFill: byName.fal_endpoint_page_fill ?? "fal-ai/flux-pro/v1/fill"
-    },
-    falStyleLoraUrl: byName.fal_style_lora_url ? byName.fal_style_lora_url : null,
     featureFlags: {
       enableMockLlm: parseBool(byName.enable_mock_llm, false),
       enableMockImage: parseBool(byName.enable_mock_image, false),

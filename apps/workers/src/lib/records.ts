@@ -88,7 +88,7 @@ export async function insertCurrentImageRecord(input: InsertImageRecordInput): P
       tx,
       `
         INSERT INTO images (
-          id, book_id, page_id, role, model_endpoint, prompt, seed, fal_request_id, width, height, s3_url, qa_json, status, parent_image_id, input_assets_json, mask_s3_url, is_current
+          id, book_id, page_id, role, model_endpoint, prompt, seed, provider_request_id, width, height, s3_url, qa_json, status, parent_image_id, input_assets_json, mask_s3_url, is_current
         ) VALUES (
           CAST(:id AS uuid),
           CAST(:bookId AS uuid),

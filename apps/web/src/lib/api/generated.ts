@@ -1408,7 +1408,15 @@ export interface components {
                 /** @enum {string} */
                 moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
             };
-            pdfUrl?: string | null;
+            pdfUrl: string | null;
+            scenePlan: {
+                url: string | null;
+                createdAt: string;
+            } | null;
+            imagePlan: {
+                url: string | null;
+                createdAt: string;
+            } | null;
             artifacts: {
                 artifactType: string;
                 url: string | null;
@@ -1448,12 +1456,14 @@ export interface components {
                 text: string;
                 templateId?: string | null;
                 previewImageUrl: string | null;
-                scenePlateUrl: string | null;
-                pageFillUrl: string | null;
+                pageArtUrl: string | null;
                 latestQaIssues: string[];
                 qaMetrics: {
                     [key: string]: unknown;
                 } | null;
+                provenance: {
+                    [key: string]: unknown;
+                };
                 retryCount: number;
             }[];
         };

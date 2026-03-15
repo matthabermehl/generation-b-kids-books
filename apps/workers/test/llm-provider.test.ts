@@ -103,7 +103,6 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
       sendgridApiKey: "sg",
       openaiApiKey: "oa",
       anthropicApiKey: "an",
-      falKey: "fk",
       jwtSigningSecret: "x".repeat(32),
       stripeSecretKey: "sk_test_123",
       stripeWebhookSecret: "whsec_123"
@@ -111,6 +110,7 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
     models: {
       openaiJson: "gpt-5-mini-2025-08-07",
       openaiVision: "gpt-5-mini-2025-08-07",
+      openaiImage: "gpt-image-1.5",
       anthropicWriter: "claude-sonnet-4-5"
     },
     stripe: {
@@ -118,14 +118,6 @@ function runtimeConfig(enableMockLlm: boolean, enableMockImage = false) {
       successUrl: "https://example.com/success",
       cancelUrl: "https://example.com/cancel"
     },
-    falEndpoints: {
-      base: "fal-ai/flux-2",
-      lora: "fal-ai/flux-lora",
-      general: "fal-ai/flux-general",
-      scenePlate: "fal-ai/flux-pro/kontext/max/multi",
-      pageFill: "fal-ai/flux-pro/v1/fill"
-    },
-    falStyleLoraUrl: null,
     featureFlags: {
       enableMockLlm,
       enableMockImage,

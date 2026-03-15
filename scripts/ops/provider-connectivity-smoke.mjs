@@ -38,17 +38,30 @@ async function loadSsmParams() {
 }
 
 async function checkOpenAi(config) {
-  const model = config.openai_model_json ?? "gpt-5-mini-2025-08-07";
-  const response = await fetch(`https://api.openai.com/v1/models/${encodeURIComponent(model)}`, {
+  const jsonModel = config.openai_model_json ?? "gpt-5-mini-2025-08-07";
+  const imageModel = config.openai_model_image ?? "gpt-image-1.5";
+  const response = await fetch("https://api.openai.com/v1/models", {
     headers: {
       Authorization: `Bearer ${config.openai_api_key}`
     }
   });
 
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      detail: await response.text()
+    };
+  }
+
+  const payload = await response.json();
+  const models = new Set((payload.data ?? []).map((entry) => entry?.id).filter(Boolean));
+  const missing = [jsonModel, imageModel].filter((model) => !models.has(model));
+
   return {
-    ok: response.ok,
+    ok: missing.length === 0,
     status: response.status,
-    detail: response.ok ? `model=${model}` : await response.text()
+    detail: missing.length === 0 ? `json=${jsonModel} image=${imageModel}` : `missing=${missing.join(", ")}`
   };
 }
 
@@ -72,22 +85,6 @@ async function checkAnthropic(config) {
     ok: response.ok,
     status: response.status,
     detail: response.ok ? `model=${model}` : await response.text()
-  };
-}
-
-async function checkFal(config) {
-  const endpoint = config.fal_endpoint_general ?? config.fal_endpoint_base ?? "fal-ai/flux-general";
-  const response = await fetch(`https://queue.fal.run/${endpoint}/requests/nonexistent/status`, {
-    headers: {
-      Authorization: `Key ${config.fal_key}`
-    }
-  });
-
-  const ok = response.ok || response.status === 404;
-  return {
-    ok,
-    status: response.status,
-    detail: ok ? `endpoint=${endpoint}` : await response.text()
   };
 }
 
@@ -127,14 +124,13 @@ function assertRequired(config, key) {
 
 async function main() {
   const config = await loadSsmParams();
-  ["openai_api_key", "anthropic_api_key", "fal_key", "sendgrid_api_key", "stripe_secret_key"].forEach((key) =>
+  ["openai_api_key", "anthropic_api_key", "sendgrid_api_key", "stripe_secret_key"].forEach((key) =>
     assertRequired(config, key)
   );
 
   const checks = [
     ["openai", () => checkOpenAi(config)],
     ["anthropic", () => checkAnthropic(config)],
-    ["fal", () => checkFal(config)],
     ["sendgrid", () => checkSendGrid(config)],
     ["stripe", () => checkStripe(config)]
   ];

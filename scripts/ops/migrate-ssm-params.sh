@@ -9,7 +9,6 @@ SECRET_KEYS=(
   "sendgrid_api_key"
   "openai_api_key"
   "anthropic_api_key"
-  "fal_key"
   "jwt_signing_secret"
   "stripe_secret_key"
   "stripe_webhook_secret"

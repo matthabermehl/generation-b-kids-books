@@ -12,6 +12,9 @@ const smokeEmail = process.env.SMOKE_EMAIL ?? "picture-book-smoke@example.com";
 const readingProfileId = process.env.READING_PROFILE_ID ?? "early_decoder_5_7";
 const childFirstName = process.env.CHILD_FIRST_NAME ?? "Ava";
 const moneyLessonKey = process.env.MONEY_LESSON_KEY ?? "saving_later";
+const characterDescription =
+  process.env.CHARACTER_DESCRIPTION
+  ?? "A curious child with warm brown skin, a bright red raincoat, striped leggings, and a round yellow backpack.";
 const interestTags = (process.env.INTEREST_TAGS ?? "soccer,baking,space")
   .split(",")
   .map((value) => value.trim())
@@ -191,7 +194,7 @@ async function loadLatestQaIssues(bookId) {
         LEFT JOIN LATERAL (
           SELECT qa_json
           FROM images i
-          WHERE i.page_id = p.id AND i.role = 'page_fill'
+          WHERE i.page_id = p.id AND i.role = 'page_art' AND i.is_current = TRUE
           ORDER BY i.created_at DESC, i.id DESC
           LIMIT 1
         ) i ON TRUE
@@ -263,10 +266,30 @@ async function main() {
       ageYears: readingProfileId === "read_aloud_3_4" ? 4 : 7,
       moneyLessonKey,
       interestTags,
-      readingProfileId
+      readingProfileId,
+      characterDescription
     },
     sessionToken
   );
+
+  const characterState = await postWithIdempotency(
+    `/v1/books/${order.bookId}/character/candidates`,
+    { characterDescription },
+    sessionToken
+  );
+  const selectedCandidate = characterState.candidates?.[0];
+  if (!selectedCandidate?.imageId) {
+    throw new Error(`Character candidate generation did not return a selectable image: ${JSON.stringify(characterState)}`);
+  }
+
+  const selectedCharacterState = await postWithIdempotency(
+    `/v1/books/${order.bookId}/character/select`,
+    { imageId: selectedCandidate.imageId },
+    sessionToken
+  );
+  if (selectedCharacterState.selectedCharacterImageId !== selectedCandidate.imageId) {
+    throw new Error(`Character selection did not persist: ${JSON.stringify(selectedCharacterState)}`);
+  }
 
   const checkout = await postWithIdempotency(`/v1/orders/${order.orderId}/checkout`, {}, sessionToken);
   if (!checkout.stripeSessionId) {
@@ -323,6 +346,8 @@ async function main() {
   const artifact = {
     orderId: order.orderId,
     bookId: terminalStatus.bookId,
+    selectedCharacterImageId: selectedCharacterState.selectedCharacterImageId ?? null,
+    characterCandidateCount: selectedCharacterState.candidates?.length ?? 0,
     executionArn: webhookResult.executionArn ?? null,
     readingProfileId,
     llmMode: "real",
