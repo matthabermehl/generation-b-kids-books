@@ -73,16 +73,20 @@ describe("runImageGenerationAttempts", () => {
   });
 });
 
-describe("pictureBookFillPrompt", () => {
+describe("pictureBookPageArtPrompt", () => {
   it("explicitly forbids rendered text artifacts in the watercolor region", async () => {
     process.env.DB_CLUSTER_ARN ??= "arn:aws:rds:us-east-1:123456789012:cluster:test";
     process.env.DB_SECRET_ARN ??= "arn:aws:secretsmanager:us-east-1:123456789012:secret:test";
     process.env.DB_NAME ??= "bookapp";
 
-    const { pictureBookFillPrompt } = await import("../src/image-worker.js");
-    const prompt = pictureBookFillPrompt("Luna sits on a bench and declines a candy.");
+    const { pictureBookPageArtPrompt } = await import("../src/image-worker.js");
+    const prompt = pictureBookPageArtPrompt({
+      pageText: "Luna sits on a bench and declines a candy.",
+      illustrationBrief: "Luna sits on a bench and declines a candy.",
+      sceneVisualDescription: "Sunny park bench with a red backpack beside Luna."
+    });
 
-    expect(prompt).toContain("Do not render any text");
+    expect(prompt).toContain("No text");
     expect(prompt).toContain("captions");
     expect(prompt).toContain("watermarks");
   });

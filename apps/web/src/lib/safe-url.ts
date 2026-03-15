@@ -52,6 +52,18 @@ export function sanitizeReviewCaseDetail(payload: ReviewCaseDetailResponse): Rev
   return {
     ...payload,
     pdfUrl: toSafeAssetUrl(payload.pdfUrl),
+    scenePlan: payload.scenePlan
+      ? {
+          ...payload.scenePlan,
+          url: toSafeAssetUrl(payload.scenePlan.url)
+        }
+      : null,
+    imagePlan: payload.imagePlan
+      ? {
+          ...payload.imagePlan,
+          url: toSafeAssetUrl(payload.imagePlan.url)
+        }
+      : null,
     artifacts: payload.artifacts.map((artifact) => ({
       ...artifact,
       url: toSafeAssetUrl(artifact.url)
@@ -59,8 +71,7 @@ export function sanitizeReviewCaseDetail(payload: ReviewCaseDetailResponse): Rev
     pages: payload.pages.map((page) => ({
       ...page,
       previewImageUrl: toSafeAssetUrl(page.previewImageUrl),
-      scenePlateUrl: toSafeAssetUrl(page.scenePlateUrl),
-      pageFillUrl: toSafeAssetUrl(page.pageFillUrl)
+      pageArtUrl: toSafeAssetUrl(page.pageArtUrl)
     }))
   };
 }

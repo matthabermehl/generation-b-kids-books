@@ -34,7 +34,7 @@ Use when:
 
 Effect:
 - writes `review_events.action=retry_page`
-- supersedes current `scene_plate`, `page_fill`, and `page_preview` rows for that page
+- supersedes current `page_art` and `page_preview` rows for that page (and clears legacy `page` rows if present)
 - re-enqueues only the selected page
 - book/order return to `building` until the retry settles
 
@@ -62,8 +62,9 @@ Requirements:
    - stage and reason summary
    - current order/book status
    - current PDF, if available
-   - page preview, scene plate, and page fill
-   - page transcript and template id
+   - page preview and final page art
+   - page transcript, template id, and provenance metadata
+   - current `scene-plan.json` and `image-plan.json` artifacts when continuity is relevant
    - latest QA issues and metrics
    - prior reviewer audit events
 3. Cross-check any beat-planning artifacts if the case stage is `text_moderation` or `finalize_gate`.

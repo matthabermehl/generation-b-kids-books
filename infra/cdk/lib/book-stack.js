@@ -581,24 +581,24 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       resultPath: "$.prepareStory"
     });
 
-    const generateCharacterSheetTask = new sfnTasks.LambdaInvoke(this, "GenerateCharacterSheet", {
+    const enqueueNextPageImageTask = new sfnTasks.LambdaInvoke(this, "EnqueueNextPageImage", {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
-        action: "generate_character_sheet",
+        action: "enqueue_next_page_image",
         bookId: sfn.JsonPath.stringAt("$.bookId"),
         mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
       }),
-      resultPath: "$.characterSheet"
+      resultPath: "$.enqueueImage"
     });
 
-    const enqueueImagesTask = new sfnTasks.LambdaInvoke(this, "EnqueuePageImages", {
+    const enqueueNextPageImageResumeTask = new sfnTasks.LambdaInvoke(this, "EnqueueNextPageImageResume", {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
-        action: "enqueue_page_images",
+        action: "enqueue_next_page_image",
         bookId: sfn.JsonPath.stringAt("$.bookId"),
         mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
       }),
-      resultPath: "$.enqueueImages"
+      resultPath: "$.enqueueImage"
     });
 
     const enqueueSinglePageImageTask = new sfnTasks.LambdaInvoke(this, "EnqueueSinglePageImage", {
@@ -609,41 +609,23 @@ export class AiChildrensBookDevStack extends cdk.Stack {
         pageId: sfn.JsonPath.stringAt("$.pageId"),
         mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
       }),
-      resultPath: "$.enqueueImages"
+      resultPath: "$.enqueueImage"
     });
 
-    const generateCharacterSheetResumeTask = new sfnTasks.LambdaInvoke(this, "GenerateCharacterSheetResume", {
-      lambdaFunction: pipelineFunction,
-      payload: sfn.TaskInput.fromObject({
-        action: "generate_character_sheet",
-        bookId: sfn.JsonPath.stringAt("$.bookId"),
-        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
-      }),
-      resultPath: "$.characterSheet"
-    });
-
-    const enqueueImagesResumeTask = new sfnTasks.LambdaInvoke(this, "EnqueuePageImagesResume", {
-      lambdaFunction: pipelineFunction,
-      payload: sfn.TaskInput.fromObject({
-        action: "enqueue_page_images",
-        bookId: sfn.JsonPath.stringAt("$.bookId"),
-        mockRunTag: sfn.JsonPath.stringAt("$.mockRunTag")
-      }),
-      resultPath: "$.enqueueImages"
-    });
-
-    const waitForImagesTask = new sfnTasks.LambdaInvoke(this, "CheckImageCompletion", {
+    const waitForQueuedPageTask = new sfnTasks.LambdaInvoke(this, "CheckQueuedPageImageCompletion", {
       lambdaFunction: checkImagesFunction,
       payload: sfn.TaskInput.fromObject({
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        pageId: sfn.JsonPath.stringAt("$.enqueueImage.Payload.pageId")
       }),
       resultPath: "$.imageStatus"
     });
 
-    const waitForImagesResumeTask = new sfnTasks.LambdaInvoke(this, "CheckImageCompletionResume", {
+    const waitForQueuedPageResumeTask = new sfnTasks.LambdaInvoke(this, "CheckQueuedPageImageCompletionResume", {
       lambdaFunction: checkImagesFunction,
       payload: sfn.TaskInput.fromObject({
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        pageId: sfn.JsonPath.stringAt("$.enqueueImage.Payload.pageId")
       }),
       resultPath: "$.imageStatus"
     });
@@ -651,20 +633,26 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const waitForRetryPageImagesTask = new sfnTasks.LambdaInvoke(this, "CheckRetryPageImageCompletion", {
       lambdaFunction: checkImagesFunction,
       payload: sfn.TaskInput.fromObject({
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        pageId: sfn.JsonPath.stringAt("$.enqueueImage.Payload.pageId")
       }),
       resultPath: "$.imageStatus"
     });
 
-    const waitForImagesRetryTask = new sfnTasks.LambdaInvoke(this, "CheckImageCompletionRetry", {
+    const waitForQueuedPageRetryTask = new sfnTasks.LambdaInvoke(this, "CheckQueuedPageImageCompletionRetry", {
       lambdaFunction: checkImagesFunction,
       payload: sfn.TaskInput.fromObject({
-        bookId: sfn.JsonPath.stringAt("$.bookId")
+        bookId: sfn.JsonPath.stringAt("$.bookId"),
+        pageId: sfn.JsonPath.stringAt("$.enqueueImage.Payload.pageId")
       }),
       resultPath: "$.imageStatus"
     });
 
     const pollWait = new sfn.Wait(this, "WaitBeforeRecheck", {
+      time: sfn.WaitTime.duration(cdk.Duration.seconds(10))
+    });
+
+    const retryPollWait = new sfn.Wait(this, "WaitBeforeRetryPageRecheck", {
       time: sfn.WaitTime.duration(cdk.Duration.seconds(10))
     });
 
@@ -771,7 +759,9 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       resultPath: "$.finalize"
     });
 
-    const imageDoneChoice = new sfn.Choice(this, "AllImagesReady?");
+    const nextPageQueuedChoice = new sfn.Choice(this, "AllPagesQueued?");
+    const pageImageDoneChoice = new sfn.Choice(this, "QueuedPageReady?");
+    const retryPageDoneChoice = new sfn.Choice(this, "RetriedPageReady?");
     const imageFailure = new sfn.Fail(this, "ImageGenerationFailed", {
       error: "ImageQAFailed",
       cause: "One or more page images failed QA after retry budget."
@@ -780,37 +770,61 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       error: "ImageNeedsReview",
       cause: "One or more page images require manual review."
     });
+    const prepareRenderChain = prepareRenderInputTask.next(renderPdfTask).next(finalizeTask);
+    const prepareRenderResumeChain = prepareRenderInputResumeTask
+      .next(renderPdfResumeTask)
+      .next(finalizePreparedRenderResumeTask);
+    const enqueueNextPageChain = enqueueNextPageImageTask.next(nextPageQueuedChoice);
+    const enqueueNextPageResumeChain = enqueueNextPageImageResumeTask.next(nextPageQueuedChoice);
+    const queuedPageStatusChain = waitForQueuedPageTask.next(pageImageDoneChoice);
+    const retryPageStatusChain = waitForRetryPageImagesTask.next(retryPageDoneChoice);
+    const retryPageEnqueueChain = enqueueSinglePageImageTask.next(retryPageStatusChain);
+    const queuedPagePollChain = pollWait.next(waitForQueuedPageRetryTask).next(pageImageDoneChoice);
+    const retryPagePollChain = retryPollWait.next(retryPageStatusChain);
 
-    imageDoneChoice
+    nextPageQueuedChoice
+      .when(
+        sfn.Condition.booleanEquals("$.enqueueImage.Payload.done", true),
+        prepareRenderChain
+      )
+      .otherwise(queuedPageStatusChain);
+
+    pageImageDoneChoice
       .when(
         sfn.Condition.booleanEquals("$.imageStatus.Payload.done", true),
-        prepareRenderInputTask.next(renderPdfTask).next(finalizeTask)
+        enqueueNextPageChain
       )
       .when(sfn.Condition.booleanEquals("$.imageStatus.Payload.needsReview", true), imageNeedsReviewFailure)
       .when(sfn.Condition.numberGreaterThan("$.imageStatus.Payload.failed", 0), imageFailure)
-      .otherwise(pollWait.next(waitForImagesRetryTask).next(imageDoneChoice));
+      .otherwise(queuedPagePollChain);
+
+    retryPageDoneChoice
+      .when(
+        sfn.Condition.booleanEquals("$.imageStatus.Payload.done", true),
+        prepareRenderResumeChain
+      )
+      .when(sfn.Condition.booleanEquals("$.imageStatus.Payload.needsReview", true), imageNeedsReviewFailure)
+      .when(sfn.Condition.numberGreaterThan("$.imageStatus.Payload.failed", 0), imageFailure)
+      .otherwise(retryPagePollChain);
 
     const resumeChoice = new sfn.Choice(this, "ResumeOrBuild");
     resumeChoice
       .when(
         sfn.Condition.stringEquals("$.resumeStage", "text_moderation"),
-        generateCharacterSheetResumeTask.next(enqueueImagesResumeTask).next(waitForImagesResumeTask).next(imageDoneChoice)
+        enqueueNextPageResumeChain
       )
       .when(
         sfn.Condition.stringEquals("$.resumeStage", "retry_page"),
-        enqueueSinglePageImageTask.next(waitForRetryPageImagesTask).next(imageDoneChoice)
+        retryPageEnqueueChain
       )
       .when(
         sfn.Condition.stringEquals("$.resumeStage", "prepare_render"),
-        prepareRenderInputResumeTask.next(renderPdfResumeTask).next(finalizePreparedRenderResumeTask)
+        prepareRenderResumeChain
       )
       .when(sfn.Condition.stringEquals("$.resumeStage", "finalize_gate"), resumeFinalizeTask)
       .otherwise(
         prepareStoryTask
-          .next(generateCharacterSheetTask)
-          .next(enqueueImagesTask)
-          .next(waitForImagesTask)
-          .next(imageDoneChoice)
+          .next(enqueueNextPageChain)
       );
 
     const logGroup = new logs.LogGroup(this, "StateMachineLogs", {
@@ -849,7 +863,6 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       SENDGRID_API_KEY: "SET_ME",
       OPENAI_API_KEY: "SET_ME",
       ANTHROPIC_API_KEY: "SET_ME",
-      FAL_KEY: "SET_ME",
       JWT_SIGNING_SECRET: "SET_ME",
       STRIPE_SECRET_KEY: "SET_ME",
       STRIPE_WEBHOOK_SECRET: "SET_ME"
@@ -861,12 +874,8 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       WEB_BASE_URL: process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`,
       OPENAI_MODEL_JSON: process.env.OPENAI_MODEL_JSON ?? "gpt-5-mini-2025-08-07",
       OPENAI_MODEL_VISION: process.env.OPENAI_MODEL_VISION ?? "gpt-5-mini-2025-08-07",
+      OPENAI_MODEL_IMAGE: process.env.OPENAI_MODEL_IMAGE ?? "gpt-image-1.5",
       ANTHROPIC_MODEL_WRITER: process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-4-5",
-      FAL_ENDPOINT_BASE: process.env.FAL_ENDPOINT_BASE ?? "fal-ai/flux-2",
-      FAL_ENDPOINT_LORA: process.env.FAL_ENDPOINT_LORA ?? "fal-ai/flux-lora",
-      FAL_ENDPOINT_GENERAL: process.env.FAL_ENDPOINT_GENERAL ?? "fal-ai/flux-general",
-      FAL_ENDPOINT_SCENE_PLATE: process.env.FAL_ENDPOINT_SCENE_PLATE ?? "fal-ai/flux-pro/kontext/max/multi",
-      FAL_ENDPOINT_PAGE_FILL: process.env.FAL_ENDPOINT_PAGE_FILL ?? "fal-ai/flux-pro/v1/fill",
       STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID ?? "price_SET_ME",
       STRIPE_SUCCESS_URL:
         process.env.STRIPE_SUCCESS_URL ?? `https://${distribution.distributionDomainName}/?checkout=success`,

@@ -7,23 +7,23 @@
 - Primary product family in this phase: `picture_book_fixed_layout` for ages `3-7`.
 - Runtime mode:
   - real AWS orchestration/storage/database
-  - real OpenAI/Anthropic/fal providers (controlled by SSM flags)
+  - real OpenAI/Anthropic providers (controlled by SSM flags)
   - real Stripe checkout/webhooks
   - fallback mock checkout behind SSM flag only
 
 ## High-Level System
 1. Static SPA (`apps/web`) is hosted in S3 behind CloudFront.
 2. Parent users authenticate via email-link auth (`/v1/auth/request-link`, `/v1/auth/verify-link`).
-3. Authenticated users create orders and create Stripe checkout sessions (`/v1/orders`, `/v1/orders/{orderId}/checkout`).
+3. Authenticated users create orders, approve a book-scoped character reference, and then create Stripe checkout sessions (`/v1/orders`, `/v1/books/{bookId}/character*`, `/v1/orders/{orderId}/checkout`).
 4. Stripe webhook (`/v1/webhooks/stripe`) verifies signature, deduplicates events, marks payment paid, and starts Step Functions `BookBuild`.
 5. Pipeline Lambdas generate story assets, moderate text, fan out image jobs to SQS, run image safety checks, prepare render input, and run PDF render on ECS Fargate.
 6. Final artifacts are written to S3 and indexed in Aurora; flagged books are moved to `needs_review` and blocked from release.
 7. Parent can request child profile deletion (`DELETE /v1/child-profiles/{childProfileId}`) which queues artifact purge.
 
 For `picture_book_fixed_layout` books, the image/render chain is:
-1. deterministic page template selection
-2. `scene_plate` generation with explicit character + style references
-3. masked fill into a white page canvas with a protected text-safe region
+1. explicit character approval before checkout
+2. deterministic page template selection plus persisted `scene-plan.json` / `image-plan.json`
+3. single-pass `page_art` generation via OpenAI image edits using the approved character reference and up to two prior same-scene pages
 4. deterministic white knockout + fade behind live text
 5. preview PNG rendering
 6. final PDF rendering with live text
@@ -35,13 +35,13 @@ For `picture_book_fixed_layout` books, the image/render chain is:
 - Tailwind v4 + shadcn/Radix component system with a shared clean-product shell
 - Parent shell:
   - `/` public landing page with magic-link request and checkout callback handling
-  - `/create` authenticated order creation flow
+  - `/create` authenticated order creation plus character generate/select flow
   - `/checkout` authenticated order summary and Stripe checkout launch
   - `/books/current` authenticated build-status, reader, download, and privacy workspace
   - persisted parent flow state backed by the existing localStorage keys for active order, checkout URL, book payload, and download URL
 - Reviewer shell:
   - internal-only `/review` queue
-  - `/review/cases/{caseId}` detail page with preview, scene plate, page fill, QA issues, and audit timeline
+  - `/review/cases/{caseId}` detail page with preview, final page art, scene/image plan links, provenance metadata, QA issues, and audit timeline
   - approve/continue, reject, and retry-page actions
 
 ### API (`apps/api/src/http.ts`)
@@ -50,6 +50,9 @@ Public routes:
 - `POST /v1/auth/verify-link`
 - `GET /v1/session`
 - `POST /v1/orders`
+- `GET /v1/books/{bookId}/character`
+- `POST /v1/books/{bookId}/character/candidates`
+- `POST /v1/books/{bookId}/character/select`
 - `POST /v1/orders/{orderId}/checkout`
 - `POST /v1/orders/{orderId}/mark-paid` (fallback-only)
 - `POST /v1/webhooks/stripe`
@@ -82,7 +85,7 @@ Cross-cutting:
   - narrative freshness critic remains active but is advisory after max beat rewrites (captured as audit warning)
   - final story stage runs one Opus draft + one critic pass (no blind full-redraft loop)
   - mock-provider authorization gate based on `mockRunTag`
-- `image-worker.ts`: legacy page image generation or fixed-layout `scene_plate`/`page_fill` generation + prompt safety checks + page QA
+- `image-worker.ts`: OpenAI-backed `page_art` generation for picture books plus legacy page generation fallback, prompt safety checks, and page QA
 - `check-images.ts`: completion + image safety / picture-book QA escalation to `needs_review`
 - `finalize.ts`: final release gate before marking `ready`
 - `execution-status.ts`: Step Functions terminal failure synchronization without overriding `needs_review`

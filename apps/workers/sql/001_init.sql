@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS images (
   negative_prompt TEXT,
   seed INTEGER NOT NULL,
   loras_json JSONB,
-  fal_request_id TEXT,
+  provider_request_id TEXT,
   width INTEGER,
   height INTEGER,
   s3_url TEXT,
@@ -164,6 +164,7 @@ ALTER TABLE pages
   ADD COLUMN IF NOT EXISTS composition_json JSONB NOT NULL DEFAULT '{}'::JSONB;
 
 ALTER TABLE images
+  ADD COLUMN IF NOT EXISTS provider_request_id TEXT,
   ADD COLUMN IF NOT EXISTS parent_image_id UUID REFERENCES images(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS input_assets_json JSONB NOT NULL DEFAULT '{}'::JSONB,
   ADD COLUMN IF NOT EXISTS mask_s3_url TEXT,
@@ -171,6 +172,21 @@ ALTER TABLE images
 
 ALTER TABLE book_artifacts
   ADD COLUMN IF NOT EXISTS is_current BOOLEAN NOT NULL DEFAULT TRUE;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'images' AND column_name = 'fal_request_id'
+  ) THEN
+    EXECUTE '
+      UPDATE images
+      SET provider_request_id = COALESCE(provider_request_id, fal_request_id)
+      WHERE provider_request_id IS NULL AND fal_request_id IS NOT NULL
+    ';
+  END IF;
+END $$;
 
 UPDATE images SET is_current = TRUE WHERE is_current IS NULL;
 UPDATE book_artifacts SET is_current = TRUE WHERE is_current IS NULL;

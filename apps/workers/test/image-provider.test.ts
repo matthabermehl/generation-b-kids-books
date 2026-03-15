@@ -6,7 +6,7 @@ vi.mock("../src/lib/ssm-config.js", () => ({
   getRuntimeConfig: getRuntimeConfigMock
 }));
 
-import { FalRequestError, resolveImageProvider, resolvePictureBookImageProviders } from "../src/providers/image.js";
+import { OpenAiImageRequestError, resolveImageProvider, resolvePictureBookImageProvider } from "../src/providers/image.js";
 
 function runtimeConfig(overrides?: Record<string, unknown>) {
   return {
@@ -14,7 +14,6 @@ function runtimeConfig(overrides?: Record<string, unknown>) {
       sendgridApiKey: "sg",
       openaiApiKey: "oa",
       anthropicApiKey: "an",
-      falKey: "fk",
       jwtSigningSecret: "x".repeat(32),
       stripeSecretKey: "sk_test_123",
       stripeWebhookSecret: "whsec_123"
@@ -22,6 +21,7 @@ function runtimeConfig(overrides?: Record<string, unknown>) {
     models: {
       openaiJson: "gpt-5-mini-2025-08-07",
       openaiVision: "gpt-5-mini-2025-08-07",
+      openaiImage: "gpt-image-1.5",
       anthropicWriter: "claude-sonnet-4-5"
     },
     stripe: {
@@ -29,14 +29,6 @@ function runtimeConfig(overrides?: Record<string, unknown>) {
       successUrl: "https://example.com/success",
       cancelUrl: "https://example.com/cancel"
     },
-    falEndpoints: {
-      base: "fal-ai/flux-2",
-      lora: "fal-ai/flux-lora",
-      general: "fal-ai/flux-general",
-      scenePlate: "fal-ai/flux-pro/kontext/max/multi",
-      pageFill: "fal-ai/flux-pro/v1/fill"
-    },
-    falStyleLoraUrl: null,
     featureFlags: {
       enableMockLlm: false,
       enableMockImage: false,
@@ -61,38 +53,21 @@ describe("image provider", () => {
     vi.unstubAllGlobals();
   });
 
-  it("polls fal and returns downloaded image bytes", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ request_id: "req-1" }), {
+  it("calls OpenAI image generation for legacy page renders", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ b64_json: Buffer.from([1, 2, 3, 4]).toString("base64") }]
+        }),
+        {
           status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "COMPLETED" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            images: [{ url: "https://cdn.example.com/image.png", width: 1024, height: 768 }]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
+          headers: {
+            "content-type": "application/json",
+            "x-request-id": "req-generate"
           }
-        )
+        }
       )
-      .mockResolvedValueOnce(
-        new Response(Buffer.from([1, 2, 3, 4]), {
-          status: 200,
-          headers: { "content-type": "image/png" }
-        })
-      );
+    );
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -107,130 +82,76 @@ describe("image provider", () => {
       1
     );
 
-    expect(image.requestId).toBe("req-1");
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body ?? "{}")) as {
+      model?: string;
+      size?: string;
+      quality?: string;
+      user?: string;
+    };
+    expect(String(fetchMock.mock.calls[0]?.[0] ?? "")).toBe("https://api.openai.com/v1/images/generations");
+    expect(requestBody.model).toBe("gpt-image-1.5");
+    expect(requestBody.size).toBe("1536x1024");
+    expect(requestBody.quality).toBe("high");
+    expect(requestBody.user).toBe("book:book-1:page:0");
+    expect(image.requestId).toBe("req-generate");
+    expect(image.endpoint).toBe("openai:gpt-image-1.5:generate");
     expect(image.contentType).toContain("image/png");
     expect(image.bytes.length).toBeGreaterThan(0);
-    expect(image.qa.passed).toBe(true);
-    expect(image.endpoint).toBe("fal-ai/flux-general");
   });
 
-  it("uses fal returned status and response urls for queue subpaths", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            request_id: "req-kontext",
-            status_url: "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext/status",
-            response_url: "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext"
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "COMPLETED" }), {
+  it("calls OpenAI image edits for picture-book page art", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ b64_json: Buffer.from([5, 6, 7, 8]).toString("base64") }]
+        }),
+        {
           status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            images: [{ url: "https://cdn.example.com/kontext.png", width: 2048, height: 2048 }]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
+          headers: {
+            "content-type": "application/json",
+            "x-request-id": "req-edit"
           }
-        )
+        }
       )
-      .mockResolvedValueOnce(
-        new Response(Buffer.from([1, 2, 3]), {
-          status: 200,
-          headers: { "content-type": "image/png" }
-        })
-      );
+    );
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const { scenePlateProvider } = await resolvePictureBookImageProviders();
-    await scenePlateProvider.generateScenePlate(
+    const provider = await resolvePictureBookImageProvider();
+    const image = await provider.generatePageArt(
       {
-        bookId: "book-kontext",
-        pageIndex: 0,
-        prompt: "Watercolor reading scene.",
-        referenceImageUrls: ["https://example.com/character.png", "https://example.com/style.png"]
-      },
-      1
-    );
-
-    expect(String(fetchMock.mock.calls[1]?.[0] ?? "")).toBe(
-      "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext/status"
-    );
-    expect(String(fetchMock.mock.calls[2]?.[0] ?? "")).toBe(
-      "https://queue.fal.run/fal-ai/flux-pro/requests/req-kontext"
-    );
-  });
-
-  it("falls back to queue model id for status and result urls when fal omits them", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ request_id: "req-fill" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "COMPLETED" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            images: [{ url: "https://cdn.example.com/fill.png", width: 2048, height: 2048 }]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(Buffer.from([1, 2, 3]), {
-          status: 200,
-          headers: { "content-type": "image/png" }
-        })
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { pageFillProvider } = await resolvePictureBookImageProviders();
-    await pageFillProvider.harmonizePageArt(
-      {
-        bookId: "book-fill-fallback",
+        bookId: "book-2",
         pageIndex: 1,
-        prompt: "Blend art into the mask.",
+        prompt: "Paint the masked watercolor region.",
         canvasImageUrl: "https://example.com/canvas.png",
-        maskImageUrl: "https://example.com/mask.png"
+        maskImageUrl: "https://example.com/mask.png",
+        referenceImageUrls: ["https://example.com/character.png", "https://example.com/page-1.png"]
       },
-      1
+      2
     );
 
-    expect(String(fetchMock.mock.calls[1]?.[0] ?? "")).toBe(
-      "https://queue.fal.run/fal-ai/flux-pro/requests/req-fill/status"
-    );
-    expect(String(fetchMock.mock.calls[2]?.[0] ?? "")).toBe(
-      "https://queue.fal.run/fal-ai/flux-pro/requests/req-fill"
-    );
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body ?? "{}")) as {
+      images?: Array<{ image_url?: string }>;
+      mask?: { image_url?: string };
+      size?: string;
+      input_fidelity?: string;
+    };
+    expect(String(fetchMock.mock.calls[0]?.[0] ?? "")).toBe("https://api.openai.com/v1/images/edits");
+    expect(requestBody.images?.map((imageRef) => imageRef.image_url)).toEqual([
+      "https://example.com/canvas.png",
+      "https://example.com/character.png",
+      "https://example.com/page-1.png"
+    ]);
+    expect(requestBody.mask?.image_url).toBe("https://example.com/mask.png");
+    expect(requestBody.size).toBe("1024x1024");
+    expect(requestBody.input_fidelity).toBe("high");
+    expect(image.requestId).toBe("req-edit");
+    expect(image.endpoint).toBe("openai:gpt-image-1.5:edit");
+    expect(image.width).toBe(1024);
+    expect(image.height).toBe(1024);
   });
 
-  it("uses mock adapter when enable_mock_image is true", async () => {
+  it("uses mock adapters when enable_mock_image is true", async () => {
     getRuntimeConfigMock.mockResolvedValue(
       runtimeConfig({
         featureFlags: {
@@ -244,10 +165,12 @@ describe("image provider", () => {
     );
 
     await expect(resolveImageProvider()).rejects.toThrow("X-Mock-Run-Tag");
-    await expect(resolvePictureBookImageProviders()).rejects.toThrow("X-Mock-Run-Tag");
+    await expect(resolvePictureBookImageProvider()).rejects.toThrow("X-Mock-Run-Tag");
 
-    const provider = await resolveImageProvider({ mockRunTag: "test-run", source: "unit-test" });
-    const image = await provider.generate(
+    const pageProvider = await resolveImageProvider({ mockRunTag: "test-run", source: "unit-test" });
+    const pageArtProvider = await resolvePictureBookImageProvider({ mockRunTag: "test-run", source: "unit-test" });
+
+    const pageImage = await pageProvider.generate(
       {
         bookId: "book-1",
         pageIndex: 0,
@@ -256,311 +179,51 @@ describe("image provider", () => {
       },
       1
     );
-
-    expect(image.endpoint).toBe("mock-fal");
-    expect(image.contentType).toBe("image/svg+xml");
-
-    const { scenePlateProvider, pageFillProvider } = await resolvePictureBookImageProviders({
-      mockRunTag: "test-run",
-      source: "unit-test"
-    });
-    const sceneImage = await scenePlateProvider.generateScenePlate(
+    const pageArtImage = await pageArtProvider.generatePageArt(
       {
         bookId: "book-1",
         pageIndex: 0,
-        prompt: "Watercolor square scene.",
+        prompt: "Masked watercolor region.",
+        canvasImageUrl: "https://example.com/canvas.png",
+        maskImageUrl: "https://example.com/mask.png",
         referenceImageUrls: []
       },
       1
     );
-    const fillImage = await pageFillProvider.harmonizePageArt(
-      {
-        bookId: "book-1",
-        pageIndex: 0,
-        prompt: "Blend watercolor edges.",
-        canvasImageUrl: "https://example.com/canvas.png",
-        maskImageUrl: "https://example.com/mask.png"
-      },
-      1
-    );
 
-    expect(sceneImage.endpoint).toBe("mock-kontext");
-    expect(fillImage.endpoint).toBe("mock-fill");
+    expect(pageImage.endpoint).toBe("mock:gpt-image-1.5:generate");
+    expect(pageArtImage.endpoint).toBe("mock:gpt-image-1.5:edit");
+    expect(pageArtImage.contentType).toBe("image/svg+xml");
   });
 
-  it("classifies fill polling timeouts as retryable provider timeouts", async () => {
+  it("classifies OpenAI request timeouts as retryable provider timeouts", async () => {
     vi.useFakeTimers();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ request_id: "req-timeout" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockImplementation(async () =>
-        new Response(JSON.stringify({ status: "IN_PROGRESS" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      );
+    const timeoutError = new Error("timed out");
+    timeoutError.name = "TimeoutError";
+    const fetchMock = vi.fn().mockRejectedValue(timeoutError);
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const { pageFillProvider } = await resolvePictureBookImageProviders();
-    const pending = pageFillProvider.harmonizePageArt(
+    const provider = await resolvePictureBookImageProvider();
+    const pending = provider.generatePageArt(
       {
-        bookId: "book-fill-timeout",
+        bookId: "book-timeout",
         pageIndex: 1,
-        prompt: "Blend art into the mask.",
+        prompt: "Masked watercolor region.",
         canvasImageUrl: "https://example.com/canvas.png",
-        maskImageUrl: "https://example.com/mask.png"
+        maskImageUrl: "https://example.com/mask.png",
+        referenceImageUrls: []
       },
       1
     );
+
     const assertion = expect(pending).rejects.toMatchObject({
-      name: "FalRequestError",
+      name: "OpenAiImageRequestError",
       code: "provider_timeout",
       retryable: true,
-      requestId: "req-timeout"
-    } satisfies Partial<FalRequestError>);
+      endpoint: "openai:gpt-image-1.5:edit"
+    } satisfies Partial<OpenAiImageRequestError>);
     await vi.runAllTimersAsync();
     await assertion;
-    vi.useRealTimers();
-  });
-
-  it("routes page renders to LoRA endpoint when style LoRA is configured", async () => {
-    getRuntimeConfigMock.mockResolvedValue(
-      runtimeConfig({
-        falStyleLoraUrl: "https://example.com/style.safetensors"
-      })
-    );
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ request_id: "req-lora" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "COMPLETED" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            images: [{ url: "https://cdn.example.com/lora.png", width: 1024, height: 768 }]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(Buffer.from([1, 2, 3]), {
-          status: 200,
-          headers: { "content-type": "image/png" }
-        })
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const provider = await resolveImageProvider();
-    const image = await provider.generate(
-      {
-        bookId: "book-style",
-        pageIndex: 1,
-        prompt: "Consistent page style",
-        role: "page"
-      },
-      1
-    );
-
-    const firstCallUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
-    expect(firstCallUrl).toContain("/fal-ai/flux-lora");
-    expect(image.endpoint).toBe("fal-ai/flux-lora");
-  });
-
-  it("uses reference-image conditioning on fal payload when a reference URL is provided", async () => {
-    getRuntimeConfigMock.mockResolvedValue(
-      runtimeConfig({
-        falStyleLoraUrl: "https://example.com/style.safetensors"
-      })
-    );
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ request_id: "req-ref" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "COMPLETED" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            images: [{ url: "https://cdn.example.com/ref.png", width: 1024, height: 768 }]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(Buffer.from([1, 2, 3]), {
-          status: 200,
-          headers: { "content-type": "image/png" }
-        })
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const provider = await resolveImageProvider();
-    const image = await provider.generate(
-      {
-        bookId: "book-style",
-        pageIndex: 1,
-        prompt: "Consistent page style",
-        role: "page",
-        referenceImageUrl: "https://example.com/character-sheet.png"
-      },
-      1
-    );
-
-    const firstCallUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
-    expect(firstCallUrl).toContain("/fal-ai/flux-general");
-    expect(image.endpoint).toBe("fal-ai/flux-general");
-
-    const firstCallInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    const requestBody = JSON.parse(String(firstCallInit.body ?? "{}")) as {
-      reference_image_url?: string;
-      reference_strength?: number;
-      loras?: Array<{ path: string }>;
-    };
-    expect(requestBody.reference_image_url).toBe("https://example.com/character-sheet.png");
-    expect(requestBody.reference_strength).toBe(0.85);
-    expect(requestBody.loras?.[0]?.path).toBe("https://example.com/style.safetensors");
-  });
-
-  it("sends explicit reference urls to the scene-plate provider", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ request_id: "req-scene" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "COMPLETED" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            images: [{ url: "https://cdn.example.com/scene.png", width: 2048, height: 2048 }]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(Buffer.from([1, 2, 3]), {
-          status: 200,
-          headers: { "content-type": "image/png" }
-        })
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-    const { scenePlateProvider } = await resolvePictureBookImageProviders();
-    await scenePlateProvider.generateScenePlate(
-      {
-        bookId: "book-scene",
-        pageIndex: 0,
-        prompt: "Watercolor playground scene.",
-        referenceImageUrls: ["https://example.com/character.png", "https://example.com/style.png"]
-      },
-      1
-    );
-
-    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body ?? "{}")) as {
-      image_urls?: string[];
-      aspect_ratio?: string;
-    };
-    expect(requestBody.image_urls).toEqual([
-      "https://example.com/character.png",
-      "https://example.com/style.png"
-    ]);
-    expect(requestBody.aspect_ratio).toBe("1:1");
-  });
-
-  it("sends image and mask urls to the fill provider", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ request_id: "req-fill" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: "COMPLETED" }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            images: [{ url: "https://cdn.example.com/fill.png", width: 2048, height: 2048 }]
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(Buffer.from([1, 2, 3]), {
-          status: 200,
-          headers: { "content-type": "image/png" }
-        })
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-    const { pageFillProvider } = await resolvePictureBookImageProviders();
-    await pageFillProvider.harmonizePageArt(
-      {
-        bookId: "book-fill",
-        pageIndex: 1,
-        prompt: "Blend art into the mask.",
-        canvasImageUrl: "https://example.com/canvas.png",
-        maskImageUrl: "https://example.com/mask.png"
-      },
-      1
-    );
-
-    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body ?? "{}")) as {
-      image_url?: string;
-      mask_url?: string;
-    };
-    expect(requestBody.image_url).toBe("https://example.com/canvas.png");
-    expect(requestBody.mask_url).toBe("https://example.com/mask.png");
   });
 });

@@ -10,7 +10,6 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
      - `/ai-childrens-book/dev/sendgrid_api_key`
      - `/ai-childrens-book/dev/openai_api_key`
      - `/ai-childrens-book/dev/anthropic_api_key`
-     - `/ai-childrens-book/dev/fal_key`
      - `/ai-childrens-book/dev/jwt_signing_secret`
      - `/ai-childrens-book/dev/stripe_secret_key`
      - `/ai-childrens-book/dev/stripe_webhook_secret`
@@ -20,12 +19,9 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
    - `/ai-childrens-book/dev/web_base_url`
    - `/ai-childrens-book/dev/auth_link_ttl_minutes`
    - `/ai-childrens-book/dev/openai_model_json`
+   - `/ai-childrens-book/dev/openai_model_image`
    - `/ai-childrens-book/dev/openai_model_vision`
    - `/ai-childrens-book/dev/anthropic_model_writer`
-   - `/ai-childrens-book/dev/fal_endpoint_base`
-   - `/ai-childrens-book/dev/fal_endpoint_lora`
-   - `/ai-childrens-book/dev/fal_endpoint_general`
-   - `/ai-childrens-book/dev/fal_style_lora_url` (optional)
    - `/ai-childrens-book/dev/stripe_price_id`
    - `/ai-childrens-book/dev/stripe_success_url`
    - `/ai-childrens-book/dev/stripe_cancel_url`
@@ -46,7 +42,8 @@ Phase 3 delivered Stripe checkout/webhooks, safety review gates, and privacy del
 5. Validate fixed-layout picture-book path:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> READING_PROFILE_ID=read_aloud_3_4 pnpm ops:picture-book-smoke`
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> READING_PROFILE_ID=early_decoder_5_7 pnpm ops:picture-book-smoke`
-   - Confirm artifact JSON under `.agent/artifacts/` includes `previewCount == pageCount` for `ready` books.
+   - The smoke flow now exercises `character/candidates -> character/select -> checkout -> webhook`.
+   - Confirm artifact JSON under `.agent/artifacts/` includes a `selectedCharacterImageId` and `previewCount == pageCount` for `ready` books.
 
 6. Validate payment path only:
    - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> SMOKE_EMAIL=<email> pnpm ops:stripe-smoke`

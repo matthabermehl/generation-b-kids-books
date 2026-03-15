@@ -752,6 +752,9 @@
           "createdAt",
           "order",
           "book",
+          "pdfUrl",
+          "scenePlan",
+          "imagePlan",
           "artifacts",
           "evaluations",
           "events",
@@ -872,6 +875,48 @@
               "string",
               "null"
             ]
+          },
+          "scenePlan": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "url",
+              "createdAt"
+            ],
+            "properties": {
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            }
+          },
+          "imagePlan": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "url",
+              "createdAt"
+            ],
+            "properties": {
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "string"
+              }
+            }
           },
           "artifacts": {
             "type": "array",
@@ -996,10 +1041,10 @@
                 "status",
                 "text",
                 "previewImageUrl",
-                "scenePlateUrl",
-                "pageFillUrl",
+                "pageArtUrl",
                 "latestQaIssues",
                 "qaMetrics",
+                "provenance",
                 "retryCount"
               ],
               "properties": {
@@ -1034,13 +1079,7 @@
                     "null"
                   ]
                 },
-                "scenePlateUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "pageFillUrl": {
+                "pageArtUrl": {
                   "type": [
                     "string",
                     "null"
@@ -1057,6 +1096,10 @@
                     "object",
                     "null"
                   ],
+                  "additionalProperties": true
+                },
+                "provenance": {
+                  "type": "object",
                   "additionalProperties": true
                 },
                 "retryCount": {

@@ -40,6 +40,14 @@ describe("safe url helpers", () => {
   it("sanitizes reviewer artifact and image URLs before rendering", () => {
     const payload = sanitizeReviewCaseDetail({
       pdfUrl: "javascript:alert(1)",
+      scenePlan: {
+        createdAt: "2026-03-08T09:59:00.000Z",
+        url: "/books/book-1/scene-plan.json"
+      },
+      imagePlan: {
+        createdAt: "2026-03-08T09:59:01.000Z",
+        url: "javascript:alert(1)"
+      },
       artifacts: [{ artifactType: "preview", createdAt: "2026-03-08T10:00:00.000Z", url: "data:text/html,boom" }],
       pages: [
         {
@@ -50,18 +58,19 @@ describe("safe url helpers", () => {
           retryCount: 0,
           latestQaIssues: [],
           qaMetrics: {},
+          provenance: {},
           previewImageUrl: "https://dazfa7oc8fu6h.cloudfront.net/books/page-1.png",
-          scenePlateUrl: "javascript:alert(1)",
-          pageFillUrl: "https://dazfa7oc8fu6h.cloudfront.net/books/page-1-fill.png"
+          pageArtUrl: "https://dazfa7oc8fu6h.cloudfront.net/books/page-1-art.png"
         }
       ]
     } as any);
 
     expect(payload.pdfUrl).toBeNull();
+    expect(payload.scenePlan?.url).toBe(`${window.location.origin}/books/book-1/scene-plan.json`);
+    expect(payload.imagePlan?.url).toBeNull();
     expect(payload.artifacts[0].url).toBeNull();
     expect(payload.pages[0].previewImageUrl).toBe("https://dazfa7oc8fu6h.cloudfront.net/books/page-1.png");
-    expect(payload.pages[0].scenePlateUrl).toBeNull();
-    expect(payload.pages[0].pageFillUrl).toBe("https://dazfa7oc8fu6h.cloudfront.net/books/page-1-fill.png");
+    expect(payload.pages[0].pageArtUrl).toBe("https://dazfa7oc8fu6h.cloudfront.net/books/page-1-art.png");
   });
 });
 

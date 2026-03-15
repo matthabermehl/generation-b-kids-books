@@ -12,6 +12,7 @@
 
 ## Execution Planning
 - [exec-plans/tech-debt-tracker.md](exec-plans/tech-debt-tracker.md)
+- [exec-plans/active/001-openai-image-pipeline.md](exec-plans/active/001-openai-image-pipeline.md)
 - `exec-plans/active/`
 - `exec-plans/completed/`
 
@@ -21,6 +22,7 @@
 
 ## Runbooks
 - [runbooks/pipeline-debug.md](runbooks/pipeline-debug.md)
+- [runbooks/review-console.md](runbooks/review-console.md)
 
 ## References
 - [references/README.md](references/README.md)

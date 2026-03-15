@@ -1088,7 +1088,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
               model_endpoint,
               prompt,
               seed,
-              fal_request_id,
+              provider_request_id,
               width,
               height,
               s3_url,
@@ -1174,7 +1174,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             model_endpoint,
             prompt,
             seed,
-            fal_request_id AS provider_request_id,
+            provider_request_id,
             width,
             height,
             s3_url,
@@ -1236,7 +1236,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
               model_endpoint,
               prompt,
               seed,
-              fal_request_id,
+              provider_request_id,
               width,
               height,
               s3_url,
@@ -1597,7 +1597,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             FROM book_artifacts
             WHERE book_id = CAST(:bookId AS uuid)
               AND is_current = TRUE
-              AND artifact_type IN ('pdf', 'beat_plan_report', 'beat_plan', 'prompt_pack')
+              AND artifact_type IN ('pdf', 'beat_plan_report', 'beat_plan', 'prompt_pack', 'scene_plan', 'image_plan')
             ORDER BY created_at DESC
           `,
           [{ name: "bookId", value: { stringValue: reviewCase.book_id } }]
@@ -1609,9 +1609,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           text: string;
           template_id: string | null;
           preview_image_url: string | null;
-          scene_plate_url: string | null;
-          page_fill_url: string | null;
+          page_art_url: string | null;
           qa_json: string | null;
+          input_assets_json: string | null;
           retry_count: number;
         }>(
           `
@@ -1622,22 +1622,21 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
               p.text,
               p.composition_json->>'templateId' AS template_id,
               preview.s3_url AS preview_image_url,
-              scene.s3_url AS scene_plate_url,
-              fill.s3_url AS page_fill_url,
-              fill.qa_json::text AS qa_json,
+              art.s3_url AS page_art_url,
+              art.qa_json::text AS qa_json,
+              art.input_assets_json::text AS input_assets_json,
               COALESCE(
                 (
                   SELECT COUNT(*)
                   FROM images history
                   WHERE history.page_id = p.id
-                    AND history.role IN ('scene_plate', 'page_fill')
+                    AND history.role = 'page_art'
                 ),
                 0
               )::int AS retry_count
             FROM pages p
             LEFT JOIN images preview ON preview.page_id = p.id AND preview.role = 'page_preview' AND preview.is_current = TRUE
-            LEFT JOIN images scene ON scene.page_id = p.id AND scene.role = 'scene_plate' AND scene.is_current = TRUE
-            LEFT JOIN images fill ON fill.page_id = p.id AND fill.role = 'page_fill' AND fill.is_current = TRUE
+            LEFT JOIN images art ON art.page_id = p.id AND art.role = 'page_art' AND art.is_current = TRUE
             WHERE p.book_id = CAST(:bookId AS uuid)
             ORDER BY p.page_index
           `,
@@ -1646,6 +1645,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       ]);
 
       const pdfArtifact = artifacts.find((artifact) => artifact.artifact_type === "pdf");
+      const scenePlanArtifact = artifacts.find((artifact) => artifact.artifact_type === "scene_plan");
+      const imagePlanArtifact = artifacts.find((artifact) => artifact.artifact_type === "image_plan");
       return json(200, {
         caseId: reviewCase.review_case_id,
         status: reviewCase.review_case_status,
@@ -1666,6 +1667,18 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           moneyLessonKey: reviewCase.money_lesson_key
         },
         pdfUrl: publicArtifactUrl(pdfArtifact?.s3_url ?? null),
+        scenePlan: scenePlanArtifact
+          ? {
+              url: publicArtifactUrl(scenePlanArtifact.s3_url),
+              createdAt: scenePlanArtifact.created_at
+            }
+          : null,
+        imagePlan: imagePlanArtifact
+          ? {
+              url: publicArtifactUrl(imagePlanArtifact.s3_url),
+              createdAt: imagePlanArtifact.created_at
+            }
+          : null,
         artifacts: artifacts.map((artifact) => ({
           artifactType: artifact.artifact_type,
           url: publicArtifactUrl(artifact.s3_url),
@@ -1690,6 +1703,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         })),
         pages: pages.map((page) => {
           const qa = parseJsonText<Record<string, unknown>>(page.qa_json, {});
+          const provenance = parseJsonText<Record<string, unknown>>(page.input_assets_json, {});
           const issues = Array.isArray(qa.issues) ? qa.issues.filter((issue): issue is string => typeof issue === "string") : [];
           return {
             pageId: page.page_id,
@@ -1698,10 +1712,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             text: page.text,
             templateId: page.template_id,
             previewImageUrl: publicArtifactUrl(page.preview_image_url),
-            scenePlateUrl: publicArtifactUrl(page.scene_plate_url),
-            pageFillUrl: publicArtifactUrl(page.page_fill_url),
+            pageArtUrl: publicArtifactUrl(page.page_art_url),
             latestQaIssues: issues,
             qaMetrics: qa.metrics ?? null,
+            provenance,
             retryCount: Math.max(Number(page.retry_count) - 1, 0)
           };
         })
@@ -1824,7 +1838,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           UPDATE images
           SET is_current = FALSE
           WHERE page_id = CAST(:pageId AS uuid)
-            AND role IN ('page', 'scene_plate', 'page_fill', 'page_preview')
+            AND role IN ('page', 'page_art', 'page_preview')
             AND is_current = TRUE
         `,
         [{ name: "pageId", value: { stringValue: pageId } }]
@@ -1951,7 +1965,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             preview.s3_url AS preview_image_url,
             p.composition_json->>'templateId' AS template_id
           FROM pages p
-          LEFT JOIN images i ON i.page_id = p.id AND i.role = 'page' AND i.is_current = TRUE
+          LEFT JOIN images i ON i.page_id = p.id AND i.role = 'page_art' AND i.is_current = TRUE
           LEFT JOIN images preview ON preview.page_id = p.id AND preview.role = 'page_preview' AND preview.is_current = TRUE
           WHERE p.book_id = CAST(:bookId AS uuid)
           ORDER BY p.page_index
