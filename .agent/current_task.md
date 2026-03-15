@@ -1,27 +1,25 @@
 # Current Task
-Task ID: clean-product-ui-system-01
+Task ID: character-approval-flow-01
 
 ## Goal
-Migrate the web app to a clean-product Tailwind and shadcn UI system, split the parent journey into routed steps, and keep the existing reviewer workflows intact.
+Add the pre-checkout character description, generation loop, and character selection flow so checkout is blocked until a parent approves a character reference.
 
 ## Constraints
-- Keep backend and API contracts unchanged.
-- Preserve the existing localStorage keys for auth/order/book persistence.
-- Honor the current checkout callback contract on `/` with `?checkout=success|cancel`.
-- Restyle the whole web app in one branch without regressing reviewer gating or current action semantics.
+- Character description is book-scoped and submitted on order creation.
+- Character generation is capped at 10 candidates per book.
+- No compatibility path for Fal-era roles or endpoints.
+- Existing parent session/order/book persistence should keep working as the flow gains character state.
 
 ## Plan (short)
-1) Install Tailwind v4 plus shadcn, add shared UI primitives and a parent-flow state provider, and replace the legacy global stylesheet with a thin token/global layer.
-2) Refactor parent routing into `/`, `/create`, `/checkout`, and `/books/current` with redirect guards, clean-product layouts, and preserved persisted state.
-3) Restyle `/verify`, `/review`, and `/review/cases/:caseId` on the same primitive layer, then verify with tests, quality gates, e2e, and screenshots.
+1) Extend the schema, API, and DB state for `characterDescription`, character candidate generation, and selection.
+2) Update the parent flow and routed UI to generate/select character candidates before checkout.
+3) Add tests for the 10-attempt cap, selection persistence, and checkout gating, then move to the next image-pipeline task.
 
 ## Evidence required
+- `pnpm --filter @book/api test`
+- `pnpm --filter @book/web test`
 - `bash scripts/agent/smoke.sh`
-- `bash scripts/agent/quality.sh`
-- `bash scripts/agent/e2e.sh`
-- updated route-level tests for parent and reviewer flows
-- desktop and mobile screenshots for `/`, `/create`, `/checkout`, `/books/current`, `/review`, and `/review/cases/:caseId`
 
 ## Status
-- verification complete: `bash scripts/agent/smoke.sh` PASS, `bash scripts/agent/quality.sh` PASS, and `bash scripts/agent/e2e.sh` returned the expected no-runner warning on `codex/clean-product-ui-system`
-- next: package the verified branch into a commit and PR
+- baseline: `bash scripts/agent/smoke.sh` PASS on `codex/openai-image-pipeline`
+- work: in progress

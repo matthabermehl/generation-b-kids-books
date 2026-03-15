@@ -4,35 +4,54 @@
 - Repo: `/Users/matthabermehl/scratch/ai-childrens-book`
 - Source branch: `master`
 - Source upstream: `Github/master`
-- Baseline on source branch: `bash scripts/agent/smoke.sh` PASS on 2026-03-08
-- Relevant frontend stack: React 18, React Router 6, Vite 5, single global stylesheet in `apps/web/src/styles.css`
-- Current parent experience is a single-route dashboard-style page that mixes auth, order creation, checkout launch, reader, download, and delete actions
-- Current reviewer experience already exists at `/review` and `/review/cases/:caseId` with typed API access and reviewer route gating
+- Baseline on source branch: `bash scripts/agent/smoke.sh` PASS on 2026-03-15
+- Current pipeline still carries Fal-specific image transport and config in `apps/workers/src/providers/image.ts`, `apps/workers/src/lib/ssm-config.ts`, `apps/api/src/lib/ssm-config.ts`, and docs.
+- Current picture-book path is a two-stage image flow:
+  - character sheet generation in `pipeline.ts`
+  - `scene_plate` generation
+  - masked `page_fill` harmonization
+  - `page_preview` rendering
+- Parent UI currently supports routed create, checkout, and current-book flows, but it does not support pre-checkout character generation/approval.
+- Reviewer UI and renderer are operational and depend on `scene_plate` / `page_fill` naming and current-asset semantics.
 
 ## Objective
-- Adopt Tailwind CSS + shadcn/ui + Radix primitives as the new web UI foundation
-- Migrate the entire web app to a clean product visual direction
-- Redesign the parent experience into route-based steps:
-  - `/`
-  - `/create`
-  - `/checkout`
-  - `/books/current`
-- Keep backend/API contracts unchanged and preserve existing localStorage keys for active session/order/book state
+- Replace the Fal/LoRA/Kontext/Fill stack with a single OpenAI image workflow based on `gpt-image-1.5`.
+- Add a pre-checkout character approval loop on the parent flow:
+  - parent enters a book-scoped `characterDescription`
+  - parent generates up to 10 character candidates
+  - parent selects one approved character reference before checkout is allowed
+- Extend beat/page planning with scene continuity metadata so subsequent page edits use:
+  - the approved character reference
+  - up to 2 prior same-scene page images
+  - a lean prompt shaped for `gpt-image-1.5`
+- Keep the deterministic page composition, fade/knockout rendering, preview/PDF output, QA gating, and reviewer workflow.
 
 ## Risks
-- The web surface is currently centralized in one stylesheet and route-level JSX; migration will touch routing, shared layout, and reviewer pages at the same time
-- Existing `.agent/feature_list.json` is already dirty in the source worktree from the latest smoke evidence update; avoid overwriting unrelated task state
-- The parent checkout callback currently returns to `/` with `?checkout=success|cancel`; the redesign must preserve that contract without requiring infra changes
-- Reviewer workflows depend on existing disabled-state and navigation behavior that should not regress while the UI system changes
+- This is a cross-cutting architectural cutover touching API contracts, DB schema, web state, worker orchestration, render inputs, reviewer payloads, runtime config, and docs in one branch.
+- Existing `images` and review queries are hard-coded to `scene_plate` / `page_fill`; partial migration would break parent, reviewer, or finalize flows.
+- Checkout gating is changing from “order exists” to “approved character exists,” so both API and web guards must change together.
+- The repo currently has harness timestamp churn in `.agent/feature_list.json`; preserve semantic task history while replacing the obsolete Fal-focused failing task set.
+- No backward compatibility is desired, so old image roles and old provider config must be removed decisively rather than left half-supported.
 
 ## Assumptions locked for this branch
-- Scope is whole-web-app, not parent-only
-- Visual direction is clean product, not warm/editorial
-- Parent flow becomes a full multi-step route flow, not just a visual reskin
-- This branch is frontend-only; no backend/database/auth contract changes
+- Character approval happens before checkout.
+- Character description is book-scoped, not child-profile-scoped.
+- No compatibility layer will be maintained for old `scene_plate` / `page_fill` assets, Fal config, or existing dev review-case payload shapes.
+- The page art output remains square (`1024x1024`) and is composited into the existing square picture-book layout pipeline.
+- Same-scene continuity uses the approved character image plus up to 2 earlier current `page_art` images from the same `sceneId`.
 
 ## Pending implementation decisions already resolved
-- Use Tailwind v4 with the Vite plugin
-- Initialize shadcn with the `new-york` style, neutral/slate base, and medium radius
-- Replace `StatusPill` with a shared `StatusBadge`
-- Consolidate parent route state behind an internal provider while keeping current localStorage keys stable
+- Public API adds:
+  - `characterDescription` on order creation
+  - `GET /v1/books/{bookId}/character`
+  - `POST /v1/books/{bookId}/character/candidates`
+  - `POST /v1/books/{bookId}/character/select`
+- Runtime image model defaults to `gpt-image-1.5`.
+- Character candidates use `images.generate`; page art uses `images.edit` with `input_fidelity=high`.
+- Prompt structure follows the OpenAI cookbook pattern:
+  - Scene
+  - Subject / Action
+  - Composition
+  - Style
+  - Preserve
+  - Constraints
