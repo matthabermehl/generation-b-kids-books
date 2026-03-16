@@ -1,5 +1,6 @@
 import type { CloudFormationCustomResourceEvent, Handler } from "aws-lambda";
 import { execute } from "./lib/rds.js";
+import { splitSqlStatements } from "./lib/sql.js";
 
 const migrationSql = `
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -160,7 +161,7 @@ CREATE TABLE IF NOT EXISTS privacy_events (
 
 ALTER TABLE books
   ADD COLUMN IF NOT EXISTS product_family TEXT NOT NULL DEFAULT 'picture_book_fixed_layout',
-  ADD COLUMN IF NOT EXISTS layout_profile_id TEXT NOT NULL DEFAULT 'pb_square_8_5_v1',
+  ADD COLUMN IF NOT EXISTS layout_profile_id TEXT NOT NULL DEFAULT 'pb_square_spread_8_5_v1',
   ADD COLUMN IF NOT EXISTS character_description TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS selected_character_image_id UUID REFERENCES images(id) ON DELETE SET NULL;
 
@@ -211,14 +212,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_review_cases_book_active ON review_cases(b
 CREATE INDEX IF NOT EXISTS idx_review_events_case ON review_events(review_case_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_privacy_events_user ON privacy_events(user_id);
 `;
-
-function splitSqlStatements(sql: string): string[] {
-  return sql
-    .split(";")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => `${part};`);
-}
 
 export const handler: Handler<CloudFormationCustomResourceEvent, { PhysicalResourceId: string; Data?: { statementCount: number } }> = async (event) => {
   const migrationVersion =

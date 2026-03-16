@@ -20,7 +20,7 @@ export type PictureBookReadingProfile = (typeof pictureBookReadingProfiles)[numb
 export const bookProductFamilies = ["picture_book_fixed_layout", "chapter_book_reflowable"] as const;
 export type BookProductFamily = (typeof bookProductFamilies)[number];
 
-export const layoutProfileIds = ["pb_square_8_5_v1"] as const;
+export const layoutProfileIds = ["pb_square_8_5_v1", "pb_square_spread_8_5_v1"] as const;
 export type LayoutProfileId = (typeof layoutProfileIds)[number];
 
 export const pageTemplateIds = [
@@ -33,7 +33,8 @@ export const pageTemplateIds = [
   "band_top_soft",
   "band_bottom_soft",
   "band_top_tall",
-  "band_bottom_tall"
+  "band_bottom_tall",
+  "text_left_art_right_v1"
 ] as const;
 export type PageTemplateId = (typeof pageTemplateIds)[number];
 

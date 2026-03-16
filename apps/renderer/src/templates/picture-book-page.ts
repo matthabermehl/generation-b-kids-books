@@ -1,13 +1,14 @@
 import sharp from "sharp";
 import {
   fitTextToBox,
+  leftPageTextRect,
   normalizedRectToPixels,
-  protectedTextRect,
+  rightPageMaskRect,
   type PageCompositionSpec,
-  type PixelRect,
   type TextFitResult
 } from "@book/domain";
 import { rendererFonts } from "./fonts.js";
+
 export type { PageCompositionSpec, TextFitResult };
 export { fitTextToBox };
 
@@ -21,9 +22,9 @@ function escapeXml(value: string): string {
 }
 
 function fadeMaskSvg(composition: PageCompositionSpec): string {
-  const rect = normalizedRectToPixels(composition.maskBox, composition.canvas);
-  const blur = Math.max(8, Math.round(composition.fade.featherPx / 2));
-  if (composition.fade.shape === "soft_band") {
+  const rect = rightPageMaskRect(composition);
+  const blur = Math.max(8, Math.round(composition.rightPage.fade.featherPx / 2));
+  if (composition.rightPage.fade.shape === "soft_band") {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${composition.canvas.width}" height="${composition.canvas.height}" viewBox="0 0 ${composition.canvas.width} ${composition.canvas.height}">
       <defs><filter id="blur"><feGaussianBlur stdDeviation="${blur}" /></filter></defs>
       <rect width="100%" height="100%" fill="black" />
@@ -40,15 +41,6 @@ function fadeMaskSvg(composition: PageCompositionSpec): string {
   </svg>`;
 }
 
-function knockoutSvg(composition: PageCompositionSpec, rect: PixelRect, featherPx: number): string {
-  const blur = Math.max(8, Math.round(featherPx / 2));
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${composition.canvas.width}" height="${composition.canvas.height}" viewBox="0 0 ${composition.canvas.width} ${composition.canvas.height}">
-    <defs><filter id="blur"><feGaussianBlur stdDeviation="${blur}" /></filter></defs>
-    <rect width="100%" height="100%" fill="rgba(255,255,255,0)" />
-    <rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" rx="40" ry="40" fill="white" filter="url(#blur)" />
-  </svg>`;
-}
-
 export async function buildArtBackground(artBytes: Buffer, composition: PageCompositionSpec): Promise<Buffer> {
   const mask = await sharp(Buffer.from(fadeMaskSvg(composition))).png().toBuffer();
   const normalizedArt = await sharp(artBytes)
@@ -61,7 +53,6 @@ export async function buildArtBackground(artBytes: Buffer, composition: PageComp
     .png()
     .toBuffer();
   const masked = await sharp(normalizedArt).composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
-  const knockout = await sharp(Buffer.from(knockoutSvg(composition, protectedTextRect(composition), 24))).png().toBuffer();
 
   return sharp({
     create: {
@@ -71,16 +62,13 @@ export async function buildArtBackground(artBytes: Buffer, composition: PageComp
       background: "#ffffff"
     }
   })
-    .composite([
-      { input: masked, blend: "over" },
-      { input: knockout, blend: "over" }
-    ])
+    .composite([{ input: masked, blend: "over" }])
     .png()
     .toBuffer();
 }
 
 function buildTextOverlaySvg(text: string, composition: PageCompositionSpec, fit: TextFitResult): string {
-  const rect = normalizedRectToPixels(composition.textBox, composition.canvas);
+  const rect = leftPageTextRect(composition);
   const lineHeightPx = fit.fontPx * composition.textStyle.lineHeight;
   const tspans = fit.lines
     .map((line, index) => {
@@ -94,17 +82,58 @@ function buildTextOverlaySvg(text: string, composition: PageCompositionSpec, fit
   </svg>`;
 }
 
+async function buildTextPage(text: string, composition: PageCompositionSpec, fit: TextFitResult): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: composition.canvas.width,
+      height: composition.canvas.height,
+      channels: 4,
+      background: "#ffffff"
+    }
+  })
+    .composite([{ input: Buffer.from(buildTextOverlaySvg(text, composition, fit)), blend: "over" }])
+    .png()
+    .toBuffer();
+}
+
+async function buildSpreadPreview(leftPagePng: Buffer, rightPagePng: Buffer, composition: PageCompositionSpec): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: composition.spreadCanvas.width,
+      height: composition.spreadCanvas.height,
+      channels: 4,
+      background: "#ffffff"
+    }
+  })
+    .composite([
+      { input: leftPagePng, left: 0, top: 0 },
+      { input: rightPagePng, left: composition.canvas.width, top: 0 }
+    ])
+    .png()
+    .toBuffer();
+}
+
 export async function renderPictureBookPreview(input: {
   artBytes: Buffer;
   text: string;
   composition: PageCompositionSpec;
-}): Promise<{ previewPng: Buffer; artBackgroundPng: Buffer; textFit: TextFitResult }> {
-  const artBackgroundPng = await buildArtBackground(input.artBytes, input.composition);
+}): Promise<{
+  previewPng: Buffer;
+  artBackgroundPng: Buffer;
+  leftPagePng: Buffer;
+  rightPagePng: Buffer;
+  textFit: TextFitResult;
+}> {
+  const rightPagePng = await buildArtBackground(input.artBytes, input.composition);
   const textFit = fitTextToBox(input.text, input.composition);
-  const previewPng = await sharp(artBackgroundPng)
-    .composite([{ input: Buffer.from(buildTextOverlaySvg(input.text, input.composition, textFit)), blend: "over" }])
-    .png()
-    .toBuffer();
+  const leftPagePng = await buildTextPage(input.text, input.composition, textFit);
+  const previewPng = await buildSpreadPreview(leftPagePng, rightPagePng, input.composition);
 
-  return { previewPng, artBackgroundPng, textFit };
+  return {
+    previewPng,
+    artBackgroundPng: rightPagePng,
+    leftPagePng,
+    rightPagePng,
+    textFit
+  };
 }

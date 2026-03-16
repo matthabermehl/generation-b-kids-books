@@ -1,27 +1,34 @@
 # Current Task
-Task ID: review-render-image-cutover-01
+Task ID: spread-layout-v1-01
 
 ## Goal
-Finish the OpenAI `page_art` cutover across workers, API, web, ops scripts, and docs, then verify the branch.
+Replace same-page text-over-art picture-book pages with deterministic facing spreads that keep text on the left page and watercolor art on the right page.
 
 ## Constraints
-- Fal-era runtime config and image-role compatibility are intentionally out of scope.
-- Full-book picture-book generation runs page-by-page in `page_index` order.
-- Live dev validation requires the current branch to be deployed before the new character approval endpoints exist remotely.
+- Keep `page_art` as the canonical illustration asset and `page_preview` as the spread preview artifact.
+- Preserve scene continuity, character consistency, review-case semantics, and print-friendly PDF export.
+- Keep the architecture scoped to picture-book fixed-layout books only.
 
 ## Plan (short)
-1) Keep `page_art` and provenance wired end to end across render/review/status paths.
-2) Verify with workers/API/web tests plus smoke and quality gates.
-3) Record the live-dev smoke blocker explicitly until this branch is deployed.
+1) Refactor shared layout and QA contracts around a single spread-first template.
+2) Update worker prompting, masking, renderer output, and artifact generation for spread previews plus physical-page PDF export.
+3) Retarget API/web reviewer and parent reader payloads to the new spread-preview contract and verify with quality gates.
 
 ## Evidence required
+- `pnpm --filter @book/domain test`
 - `pnpm --filter @book/workers test`
 - `pnpm --filter @book/api test`
 - `pnpm --filter @book/web test`
-- `bash scripts/agent/smoke.sh`
+- `pnpm --filter @book/renderer test`
 - `bash scripts/agent/quality.sh`
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS
-- work: completed locally
-- live validation: `pnpm ops:provider-smoke` PASS; `pnpm ops:picture-book-smoke` currently fails against deployed dev because `/v1/books/{bookId}/character/candidates` is not deployed there yet
+- work: implementation complete on `codex/spread-layout-v1`
+- verification:
+  - `pnpm --filter @book/domain test` PASS
+  - `pnpm --filter @book/workers test` PASS
+  - `pnpm --filter @book/renderer test` PASS
+  - `pnpm --filter @book/api test` PASS
+  - `pnpm --filter @book/web test` PASS
+  - `bash scripts/agent/quality.sh` PASS

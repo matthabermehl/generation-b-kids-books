@@ -1,13 +1,13 @@
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import type { Handler } from "aws-lambda";
 import {
+  compositionForTemplate,
   pictureBookLayoutProfileId,
   pictureBookReadingProfiles,
   buildPageArtPrompt,
   type BookProductFamily,
   type MoneyLessonKey,
   type PageCompositionSpec,
-  type PageTemplateId,
   type PictureBookReadingProfile,
   type ReviewStage,
   type ReadingProfile
@@ -715,20 +715,9 @@ async function enqueuePageImage(
     };
   }
 
-  let previousTemplateId: PageTemplateId | null = null;
   const pictureBookProfile = isPictureBookReadingProfile(context.reading_profile_id)
     ? context.reading_profile_id
     : null;
-
-  for (const page of pages) {
-    if (Number(page.page_index) >= Number(queuedPage.page_index)) {
-      break;
-    }
-    if (page.composition_json) {
-      const composition = safeJsonParse<PageCompositionSpec | null>(page.composition_json, null);
-      previousTemplateId = composition?.templateId ?? previousTemplateId;
-    }
-  }
 
   const queuedPreparedPage = preparedPages.find((page) => page.id === queuedPage.id);
   if (!queuedPreparedPage) {
@@ -749,8 +738,7 @@ async function enqueuePageImage(
       bookId,
       pageIndex: Number(queuedPage.page_index),
       text: queuedPage.text,
-      readingProfileId: pictureBookProfile ?? "early_decoder_5_7",
-      previousTemplateId
+      readingProfileId: pictureBookProfile ?? "early_decoder_5_7"
     });
     await execute(
       `UPDATE pages SET composition_json = CAST(:composition AS jsonb) WHERE id = CAST(:pageId AS uuid)`,
@@ -1043,22 +1031,10 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
   }>;
 
   for (const row of pageData) {
-    const composition = safeJsonParse<PageCompositionSpec>(row.composition_json ?? "{}", {
-      layoutProfileId: pictureBookLayoutProfileId(),
-      templateId: "corner_ul_ellipse",
-      canvas: { width: 2048, height: 2048 },
-      textBox: { x: 0.08, y: 0.08, width: 0.34, height: 0.25 },
-      artBox: { x: 0.40, y: 0.18, width: 0.52, height: 0.62 },
-      maskBox: { x: 0.36, y: 0.14, width: 0.58, height: 0.68 },
-      fade: { shape: "ellipse", featherPx: 120 },
-      textStyle: {
-        readingProfileId: pictureBookReadingProfile,
-        preferredFontPx: 64,
-        minFontPx: 52,
-        lineHeight: 1.2,
-        align: "left"
-      }
-    });
+    const composition = safeJsonParse<PageCompositionSpec>(
+      row.composition_json ?? "{}",
+      compositionForTemplate("text_left_art_right_v1", pictureBookReadingProfile)
+    );
     const previewOutputKey = `books/${bookId}/render/previews/page-${Number(row.page_index) + 1}.png`;
     await upsertPagePreviewRecord(bookId, row.page_id, Number(row.page_index), `s3://${process.env.ARTIFACT_BUCKET}/${previewOutputKey}`);
     renderPages.push({

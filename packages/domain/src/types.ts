@@ -113,19 +113,34 @@ export interface PageTextStyleSpec {
   align: "left";
 }
 
-export interface PageCompositionSpec {
+export interface SpreadTextPageSpec {
+  textBox: NormalizedRect;
+}
+
+export interface SpreadArtPageSpec {
+  artBox: NormalizedRect;
+  maskBox: NormalizedRect;
+  fade: PageFadeSpec;
+  gutterSafeInsetPx: number;
+}
+
+export interface SpreadCompositionSpec {
   layoutProfileId: LayoutProfileId;
   templateId: PageTemplateId;
   canvas: {
     width: number;
     height: number;
   };
-  textBox: NormalizedRect;
-  artBox: NormalizedRect;
-  maskBox: NormalizedRect;
-  fade: PageFadeSpec;
+  spreadCanvas: {
+    width: number;
+    height: number;
+  };
+  leftPage: SpreadTextPageSpec;
+  rightPage: SpreadArtPageSpec;
   textStyle: PageTextStyleSpec;
 }
+
+export type PageCompositionSpec = SpreadCompositionSpec;
 
 export interface BookProductConfig {
   productFamily: BookProductFamily;

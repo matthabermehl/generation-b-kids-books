@@ -153,6 +153,10 @@ function scaleCompositionForWorkingCanvas(composition: PageCompositionSpec): Pag
     canvas: {
       width: pageArtWorkingCanvasSize,
       height: pageArtWorkingCanvasSize
+    },
+    spreadCanvas: {
+      width: pageArtWorkingCanvasSize * 2,
+      height: pageArtWorkingCanvasSize
     }
   };
 }
@@ -242,7 +246,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
 
   let activeComposition = job.composition;
   let finalQa: PictureBookQaPayload | null = null;
-  let stopAfterTextZoneFailure = false;
+  let stopAfterSpreadQaFailure = false;
 
   await persistPageComposition(job.pageId, activeComposition);
 
@@ -280,7 +284,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
       canvasS3Url,
       maskS3Url,
       maskRect: mask.rect,
-      protectedTextRect: mask.protectedTextRect,
+      gutterSafeRect: mask.gutterSafeRect,
       previewTemplateId: activeComposition.templateId,
       providerCanvas: providerComposition.canvas
     };
@@ -358,7 +362,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         return;
       }
 
-      if (category === "text_zone" && qaHasTextOverflow(qaPayload)) {
+      if (category === "text_layout" && qaHasTextOverflow(qaPayload)) {
         const alternateComposition = selectAlternatePictureBookComposition({
           bookId: job.bookId,
           pageIndex: job.pageIndex,
@@ -368,7 +372,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         });
 
         if (!alternateComposition) {
-          stopAfterTextZoneFailure = true;
+          stopAfterSpreadQaFailure = true;
           break;
         }
 
@@ -388,8 +392,8 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         continue;
       }
 
-      if (category === "text_zone") {
-        stopAfterTextZoneFailure = true;
+      if (category === "text_layout" || category === "gutter_safety") {
+        stopAfterSpreadQaFailure = true;
       }
       break;
     } catch (error) {
@@ -439,7 +443,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
       pageId: job.pageId,
       role: "page_art",
       bookId: job.bookId,
-      endpoint: stopAfterTextZoneFailure ? "qa-needs-review" : "qa-failed",
+      endpoint: stopAfterSpreadQaFailure ? "qa-needs-review" : "qa-failed",
       prompt: job.brief.pageArtPrompt,
       seed: 0,
       qaJson: finalQa,

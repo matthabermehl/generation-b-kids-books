@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  compositionForTemplate,
   rankPageTemplateCandidates,
-  protectedTextRect,
+  rightPageGutterSafeRect,
+  rightPageMaskRect,
   selectAlternatePageTemplate,
   selectPageComposition
 } from "../src/layouts.js";
@@ -17,7 +19,7 @@ Then Nora saw a soccer sticker on the table. It cost two coins.
 "I could buy that sticker now," Nora thought. "But then I would have only three coins left."`;
 
 describe("picture book layouts", () => {
-  it("selects deterministic templates for a given page", () => {
+  it("selects deterministic spread compositions for a given page", () => {
     const first = selectPageComposition({
       bookId: "book-1",
       pageIndex: 0,
@@ -33,47 +35,30 @@ describe("picture book layouts", () => {
     });
 
     expect(first).toEqual(second);
-    expect(first.layoutProfileId).toBe("pb_square_8_5_v1");
+    expect(first.layoutProfileId).toBe("pb_square_spread_8_5_v1");
+    expect(first.templateId).toBe("text_left_art_right_v1");
   });
 
-  it("avoids repeating the same template family on adjacent pages when alternatives exist", () => {
-    const previous = selectPageComposition({
-      bookId: "book-2",
-      pageIndex: 0,
-      text: "This is a longer early reader page that should have enough text to allow multiple templates.",
-      readingProfileId: "early_decoder_5_7"
-    });
+  it("uses the same canonical spread template for all picture-book pages in v1", () => {
+    const composition = compositionForTemplate("text_left_art_right_v1", "early_decoder_5_7");
 
-    const current = selectPageComposition({
-      bookId: "book-2",
-      pageIndex: 1,
-      text: "This is another longer early reader page that should prefer a different template family.",
-      readingProfileId: "early_decoder_5_7",
-      previousTemplateId: previous.templateId
-    });
-
-    expect(current.templateId.split("_")[0]).not.toBe(previous.templateId.split("_")[0]);
+    expect(composition.leftPage.textBox.width).toBeGreaterThan(0.7);
+    expect(composition.spreadCanvas.width).toBe(composition.canvas.width * 2);
   });
 
-  it("selects the next deterministic alternate template in ranked order", () => {
-    const ranked = rankPageTemplateCandidates({
-      bookId: "book-2",
-      pageIndex: 3,
-      text: earlyDecoderOverflowText,
-      readingProfileId: "early_decoder_5_7"
-    }).map((entry) => entry.templateId);
+  it("does not offer alternate spread templates in v1", () => {
     const alternate = selectAlternatePageTemplate({
       bookId: "book-2",
       pageIndex: 3,
-      currentTemplateId: ranked[0]!,
+      currentTemplateId: "text_left_art_right_v1",
       readingProfileId: "early_decoder_5_7",
       text: earlyDecoderOverflowText
     });
 
-    expect(alternate).toBe(ranked[1]);
+    expect(alternate).toBeNull();
   });
 
-  it("ranks long early-decoder pages onto tall layouts before soft fallbacks", () => {
+  it("fits long early-decoder text on the dedicated left text page", () => {
     const ranked = rankPageTemplateCandidates({
       bookId: "book-overflow",
       pageIndex: 2,
@@ -81,23 +66,17 @@ describe("picture book layouts", () => {
       readingProfileId: "early_decoder_5_7"
     });
 
-    expect(ranked[0]?.templateId).toMatch(/^column_(left|right)_tall$/);
+    expect(ranked).toHaveLength(1);
+    expect(ranked[0]?.templateId).toBe("text_left_art_right_v1");
     expect(ranked[0]?.fit.ok).toBe(true);
-    expect(ranked.find((entry) => entry.templateId === "column_left_soft")?.fit.ok).toBe(false);
-    expect(ranked.find((entry) => entry.templateId === "column_right_soft")?.fit.ok).toBe(false);
   });
 
-  it("expands a protected text rect beyond the live text box", () => {
-    const composition = selectPageComposition({
-      bookId: "book-3",
-      pageIndex: 0,
-      text: "A short calm page about saving up for a bike.",
-      readingProfileId: "read_aloud_3_4"
-    });
+  it("keeps the editable art mask away from the protected inner gutter strip", () => {
+    const composition = compositionForTemplate("text_left_art_right_v1", "read_aloud_3_4");
+    const gutterRect = rightPageGutterSafeRect(composition);
+    const maskRect = rightPageMaskRect(composition);
 
-    const protectedRect = protectedTextRect(composition);
-
-    expect(protectedRect.width).toBeGreaterThan(Math.round(composition.textBox.width * composition.canvas.width));
-    expect(protectedRect.height).toBeGreaterThan(Math.round(composition.textBox.height * composition.canvas.height));
+    expect(gutterRect.width).toBe(composition.rightPage.gutterSafeInsetPx);
+    expect(maskRect.left).toBeGreaterThan(gutterRect.width);
   });
 });

@@ -191,7 +191,7 @@ async function renderPictureBookPdf(input: RenderInput): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
   });
 
-  let firstPage = true;
+  let hasRenderedSpread = false;
   for (const page of input.pages) {
     if (!isPictureBookPage(page)) {
       continue;
@@ -205,15 +205,14 @@ async function renderPictureBookPdf(input: RenderInput): Promise<Buffer> {
     });
     await putS3Buffer(page.previewOutputKey, rendered.previewPng, "image/png");
 
-    if (!firstPage) {
+    if (hasRenderedSpread) {
       doc.addPage({ size: [pageSize, pageSize], margin: 0 });
     }
-    firstPage = false;
+    hasRenderedSpread = true;
 
-    doc.image(rendered.artBackgroundPng, 0, 0, { width: pageSize, height: pageSize });
-    const textLeft = page.composition.textBox.x * pageSize;
-    const textTop = page.composition.textBox.y * pageSize;
-    const boxWidth = page.composition.textBox.width * pageSize;
+    const textLeft = page.composition.leftPage.textBox.x * pageSize;
+    const textTop = page.composition.leftPage.textBox.y * pageSize;
+    const boxWidth = page.composition.leftPage.textBox.width * pageSize;
     const lineHeight = rendered.textFit.fontPx * (pageSize / page.composition.canvas.width) * page.composition.textStyle.lineHeight;
     const fontSize = rendered.textFit.fontPx * (pageSize / page.composition.canvas.width);
     doc.fillColor("#111827");
@@ -224,6 +223,9 @@ async function renderPictureBookPdf(input: RenderInput): Promise<Buffer> {
         lineBreak: false
       });
     });
+
+    doc.addPage({ size: [pageSize, pageSize], margin: 0 });
+    doc.image(rendered.rightPagePng, 0, 0, { width: pageSize, height: pageSize });
   }
 
   doc.end();

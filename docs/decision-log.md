@@ -111,3 +111,7 @@
 ## 2026-03-06: Split fixed-layout image generation into scene and fill stages
 - Decision: use `Kontext` for square scene plates and `FLUX Fill` for masked page harmonization.
 - Rationale: the model handles subject/style generation, while deterministic whitespace, fade behavior, and QA remain under system control.
+
+## 2026-03-16: Make picture-book layouts spread-first
+- Decision: treat each picture-book story page as a facing spread with a text-only left page and an illustration-only right page.
+- Rationale: this removes text/illustration collisions at the root, preserves generous watercolor whitespace, and keeps review/reader previews aligned with the intended book experience while still allowing print-friendly physical page export.

@@ -1333,8 +1333,11 @@ export interface components {
             moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
             /** @enum {string} */
             productFamily?: "picture_book_fixed_layout" | "chapter_book_reflowable";
+            spreadCount: number;
+            physicalPageCount: number;
             pages: {
                 pageIndex: number;
+                spreadIndex: number;
                 text: string;
                 /** @enum {string} */
                 status: "pending" | "ready" | "failed";
@@ -1407,6 +1410,8 @@ export interface components {
                 readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
                 /** @enum {string} */
                 moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
+                spreadCount: number;
+                physicalPageCount: number;
             };
             pdfUrl: string | null;
             scenePlan: {
@@ -1451,6 +1456,7 @@ export interface components {
                 /** Format: uuid */
                 pageId: string;
                 pageIndex: number;
+                spreadIndex: number;
                 /** @enum {string} */
                 status: "pending" | "ready" | "failed";
                 text: string;

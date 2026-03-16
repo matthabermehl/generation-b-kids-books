@@ -543,6 +543,17 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     });
     api.addRoutes({ path: "/v1/orders/{orderId}", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
     api.addRoutes({ path: "/v1/books/{bookId}", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
+    api.addRoutes({ path: "/v1/books/{bookId}/character", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
+    api.addRoutes({
+      path: "/v1/books/{bookId}/character/candidates",
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration
+    });
+    api.addRoutes({
+      path: "/v1/books/{bookId}/character/select",
+      methods: [apigwv2.HttpMethod.POST],
+      integration: apiIntegration
+    });
     api.addRoutes({ path: "/v1/review/cases", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
     api.addRoutes({ path: "/v1/review/cases/{caseId}", methods: [apigwv2.HttpMethod.GET], integration: apiIntegration });
     api.addRoutes({
