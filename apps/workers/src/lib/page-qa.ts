@@ -2,9 +2,9 @@ import sharp from "sharp";
 import {
   fitTextToBox,
   insetPixelRect,
-  normalizedRectToPixels,
+  rightPageArtRect,
+  rightPageGutterSafeRect,
   type PageCompositionSpec,
-  type PixelRect,
   type TextFitResult
 } from "@book/domain";
 
@@ -12,49 +12,32 @@ export interface PageQaResult {
   passed: boolean;
   issues: string[];
   metrics: {
-    meanLuminance: number;
-    p10Luminance: number;
-    edgeDensity: number;
-    contrastRatio: number;
+    gutterMeanLuminance: number;
+    gutterP10Luminance: number;
+    gutterEdgeDensity: number;
+    gutterOccupancyRatio: number;
     artOccupancy: number;
-    spillRatio: number;
   };
   textFit: TextFitResult;
 }
 
-export type PictureBookQaCategory = "text_zone" | "art_strength" | "provider_timeout" | "safety" | "other";
+export type PictureBookQaCategory =
+  | "text_layout"
+  | "gutter_safety"
+  | "art_strength"
+  | "provider_timeout"
+  | "safety"
+  | "other";
 
-const textZoneIssues = new Set([
-  "text_zone_spill",
-  "text_zone_busy",
-  "text_zone_low_luminance",
-  "text_zone_high_edge_density",
-  "contrast_fail",
-  "text_overflow"
-]);
+const textLayoutIssues = new Set(["text_overflow"]);
+const gutterSafetyIssues = new Set(["gutter_intrusion", "gutter_low_luminance", "gutter_high_edge_density"]);
 export { fitTextToBox };
 
 function luminance(r: number, g: number, b: number): number {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }
 
-function relativeLuminanceFromRgb(r: number, g: number, b: number): number {
-  const convert = (channel: number) => {
-    const value = channel / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  };
-
-  return 0.2126 * convert(r) + 0.7152 * convert(g) + 0.0722 * convert(b);
-}
-
-function contrastRatio(backgroundLuminance: number): number {
-  const textLuminance = relativeLuminanceFromRgb(17, 24, 39);
-  const lighter = Math.max(backgroundLuminance, textLuminance);
-  const darker = Math.min(backgroundLuminance, textLuminance);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-async function sampleRect(buffer: Buffer, rect: PixelRect) {
+async function sampleRect(buffer: Buffer, rect: { left: number; top: number; width: number; height: number }) {
   const { data, info } = await sharp(buffer)
     .extract({ left: rect.left, top: rect.top, width: rect.width, height: rect.height })
     .ensureAlpha()
@@ -68,8 +51,11 @@ export function classifyPictureBookIssues(issues: string[]): PictureBookQaCatego
   if (issues.some((issue) => issue.startsWith("safety_flagged_prompt:"))) {
     return "safety";
   }
-  if (issues.some((issue) => textZoneIssues.has(issue))) {
-    return "text_zone";
+  if (issues.some((issue) => textLayoutIssues.has(issue))) {
+    return "text_layout";
+  }
+  if (issues.some((issue) => gutterSafetyIssues.has(issue))) {
+    return "gutter_safety";
   }
   if (issues.some((issue) => issue === "provider_timeout" || issue.toLowerCase().includes("timed out"))) {
     return "provider_timeout";
@@ -91,70 +77,56 @@ export async function evaluatePictureBookPage(
     issues.push("text_overflow");
   }
 
-  const textRect = normalizedRectToPixels(composition.textBox, composition.canvas);
-  const innerTextRect = insetPixelRect(textRect, 48, composition.canvas);
-  const luminanceSample = await sampleRect(backgroundBytes, innerTextRect);
-  const edgeSample = await sampleRect(backgroundBytes, textRect);
+  const gutterRect = insetPixelRect(rightPageGutterSafeRect(composition), 24, composition.canvas);
+  const gutterSample = await sampleRect(backgroundBytes, gutterRect);
 
   const luminances: number[] = [];
-  let spillPixels = 0;
-  for (let i = 0; i < luminanceSample.data.length; i += luminanceSample.info.channels) {
-    const r = luminanceSample.data[i] ?? 255;
-    const g = luminanceSample.data[i + 1] ?? 255;
-    const b = luminanceSample.data[i + 2] ?? 255;
+  let occupiedPixels = 0;
+  let edges = 0;
+  const gutterPixels = Math.max(gutterSample.info.width * gutterSample.info.height, 1);
+
+  for (let i = 0; i < gutterSample.data.length; i += gutterSample.info.channels) {
+    const r = gutterSample.data[i] ?? 255;
+    const g = gutterSample.data[i + 1] ?? 255;
+    const b = gutterSample.data[i + 2] ?? 255;
     const lum = luminance(r, g, b);
     luminances.push(lum);
-    if (lum < 0.94) {
-      spillPixels += 1;
+    if (lum < 0.97) {
+      occupiedPixels += 1;
     }
-  }
 
-  let edges = 0;
-  const edgeLuminancesCount = Math.max(edgeSample.info.width * edgeSample.info.height, 1);
-  for (let i = 0; i < edgeSample.data.length; i += edgeSample.info.channels) {
-    const r = edgeSample.data[i] ?? 255;
-    const g = edgeSample.data[i + 1] ?? 255;
-    const b = edgeSample.data[i + 2] ?? 255;
-    const lum = luminance(r, g, b);
-    const pixelIndex = i / edgeSample.info.channels;
-    const x = pixelIndex % edgeSample.info.width;
+    const pixelIndex = i / gutterSample.info.channels;
+    const x = pixelIndex % gutterSample.info.width;
     if (x > 0) {
-      const prevIndex = i - edgeSample.info.channels;
+      const prevIndex = i - gutterSample.info.channels;
       const prevLum = luminance(
-        edgeSample.data[prevIndex] ?? 255,
-        edgeSample.data[prevIndex + 1] ?? 255,
-        edgeSample.data[prevIndex + 2] ?? 255
+        gutterSample.data[prevIndex] ?? 255,
+        gutterSample.data[prevIndex + 1] ?? 255,
+        gutterSample.data[prevIndex + 2] ?? 255
       );
-      if (Math.abs(lum - prevLum) > 0.08) {
+      if (Math.abs(lum - prevLum) > 0.05) {
         edges += 1;
       }
     }
   }
 
   luminances.sort((a, b) => a - b);
-  const meanLuminance = luminances.reduce((sum, value) => sum + value, 0) / Math.max(luminances.length, 1);
-  const p10Luminance = luminances[Math.floor(luminances.length * 0.1)] ?? meanLuminance;
-  const edgeDensity = edges / edgeLuminancesCount;
-  const spillRatio = spillPixels / Math.max(luminances.length, 1);
-  const ratio = contrastRatio(meanLuminance);
+  const gutterMeanLuminance = luminances.reduce((sum, value) => sum + value, 0) / Math.max(luminances.length, 1);
+  const gutterP10Luminance = luminances[Math.floor(luminances.length * 0.1)] ?? gutterMeanLuminance;
+  const gutterEdgeDensity = edges / gutterPixels;
+  const gutterOccupancyRatio = occupiedPixels / gutterPixels;
 
-  if (meanLuminance < 0.9) {
-    issues.push("text_zone_busy");
+  if (gutterP10Luminance < 0.94) {
+    issues.push("gutter_low_luminance");
   }
-  if (p10Luminance < 0.82) {
-    issues.push("text_zone_low_luminance");
+  if (gutterEdgeDensity > 0.03) {
+    issues.push("gutter_high_edge_density");
   }
-  if (edgeDensity > 0.1) {
-    issues.push("text_zone_high_edge_density");
-  }
-  if (ratio < 7) {
-    issues.push("contrast_fail");
-  }
-  if (spillRatio > 0.02) {
-    issues.push("text_zone_spill");
+  if (gutterOccupancyRatio > 0.015) {
+    issues.push("gutter_intrusion");
   }
 
-  const artRect = normalizedRectToPixels(composition.artBox, composition.canvas);
+  const artRect = rightPageArtRect(composition);
   const artSample = await sampleRect(backgroundBytes, artRect);
   let occupied = 0;
   const artPixels = artSample.info.width * artSample.info.height;
@@ -168,7 +140,7 @@ export async function evaluatePictureBookPage(
   }
 
   const artOccupancy = occupied / Math.max(artPixels, 1);
-  if (artOccupancy < 0.4) {
+  if (artOccupancy < 0.32) {
     issues.push("weak_art");
   }
 
@@ -176,12 +148,11 @@ export async function evaluatePictureBookPage(
     passed: issues.length === 0,
     issues,
     metrics: {
-      meanLuminance,
-      p10Luminance,
-      edgeDensity,
-      contrastRatio: ratio,
-      artOccupancy,
-      spillRatio
+      gutterMeanLuminance,
+      gutterP10Luminance,
+      gutterEdgeDensity,
+      gutterOccupancyRatio,
+      artOccupancy
     },
     textFit
   };

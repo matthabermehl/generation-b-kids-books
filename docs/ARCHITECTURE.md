@@ -22,11 +22,11 @@
 
 For `picture_book_fixed_layout` books, the image/render chain is:
 1. explicit character approval before checkout
-2. deterministic page template selection plus persisted `scene-plan.json` / `image-plan.json`
+2. deterministic spread composition selection plus persisted `scene-plan.json` / `image-plan.json`
 3. single-pass `page_art` generation via OpenAI image edits using the approved character reference and up to two prior same-scene pages
-4. deterministic white knockout + fade behind live text
-5. preview PNG rendering
-6. final PDF rendering with live text
+4. deterministic text-left / art-right spread composition with a text-only left page and masked watercolor art on the right page
+5. landscape spread preview PNG rendering
+6. final PDF rendering as separate physical pages in reading order
 
 ## Runtime Components
 
@@ -99,7 +99,7 @@ Cross-cutting:
 
 ### Renderer (`apps/renderer`)
 - ECS Fargate service and one-shot render command
-- picture-book render path writes per-page preview PNGs and final live-text PDF
+- picture-book render path writes landscape spread preview PNGs and a print-friendly PDF with separate left/right physical pages
 - legacy render path remains supported for fallback books
 - legacy render path fetches page images from S3 and embeds binaries into PDF
 - supports PNG/JPEG directly and SVG via deterministic rasterization
@@ -178,7 +178,7 @@ Fixed-layout additions:
 
 ## Determinism, Safety, and Privacy Controls
 - Deterministic seed: `hash32(book_id + ":" + page_index + ":" + version)`
-- Deterministic page template selection for fixed-layout books
+- Deterministic spread template selection for fixed-layout books
 - Story checks:
   - strict beat sheet schema validation (planner, critics, rewrite, final writer)
   - late Bitcoin reveal (~80/20 arc)
@@ -193,10 +193,9 @@ Fixed-layout additions:
   - image prompt safety gate
   - release gate before finalization
 - Fixed-layout page QA:
-  - text-fit check
-  - protected text-zone knockout behind live text
-  - whitespace/luminance check in an inset text zone
-  - contrast and art occupancy checks
+  - left-page text-fit check
+  - right-page gutter-safety / whitespace check
+  - right-page art occupancy check
 - Prompting evidence:
   - `books/<bookId>/beat-plan.json` stores planner + validator + critic + rewrite lineage
   - `books/<bookId>/beat-plan-failed.json` stores failed beat-planning lineage

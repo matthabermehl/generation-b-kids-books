@@ -116,6 +116,8 @@ export function ReviewCasePage() {
               <CardContent className="space-y-2 text-sm text-slate-600">
                 <p>Reading profile: {payload.book.readingProfileId}</p>
                 <p>Lesson: {payload.book.moneyLessonKey}</p>
+                <p>Spreads: {payload.book.spreadCount}</p>
+                <p>Physical pages: {payload.book.physicalPageCount}</p>
                 <p>Order: {payload.order.orderId}</p>
                 <p>Book: {payload.book.bookId}</p>
               </CardContent>
@@ -202,8 +204,8 @@ export function ReviewCasePage() {
             <Card className="border-border/70 bg-white/95">
               <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-2xl font-semibold text-slate-950">Page review</h2>
-                  <CardDescription>Inspect the selected page across preview and final page art outputs.</CardDescription>
+                  <h2 className="text-2xl font-semibold text-slate-950">Spread review</h2>
+                  <CardDescription>Inspect the selected spread preview alongside the right-page illustration asset.</CardDescription>
                 </div>
                 <div className="text-sm text-slate-500">Order {payload.order.orderId} · Book {payload.book.bookId}</div>
               </CardHeader>
@@ -213,7 +215,7 @@ export function ReviewCasePage() {
                     <TabsList variant="line" className="min-w-max">
                       {payload.pages.map((page) => (
                         <TabsTrigger key={page.pageId} value={page.pageId}>
-                          Page {page.pageIndex + 1}
+                          Spread {page.spreadIndex + 1}
                         </TabsTrigger>
                       ))}
                     </TabsList>
@@ -223,25 +225,25 @@ export function ReviewCasePage() {
                       <div className="grid gap-4 xl:grid-cols-2">
                         <Card className="border-border/70 bg-slate-50/70">
                           <CardHeader>
-                            <h3 className="text-base font-semibold text-slate-950">Preview</h3>
+                            <h3 className="text-base font-semibold text-slate-950">Spread preview</h3>
                           </CardHeader>
                           <CardContent>
                             {page.previewImageUrl ? (
-                              <img src={page.previewImageUrl} alt="Preview" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
+                              <img src={page.previewImageUrl} alt="Spread preview" className="aspect-[2/1] w-full rounded-xl border border-border bg-white object-contain" />
                             ) : (
-                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No page preview yet</div>
+                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No spread preview yet</div>
                             )}
                           </CardContent>
                         </Card>
                         <Card className="border-border/70 bg-slate-50/70">
                           <CardHeader>
-                            <h3 className="text-base font-semibold text-slate-950">Page art</h3>
+                            <h3 className="text-base font-semibold text-slate-950">Right-page art</h3>
                           </CardHeader>
                           <CardContent>
                             {page.pageArtUrl ? (
-                              <img src={page.pageArtUrl} alt="Page art" className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain" />
+                              <img src={page.pageArtUrl} alt="Right-page art" className="aspect-square w-full rounded-xl border border-border bg-white object-contain" />
                             ) : (
-                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No page art</div>
+                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No right-page art</div>
                             )}
                           </CardContent>
                         </Card>
@@ -260,6 +262,7 @@ export function ReviewCasePage() {
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm text-slate-600">
                     <p className="leading-6">{selectedPage.text}</p>
+                    <p>Spread: {selectedPage.spreadIndex + 1}</p>
                     <p>Template: {selectedPage.templateId ?? "n/a"}</p>
                     <p>Scene: {String(selectedPage.provenance?.sceneId ?? "n/a")}</p>
                     <p>

@@ -83,6 +83,18 @@ export function CurrentBookPage() {
                       <p className="mt-1 text-slate-900">{new Date(orderStatus.createdAt).toLocaleString()}</p>
                     </div>
                   </div>
+                  {bookPayload ? (
+                    <div className="grid gap-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Spreads</p>
+                        <p className="mt-1 text-slate-900">{bookPayload.spreadCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Physical pages</p>
+                        <p className="mt-1 text-slate-900">{bookPayload.physicalPageCount}</p>
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               ) : null}
               <div className="flex flex-col gap-3 sm:flex-row">
@@ -133,8 +145,8 @@ export function CurrentBookPage() {
           <Card className="border-border/70 bg-white/95">
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-slate-950">Reader previews</h2>
-                <CardDescription>Load page previews and switch between art-first and transcript-first views.</CardDescription>
+                <h2 className="text-lg font-semibold text-slate-950">Reader spread previews</h2>
+                <CardDescription>Load facing-spread previews and switch between spread view and transcript view.</CardDescription>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setShowTranscript((current) => !current)} className="w-fit">
                 {showTranscript ? "Hide text" : "Show text"}
@@ -159,8 +171,8 @@ export function CurrentBookPage() {
                           <Card key={page.pageIndex} className="border-border/70 bg-slate-50/70">
                             <CardHeader className="flex flex-row items-start justify-between gap-3">
                               <div>
-                                <h3 className="text-base font-semibold text-slate-950">Page {page.pageIndex + 1}</h3>
-                                <CardDescription>Preview and status</CardDescription>
+                                <h3 className="text-base font-semibold text-slate-950">Spread {page.spreadIndex + 1}</h3>
+                                <CardDescription>Facing-spread preview and status</CardDescription>
                               </div>
                               <StatusBadge value={page.status} />
                             </CardHeader>
@@ -168,12 +180,12 @@ export function CurrentBookPage() {
                               {previewUrl ? (
                                 <img
                                   src={previewUrl}
-                                  alt={`Page ${page.pageIndex + 1}`}
-                                  className="aspect-[4/5] w-full rounded-xl border border-border bg-white object-contain"
+                                  alt={`Spread ${page.spreadIndex + 1}`}
+                                  className="aspect-[2/1] w-full rounded-xl border border-border bg-white object-contain"
                                 />
                               ) : (
                                 <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">
-                                  No page preview yet
+                                  No spread preview yet
                                 </div>
                               )}
                               {showTranscript ? <p className="text-sm leading-6 text-slate-600">{page.text}</p> : null}
@@ -189,7 +201,7 @@ export function CurrentBookPage() {
                         {bookPayload.pages.map((page) => (
                           <Card key={page.pageIndex} size="sm" className="border-border/70 bg-white">
                             <CardHeader>
-                              <h3 className="text-sm font-semibold text-slate-950">Page {page.pageIndex + 1}</h3>
+                              <h3 className="text-sm font-semibold text-slate-950">Spread {page.spreadIndex + 1}</h3>
                             </CardHeader>
                             <CardContent className="text-sm leading-6 text-slate-600">{page.text}</CardContent>
                           </Card>

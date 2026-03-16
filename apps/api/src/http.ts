@@ -1664,7 +1664,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           status: reviewCase.book_status,
           childFirstName: reviewCase.child_first_name,
           readingProfileId: reviewCase.reading_profile_id,
-          moneyLessonKey: reviewCase.money_lesson_key
+          moneyLessonKey: reviewCase.money_lesson_key,
+          spreadCount: pages.length,
+          physicalPageCount: pages.length * 2
         },
         pdfUrl: publicArtifactUrl(pdfArtifact?.s3_url ?? null),
         scenePlan: scenePlanArtifact
@@ -1708,6 +1710,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           return {
             pageId: page.page_id,
             pageIndex: Number(page.page_index),
+            spreadIndex: Number(page.page_index),
             status: page.status,
             text: page.text,
             templateId: page.template_id,
@@ -1980,8 +1983,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         readingProfileId: bookRows[0].reading_profile_id,
         moneyLessonKey: bookRows[0].money_lesson_key,
         productFamily: bookRows[0].product_family,
+        spreadCount: pages.length,
+        physicalPageCount: pages.length * 2,
         pages: pages.map((page) => ({
           pageIndex: Number(page.page_index),
+          spreadIndex: Number(page.page_index),
           text: page.text,
           status: page.status,
           imageUrl: publicArtifactUrl(page.preview_image_url ?? page.image_url),

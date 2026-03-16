@@ -255,6 +255,8 @@ export const openApiSpec = {
           "childFirstName",
           "readingProfileId",
           "moneyLessonKey",
+          "spreadCount",
+          "physicalPageCount",
           "pages"
         ],
         properties: {
@@ -273,13 +275,16 @@ export const openApiSpec = {
             type: "string",
             enum: ["picture_book_fixed_layout", "chapter_book_reflowable"]
           },
+          spreadCount: { type: "integer", minimum: 0 },
+          physicalPageCount: { type: "integer", minimum: 0 },
           pages: {
             type: "array",
             items: {
               type: "object",
-              required: ["pageIndex", "text", "status", "imageUrl"],
+              required: ["pageIndex", "spreadIndex", "text", "status", "imageUrl"],
               properties: {
                 pageIndex: { type: "integer", minimum: 0 },
+                spreadIndex: { type: "integer", minimum: 0 },
                 text: { type: "string" },
                 status: { type: "string", enum: ["pending", "ready", "failed"] },
                 imageUrl: { type: ["string", "null"] },
@@ -397,7 +402,7 @@ export const openApiSpec = {
           },
           book: {
             type: "object",
-            required: ["bookId", "status", "childFirstName", "readingProfileId", "moneyLessonKey"],
+            required: ["bookId", "status", "childFirstName", "readingProfileId", "moneyLessonKey", "spreadCount", "physicalPageCount"],
             properties: {
               bookId: { type: "string", format: "uuid" },
               status: { type: "string", enum: ["draft", "building", "needs_review", "ready", "failed"] },
@@ -409,7 +414,9 @@ export const openApiSpec = {
               moneyLessonKey: {
                 type: "string",
                 enum: ["inflation_candy", "saving_later", "delayed_gratification"]
-              }
+              },
+              spreadCount: { type: "integer", minimum: 0 },
+              physicalPageCount: { type: "integer", minimum: 0 }
             }
           },
           pdfUrl: { type: ["string", "null"] },
@@ -479,6 +486,7 @@ export const openApiSpec = {
               required: [
                 "pageId",
                 "pageIndex",
+                "spreadIndex",
                 "status",
                 "text",
                 "previewImageUrl",
@@ -491,6 +499,7 @@ export const openApiSpec = {
               properties: {
                 pageId: { type: "string", format: "uuid" },
                 pageIndex: { type: "integer", minimum: 0 },
+                spreadIndex: { type: "integer", minimum: 0 },
                 status: { type: "string", enum: ["pending", "ready", "failed"] },
                 text: { type: "string" },
                 templateId: { type: ["string", "null"] },

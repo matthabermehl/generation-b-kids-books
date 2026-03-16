@@ -497,6 +497,8 @@
           "childFirstName",
           "readingProfileId",
           "moneyLessonKey",
+          "spreadCount",
+          "physicalPageCount",
           "pages"
         ],
         "properties": {
@@ -540,18 +542,31 @@
               "chapter_book_reflowable"
             ]
           },
+          "spreadCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "physicalPageCount": {
+            "type": "integer",
+            "minimum": 0
+          },
           "pages": {
             "type": "array",
             "items": {
               "type": "object",
               "required": [
                 "pageIndex",
+                "spreadIndex",
                 "text",
                 "status",
                 "imageUrl"
               ],
               "properties": {
                 "pageIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "spreadIndex": {
                   "type": "integer",
                   "minimum": 0
                 },
@@ -832,7 +847,9 @@
               "status",
               "childFirstName",
               "readingProfileId",
-              "moneyLessonKey"
+              "moneyLessonKey",
+              "spreadCount",
+              "physicalPageCount"
             ],
             "properties": {
               "bookId": {
@@ -867,6 +884,14 @@
                   "saving_later",
                   "delayed_gratification"
                 ]
+              },
+              "spreadCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "physicalPageCount": {
+                "type": "integer",
+                "minimum": 0
               }
             }
           },
@@ -1038,6 +1063,7 @@
               "required": [
                 "pageId",
                 "pageIndex",
+                "spreadIndex",
                 "status",
                 "text",
                 "previewImageUrl",
@@ -1053,6 +1079,10 @@
                   "format": "uuid"
                 },
                 "pageIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "spreadIndex": {
                   "type": "integer",
                   "minimum": 0
                 },

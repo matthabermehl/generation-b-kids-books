@@ -245,3 +245,17 @@ Evidence:
 - CloudWatch `/aws/lambda/AiChildrensBookDevStack-ApiFunctionCE271BD4-SHPZy7P1mDZB` => request timed out after 29s during character candidate generation
 Notes: the live flow now reaches the correct handler and provider wiring, but the synchronous character candidate request exceeds the current `ApiFunction` timeout budget. This means the OpenAI cutover is deployed and mostly wired, but not yet operationally complete end to end.
 Commit: pending
+
+2026-03-16T12:35:59-0400
+Task: spread-layout-v1-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: replaced the single-page picture-book overlay model with a deterministic spread-first layout contract that renders each narrative unit as a text-only left page plus watercolor right page, updated prompt composition and spread QA around right-page gutter safety/art strength, generated landscape spread previews alongside physical-page PDF output, and retargeted API/web surfaces to spread previews with spread and physical-page counts.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `pnpm --filter @book/renderer test` => PASS
+- `pnpm --filter @book/api test` => PASS
+- `pnpm --filter @book/web test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Notes: `page_art` remains the canonical right-page illustration asset while `page_preview` now stores the landscape spread preview. Print/export now writes separate left/right physical pages per narrative spread, and the old text-zone knockout path is retired for picture-book spreads.
+Commit: pending

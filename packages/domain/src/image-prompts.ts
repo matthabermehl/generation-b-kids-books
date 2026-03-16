@@ -39,7 +39,7 @@ export function buildPageArtPrompt(input: {
 
   return [
     "Task:",
-    "Edit the masked watercolor region so it becomes the finished book illustration for this page.",
+    "Edit the masked watercolor region so it becomes the finished illustration for the right-hand page of a facing spread.",
     "",
     "Scene continuity:",
     sceneVisualDescription,
@@ -53,10 +53,15 @@ export function buildPageArtPrompt(input: {
     "Style:",
     watercolorStyleGuide,
     "",
+    "Layout intent:",
+    "This spread uses a text-only left page and an illustration-only right page.",
+    "Keep generous white paper margins around the painted area.",
+    "Keep the subject and important props away from the inner gutter side of the right page.",
+    "",
     "Constraints:",
     "Match the approved character reference and any same-scene reference images for costume, proportions, palette, props, and camera continuity.",
-    "Paint only inside the editable masked watercolor region.",
-    "Keep all white paper, margins, and negative space outside the mask untouched.",
+    "Paint only inside the editable masked watercolor region on the right page.",
+    "Keep all white paper, margins, gutter space, and negative space outside the mask untouched.",
     "No text, no lettering, no captions, no page numbers, no logos, and no watermarks anywhere in the image."
   ].join("\n");
 }

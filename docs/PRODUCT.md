@@ -20,8 +20,8 @@ Generate personalized, visually polished children's books that teach money conce
 ### In scope
 - `picture_book_fixed_layout` pipeline for `read_aloud_3_4` and `early_decoder_5_7`
 - Book-scoped character approval before checkout, with a selected character reference reused across page art generation
-- Layered page model with deterministic template selection
-- Live-text PDF output and preview PNG reader assets
+- Layered spread model with deterministic `text-left / art-right` composition
+- Landscape spread previews for reading/review plus print-friendly PDF output as separate physical pages
 - Unified web app with:
   - public landing plus parent create, checkout, and current-book routes
   - internal reviewer queue and case detail console

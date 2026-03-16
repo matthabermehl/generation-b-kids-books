@@ -30,8 +30,8 @@ export function wrapText(text: string, maxCharsPerLine: number): string[] {
 }
 
 export function fitTextToBox(text: string, composition: PageCompositionSpec): TextFitResult {
-  const boxWidth = composition.textBox.width * composition.canvas.width;
-  const boxHeight = composition.textBox.height * composition.canvas.height;
+  const boxWidth = composition.leftPage.textBox.width * composition.canvas.width;
+  const boxHeight = composition.leftPage.textBox.height * composition.canvas.height;
 
   for (let fontPx = composition.textStyle.preferredFontPx; fontPx >= composition.textStyle.minFontPx; fontPx -= 2) {
     const avgCharWidth = fontPx * 0.52;
