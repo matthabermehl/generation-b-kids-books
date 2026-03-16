@@ -221,6 +221,9 @@ importers:
       '@book/prompts':
         specifier: workspace:*
         version: link:../../packages/prompts
+      pdfkit:
+        specifier: ^0.15.1
+        version: 0.15.2
       sharp:
         specifier: ^0.34.5
         version: 0.34.5
@@ -231,6 +234,9 @@ importers:
       '@types/aws-lambda':
         specifier: ^8.10.147
         version: 8.10.161
+      '@types/pdfkit':
+        specifier: ^0.17.3
+        version: 0.17.5
       typescript:
         specifier: ^5.8.2
         version: 5.9.3

@@ -275,16 +275,33 @@ export const openApiSpec = {
             type: "string",
             enum: ["picture_book_fixed_layout", "chapter_book_reflowable"]
           },
-          spreadCount: { type: "integer", minimum: 0 },
-          physicalPageCount: { type: "integer", minimum: 0 },
+          spreadCount: {
+            type: "integer",
+            minimum: 0,
+            description: "Narrative spread count for picture books. One spread renders as two physical PDF pages."
+          },
+          physicalPageCount: {
+            type: "integer",
+            minimum: 0,
+            description: "Physical PDF page count. Picture-book physical pages equal spreadCount * 2."
+          },
           pages: {
             type: "array",
+            description: "Picture-book narrative units. Each array entry represents one spread, not one physical PDF page.",
             items: {
               type: "object",
               required: ["pageIndex", "spreadIndex", "text", "status", "imageUrl"],
               properties: {
-                pageIndex: { type: "integer", minimum: 0 },
-                spreadIndex: { type: "integer", minimum: 0 },
+                pageIndex: {
+                  type: "integer",
+                  minimum: 0,
+                  description: "Zero-based spread index retained under the legacy pageIndex field name."
+                },
+                spreadIndex: {
+                  type: "integer",
+                  minimum: 0,
+                  description: "Zero-based spread index for picture-book readers and reviewers."
+                },
                 text: { type: "string" },
                 status: { type: "string", enum: ["pending", "ready", "failed"] },
                 imageUrl: { type: ["string", "null"] },
@@ -351,7 +368,11 @@ export const openApiSpec = {
                   type: "string",
                   enum: ["inflation_candy", "saving_later", "delayed_gratification"]
                 },
-                pageCount: { type: "integer", minimum: 0 },
+                pageCount: {
+                  type: "integer",
+                  minimum: 0,
+                  description: "Narrative spread count for the book under review."
+                },
                 latestAction: {
                   type: ["string", "null"],
                   enum: ["approve_continue", "reject", "retry_page", null]
@@ -374,6 +395,7 @@ export const openApiSpec = {
           "order",
           "book",
           "pdfUrl",
+          "storyProofPdfUrl",
           "scenePlan",
           "imagePlan",
           "artifacts",
@@ -415,11 +437,26 @@ export const openApiSpec = {
                 type: "string",
                 enum: ["inflation_candy", "saving_later", "delayed_gratification"]
               },
-              spreadCount: { type: "integer", minimum: 0 },
-              physicalPageCount: { type: "integer", minimum: 0 }
+              spreadCount: {
+                type: "integer",
+                minimum: 0,
+                description: "Narrative spread count for picture books."
+              },
+              physicalPageCount: {
+                type: "integer",
+                minimum: 0,
+                description: "Physical PDF page count. Picture-book physical pages equal spreadCount * 2."
+              }
             }
           },
-          pdfUrl: { type: ["string", "null"] },
+          pdfUrl: {
+            type: ["string", "null"],
+            description: "Signed URL for the final illustrated PDF when the book has passed all release gates."
+          },
+          storyProofPdfUrl: {
+            type: ["string", "null"],
+            description: "Signed URL for the readable story proof PDF built from story text only."
+          },
           scenePlan: {
             type: ["object", "null"],
             required: ["url", "createdAt"],

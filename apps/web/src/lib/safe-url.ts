@@ -52,6 +52,7 @@ export function sanitizeReviewCaseDetail(payload: ReviewCaseDetailResponse): Rev
   return {
     ...payload,
     pdfUrl: toSafeAssetUrl(payload.pdfUrl),
+    storyProofPdfUrl: toSafeAssetUrl(payload.storyProofPdfUrl),
     scenePlan: payload.scenePlan
       ? {
           ...payload.scenePlan,

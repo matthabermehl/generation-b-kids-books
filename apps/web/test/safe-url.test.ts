@@ -40,6 +40,7 @@ describe("safe url helpers", () => {
   it("sanitizes reviewer artifact and image URLs before rendering", () => {
     const payload = sanitizeReviewCaseDetail({
       pdfUrl: "javascript:alert(1)",
+      storyProofPdfUrl: "/books/book-1/render/story-proof.pdf",
       scenePlan: {
         createdAt: "2026-03-08T09:59:00.000Z",
         url: "/books/book-1/scene-plan.json"
@@ -66,6 +67,7 @@ describe("safe url helpers", () => {
     } as any);
 
     expect(payload.pdfUrl).toBeNull();
+    expect(payload.storyProofPdfUrl).toBe(`${window.location.origin}/books/book-1/render/story-proof.pdf`);
     expect(payload.scenePlan?.url).toBe(`${window.location.origin}/books/book-1/scene-plan.json`);
     expect(payload.imagePlan?.url).toBeNull();
     expect(payload.artifacts[0].url).toBeNull();

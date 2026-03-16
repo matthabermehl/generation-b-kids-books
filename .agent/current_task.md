@@ -1,31 +1,30 @@
 # Current Task
-Task ID: story-quality-hardening-01
+Task ID: spread-contract-proof-pdf-01
 
 ## Goal
-Add a lightweight story-concept stage plus continuity-focused QA so generated 3-7 stories stop inventing caregiver terms, chores, deadlines, and Bitcoin framing ad hoc.
+Make picture-book spread semantics explicit and add a first-class story proof PDF so reviewers always get a readable book artifact, even before the final illustrated PDF exists.
 
 ## Constraints
-- Keep changes internal to prompts, schemas, deterministic validators, and worker orchestration; no public API/UI contract changes.
-- Keep explicit Bitcoin wording late and limited to one adult line in the final two pages for this slice.
-- Default caregiver wording to configurable `Mom` or `Dad` and keep the scope focused on 3-7 picture-book story generation.
+- Keep `pages` rows and `story.pages[]` as spread units in this slice; no repo-wide rename.
+- Keep `pdf` as the final illustrated artifact and `/download?format=pdf` final-only.
+- Do not revert unrelated local changes in `.gitignore`, `apps/workers/src/providers/llm.ts`, or `apps/workers/test/llm-provider.test.ts`.
 
 ## Plan (short)
-1) Add `StoryConcept` and continuity-focused beat/story schema contracts plus prompt updates.
-2) Wire worker orchestration for concept generation, story QA artifacts, and bounded page-vs-beat rewrite routing.
-3) Add regression/happy-path tests for counting, caregiver consistency, continuity, late setup, and Bitcoin fit.
+1) Persist `story.json` plus `story-proof.pdf` before story-review stops.
+2) Expose the proof artifact distinctly from the final PDF in reviewer/API surfaces.
+3) Clarify spread vs physical-page semantics in docs and tests.
 
 ## Evidence required
-- `pnpm --filter @book/prompts test`
-- `pnpm --filter @book/domain test`
 - `pnpm --filter @book/workers test`
 - `pnpm --filter @book/api test`
+- `pnpm --filter @book/web test`
 - `bash scripts/agent/quality.sh`
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS
-- work: implemented on `codex/story-quality-hardening`
+- work: completed on `codex/spread-proof-pdf`
 - verification:
-  - `pnpm --filter @book/prompts test` PASS
-  - `pnpm --filter @book/domain test` PASS
   - `pnpm --filter @book/workers test` PASS
+  - `pnpm --filter @book/api test` PASS
+  - `pnpm --filter @book/web test` PASS
   - `bash scripts/agent/quality.sh` PASS

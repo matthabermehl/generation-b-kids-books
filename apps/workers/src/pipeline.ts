@@ -13,7 +13,7 @@ import {
   type ReadingProfile
 } from "@book/domain";
 import { execute, query, withTransaction, txExecute } from "./lib/rds.js";
-import { putJson, presignGetObjectFromS3Url } from "./lib/storage.js";
+import { putBuffer, putJson, presignGetObjectFromS3Url } from "./lib/storage.js";
 import { logStructured, makeId, safeJsonParse } from "./lib/helpers.js";
 import { moderateTexts } from "./lib/content-safety.js";
 import { buildImagePlanArtifact, buildScenePlanArtifact } from "./lib/scene-plans.js";
@@ -21,6 +21,7 @@ import { getRuntimeConfig } from "./lib/ssm-config.js";
 import { selectPictureBookComposition } from "./lib/page-template-select.js";
 import { insertCurrentBookArtifact, insertCurrentImageRecord } from "./lib/records.js";
 import { upsertOpenReviewCase } from "./lib/review-cases.js";
+import { renderStoryProofPdf } from "./lib/story-proof.js";
 import { BeatPlanningError, resolveLlmProvider } from "./providers/llm.js";
 
 const sqs = new SQSClient({});
@@ -262,7 +263,7 @@ async function prepareStory(
 ): Promise<{ bookId: string; pageCount: number }> {
   const context = await loadBookContext(bookId);
   const llm = await resolveLlmProvider({ mockRunTag, source: "prepare_story" });
-  const pageCount = Number(process.env.BOOK_DEFAULT_PAGE_COUNT ?? "12");
+  const pageCount = Number(process.env.BOOK_DEFAULT_SPREAD_COUNT ?? process.env.BOOK_DEFAULT_PAGE_COUNT ?? "12");
   const interests = (context.interest_tags ?? "").split(",").filter(Boolean);
   const storyContext = {
     bookId,
@@ -457,6 +458,32 @@ async function prepareStory(
       beatPlan: beatPlanning.meta,
       story: providerMeta
     }
+  });
+  const storyKey = `books/${bookId}/story.json`;
+  await putJson(storyKey, story);
+
+  const storyProofKey = `books/${bookId}/render/story-proof.pdf`;
+  const storyProofStartedAt = Date.now();
+  const storyProofPdf = await renderStoryProofPdf({
+    bookId,
+    title: story.title,
+    spreads: story.pages.map((page) => ({
+      index: page.pageIndex,
+      text: page.pageText
+    }))
+  });
+  const storyProofS3Url = await putBuffer(storyProofKey, storyProofPdf, "application/pdf");
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "story_proof_pdf",
+    s3Url: storyProofS3Url
+  });
+  logStructured("StoryProofRenderComplete", {
+    bookId,
+    spreadCount: story.pages.length,
+    physicalPageCount: story.pages.length * 2,
+    outputKey: storyProofKey,
+    durationMs: Date.now() - storyProofStartedAt
   });
 
   const remainingHardIssues = verdict.verdict.issues.filter((issue) => issue.severity === "hard");
@@ -662,7 +689,6 @@ async function prepareStory(
   });
 
   const promptKey = `books/${bookId}/prompt-pack.json`;
-  const storyKey = `books/${bookId}/story.json`;
   const scenePlanKey = `books/${bookId}/scene-plan.json`;
   const imagePlanKey = `books/${bookId}/image-plan.json`;
   const generatedAt = new Date().toISOString();
@@ -675,7 +701,6 @@ async function prepareStory(
     generatedAt
   });
 
-  await putJson(storyKey, story);
   await putJson(
     scenePlanKey,
     buildScenePlanArtifact({

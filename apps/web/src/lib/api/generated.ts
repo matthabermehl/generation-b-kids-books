@@ -1333,10 +1333,15 @@ export interface components {
             moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
             /** @enum {string} */
             productFamily?: "picture_book_fixed_layout" | "chapter_book_reflowable";
+            /** @description Narrative spread count for picture books. One spread renders as two physical PDF pages. */
             spreadCount: number;
+            /** @description Physical PDF page count. Picture-book physical pages equal spreadCount * 2. */
             physicalPageCount: number;
+            /** @description Picture-book narrative units. Each array entry represents one spread, not one physical PDF page. */
             pages: {
+                /** @description Zero-based spread index retained under the legacy pageIndex field name. */
                 pageIndex: number;
+                /** @description Zero-based spread index for picture-book readers and reviewers. */
                 spreadIndex: number;
                 text: string;
                 /** @enum {string} */
@@ -1375,6 +1380,7 @@ export interface components {
                 readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
                 /** @enum {string} */
                 moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
+                /** @description Narrative spread count for the book under review. */
                 pageCount: number;
                 /** @enum {string|null} */
                 latestAction?: "approve_continue" | "reject" | "retry_page" | null;
@@ -1410,10 +1416,15 @@ export interface components {
                 readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
                 /** @enum {string} */
                 moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
+                /** @description Narrative spread count for picture books. */
                 spreadCount: number;
+                /** @description Physical PDF page count. Picture-book physical pages equal spreadCount * 2. */
                 physicalPageCount: number;
             };
+            /** @description Signed URL for the final illustrated PDF when the book has passed all release gates. */
             pdfUrl: string | null;
+            /** @description Signed URL for the readable story proof PDF built from story text only. */
+            storyProofPdfUrl: string | null;
             scenePlan: {
                 url: string | null;
                 createdAt: string;

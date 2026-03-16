@@ -251,6 +251,7 @@ describe("review and render cutover http routes", () => {
       if (normalized.includes("FROM book_artifacts")) {
         return [
           { artifact_type: "pdf", s3_url: "s3://bucket/books/book-1/render/book.pdf", created_at: "2026-03-15T10:00:00.000Z" },
+          { artifact_type: "story_proof_pdf", s3_url: "s3://bucket/books/book-1/render/story-proof.pdf", created_at: "2026-03-15T09:30:00.000Z" },
           { artifact_type: "scene_plan", s3_url: "s3://bucket/books/book-1/scene-plan.json", created_at: "2026-03-15T09:00:00.000Z" },
           { artifact_type: "image_plan", s3_url: "s3://bucket/books/book-1/image-plan.json", created_at: "2026-03-15T09:00:01.000Z" }
         ];
@@ -289,6 +290,8 @@ describe("review and render cutover http routes", () => {
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body ?? "{}")).toMatchObject({
       caseId: "case-1",
+      pdfUrl: "https://cdn.example.com/books/book-1/render/book.pdf",
+      storyProofPdfUrl: "https://cdn.example.com/books/book-1/render/story-proof.pdf",
       scenePlan: {
         url: "https://cdn.example.com/books/book-1/scene-plan.json"
       },

@@ -1,41 +1,49 @@
 # Before Branch Snapshot
 
-Date: 2026-03-16
-Source branch: master
-Planned branch: codex/story-quality-hardening
-
-## Current state
-- `master` contains the recent OpenAI image cutover, spread layout work, and merged prompt/render pipeline changes.
-- Baseline smoke is passing in the current session.
-- Story generation quality issues remain in the writing/planning layer: skipped count sequences, generic caregiver wording, chore/action discontinuity, late unseeded deadline events, and ad-hoc Bitcoin framing.
-- Current story planning pipeline goes `beat planning -> beat critics/rewrite -> page writer -> shallow final critic`, with no explicit concept/storia spine stage.
-- Current final story QA is too weak for continuity and setup/payoff failures, and deterministic checks do not cover the observed story defects.
+## Source branch
+- `master`
+- upstream: `Github/master`
 
 ## Objective
-Implement story-quality hardening for 3-7 books by:
-- introducing a lightweight `StoryConcept` stage before beat planning,
-- adding continuity-carrying beat fields,
-- strengthening final story QA and deterministic validators,
-- and adding a bounded rewrite path that routes page-level issues to page rewrite and concept/beat issues back to beat rewrite.
+- Implement the spread-count contract for 3-7 picture books.
+- Add a first-class `story_proof_pdf` artifact generated from story text only.
+- Keep the final illustrated `pdf` artifact separate and final-only.
+- Update reviewer/API/docs/tests so spread vs physical-page semantics are explicit.
+
+## Current state
+- Picture-book generation already treats each persisted `pages` row as one narrative spread.
+- API payloads already expose both `spreadCount` and `physicalPageCount`.
+- Final renderer already outputs two physical PDF pages per spread: left text page and right art page.
+- Review flows currently expose only `pdfUrl`, which points at the final illustrated PDF artifact when it exists.
+- A failed story-quality run can persist `story-concept.json`, `story.json`, and `story-qa-report.json`, but there is no first-class readable proof PDF artifact.
 
 ## Constraints
-- Keep changes internal to prompts, schemas, validators, and worker orchestration; no public API/UI contract changes.
-- Keep Bitcoin explicit and late for 3-7 books, but only once, as an adult line in the final two pages.
-- Default caregiver wording to configurable `Mom` or `Dad` for this slice.
-- Preserve existing deployment/runtime patterns unless the new story-quality flow requires a local interface extension.
+- No database migration.
+- No repo-wide rename from `page` to `spread`.
+- Keep `/v1/books/{bookId}/download?format=pdf` bound to the final illustrated `pdf` artifact only.
+- `story_proof_pdf` is internal/reviewer-facing support output, not the customer final download.
 
 ## Risks
-- Prompt/schema changes span multiple pipeline stages and can break existing tests or mock fixtures.
-- Reusing beat rewrite for concept-level failures may require careful mapping of issue types back into rewrite instructions.
-- Tightening QA too aggressively can raise failure rates or create rewrite loops if retry bounds are not enforced cleanly.
-- Existing tests may encode older story-package shapes and need coordinated updates.
+- Existing local changes on `master` are present in:
+  - `.gitignore`
+  - `.agent/current_task.md`
+  - `.agent/feature_list.json`
+  - `apps/workers/src/providers/llm.ts`
+  - `apps/workers/test/llm-provider.test.ts`
+- The `llm.ts` changes are unrelated provider-routing work and should not be reverted or overwritten.
+- `apps/web` test/build regenerates OpenAPI-derived files, so API schema changes will cascade into generated client output.
 
-## Assumptions
-- `master` is the correct source branch and has an upstream (`Github/master`).
-- This work is architectural enough to justify an isolated feature branch and PR scaffold before implementation.
-- A new task entry may need to be added to `.agent/feature_list.json` so the harness has a single source-of-truth task for this slice.
+## Expected implementation areas
+- `apps/workers/src/pipeline.ts`
+- `apps/workers/src/lib/*` for proof rendering/persistence
+- `apps/api/src/http.ts`
+- `apps/api/src/openapi/spec.ts`
+- `apps/web/src/routes/ReviewCasePage.tsx`
+- `apps/web/src/routes/ReviewQueuePage.tsx`
+- `apps/renderer/src/lib/render-book.ts`
+- tests in workers/api/web/renderer
+- product/architecture docs
 
-## Pending decisions already resolved for this slice
-- Rollout depth: concept stage + QA hardening.
-- Bitcoin policy for 3-7 books: always present late, but constrained to one concept-defined adult line.
-- Caregiver policy: configurable default `Mom` or `Dad`.
+## Verification target
+- targeted package tests for workers, renderer, api, and web
+- `bash scripts/agent/quality.sh`
