@@ -53,5 +53,7 @@ describe("openapi spec", () => {
     expect(openApiSpec.components.schemas.ReviewQueueResponse).toBeDefined();
     expect(openApiSpec.components.schemas.ReviewCaseDetailResponse).toBeDefined();
     expect(openApiSpec.components.schemas.ReviewActionResponse).toBeDefined();
+    expect(openApiSpec.components.schemas.ReviewCaseDetailResponse.properties.storyProofPdfUrl).toBeDefined();
+    expect(openApiSpec.components.schemas.BookResponse.properties.spreadCount.description).toMatch(/spread/i);
   });
 });

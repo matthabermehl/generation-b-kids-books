@@ -21,11 +21,13 @@
     "@aws-sdk/s3-request-presigner": "^3.750.0",
     "@book/domain": "workspace:*",
     "@book/prompts": "workspace:*",
+    "pdfkit": "^0.15.1",
     "sharp": "^0.34.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.147",
+    "@types/pdfkit": "^0.17.3",
     "typescript": "^5.8.2",
     "vitest": "^2.1.9"
   }

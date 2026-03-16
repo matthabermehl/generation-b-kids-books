@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-16T17:36:01Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-16T20:02:09Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -70,6 +70,18 @@
     ],
     "passes": true,
     "evidence": "Implemented a StoryConcept-driven 3-7 story pipeline with continuity-carrying beats, structured story QA verdicts, deterministic story validators, persisted story-concept/story-qa-report artifacts, and bounded page-vs-beat rewrite routing. Verification 2026-03-16: pnpm --filter @book/prompts test (PASS); pnpm --filter @book/domain test (PASS); pnpm --filter @book/workers test (PASS); bash scripts/agent/quality.sh (PASS)."
+  },
+  {
+    "id": "spread-contract-proof-pdf-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Make picture-book spread semantics explicit and persist a readable story proof PDF before the final illustrated book is ready",
+    "steps": [
+      "Keep spreadCount as the canonical narrative length, clarify physicalPageCount as spreadCount * 2, and update reviewer/API/docs copy to use spread language for picture-book units",
+      "Persist story.json plus story-proof.pdf before finalize-gate review stops, expose storyProofPdfUrl distinctly from pdfUrl, and keep final download bound to the illustrated pdf artifact only"
+    ],
+    "passes": true,
+    "evidence": "Implemented explicit spread-vs-physical-page semantics plus a first-class story_proof_pdf artifact built from story text only and persisted before review stops. Verification 2026-03-16: pnpm --filter @book/workers test (PASS); pnpm --filter @book/api test (PASS); pnpm --filter @book/web test (PASS); bash scripts/agent/quality.sh (PASS)."
   },
   {
     "id": "live-character-generation-timeout-01",

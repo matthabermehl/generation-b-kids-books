@@ -44,6 +44,13 @@ export function ReviewCasePage() {
     () => payload?.pages.find((page) => page.pageId === selectedPageId) ?? payload?.pages[0] ?? null,
     [payload, selectedPageId]
   );
+  const supportingArtifacts = useMemo(
+    () =>
+      payload?.artifacts.filter(
+        (artifact) => artifact.artifactType !== "pdf" && artifact.artifactType !== "story_proof_pdf"
+      ) ?? [],
+    [payload]
+  );
 
   if (!caseId) {
     return (
@@ -163,12 +170,24 @@ export function ReviewCasePage() {
                 <h2 className="text-lg font-semibold text-slate-950">Artifacts</h2>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
+                {payload.storyProofPdfUrl ? (
+                  <p>
+                    <a href={payload.storyProofPdfUrl} className="font-medium text-slate-900 underline" rel="noreferrer">
+                      Story proof PDF
+                    </a>
+                  </p>
+                ) : null}
                 {payload.pdfUrl ? (
-                  <p><a href={payload.pdfUrl} className="font-medium text-slate-900 underline" rel="noreferrer">Current PDF</a></p>
-                ) : (
-                  <p className="text-slate-500">No PDF available yet.</p>
-                )}
-                {payload.artifacts.map((artifact) => (
+                  <p>
+                    <a href={payload.pdfUrl} className="font-medium text-slate-900 underline" rel="noreferrer">
+                      Final illustrated PDF
+                    </a>
+                  </p>
+                ) : null}
+                {!payload.storyProofPdfUrl && !payload.pdfUrl ? (
+                  <p className="text-slate-500">No readable PDF available yet.</p>
+                ) : null}
+                {supportingArtifacts.map((artifact) => (
                   <p key={`${artifact.artifactType}-${artifact.createdAt}`}>
                     {artifact.url ? (
                       <a href={artifact.url} className="text-slate-700 underline" rel="noreferrer">{artifact.artifactType}</a>
@@ -177,6 +196,9 @@ export function ReviewCasePage() {
                     )}
                   </p>
                 ))}
+                {!payload.storyProofPdfUrl && !payload.pdfUrl && supportingArtifacts.length === 0 ? (
+                  <p className="text-slate-500">No support artifacts available yet.</p>
+                ) : null}
               </CardContent>
             </Card>
 

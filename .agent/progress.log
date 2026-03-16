@@ -118,6 +118,18 @@ Evidence:
 - pnpm --filter @book/web build => PASS
 - pnpm run deploy:web:dev => PASS
 - live CloudFront validation => https://dazfa7oc8fu6h.cloudfront.net redirects signed-in users into `/create`; desktop/mobile screenshots saved under `output/playwright/live-*.png`
+
+2026-03-16T16:12:08-0400
+Task: spread-contract-proof-pdf-01
+Baseline: smoke PASS
+Change: clarified picture-book spread vs physical-page semantics, added worker-side story proof PDF rendering/persistence before review stops, exposed `storyProofPdfUrl` separately from final `pdfUrl`, updated reviewer labels to use spreads, and documented the new proof artifact flow.
+Evidence:
+- pnpm --filter @book/workers test => PASS
+- pnpm --filter @book/api test => PASS
+- pnpm --filter @book/web test => PASS
+- bash scripts/agent/quality.sh => PASS
+Notes: left existing unrelated local edits in `.gitignore`, `apps/workers/src/providers/llm.ts`, and `apps/workers/test/llm-provider.test.ts` untouched; final customer download remains bound to the illustrated `pdf` artifact only.
+Commit: pending
 Notes: route docs now reflect the routed parent flow and shared UI foundation. Live reviewer screenshots were not possible from the personal browser session because the active account is not reviewer-allowlisted.
 Commit: pending
 

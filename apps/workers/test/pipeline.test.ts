@@ -106,6 +106,7 @@ describe("pipeline beat-planning failure persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.ARTIFACT_BUCKET = "artifact-bucket";
+    process.env.BOOK_DEFAULT_SPREAD_COUNT = "12";
     process.env.BOOK_DEFAULT_PAGE_COUNT = "12";
     queryMock.mockResolvedValue([
       {
@@ -126,7 +127,7 @@ describe("pipeline beat-planning failure persistence", () => {
       callback({})
     );
     txExecuteMock.mockResolvedValue(undefined);
-    putBufferMock.mockResolvedValue("s3://artifact-bucket/image.png");
+    putBufferMock.mockResolvedValue("s3://artifact-bucket/render/story-proof.pdf");
     presignGetObjectMock.mockResolvedValue("https://example.com/presigned");
     resolveImageProviderMock.mockResolvedValue({
       generate: vi.fn()
@@ -348,6 +349,17 @@ describe("pipeline beat-planning failure persistence", () => {
         ])
       })
     );
+    expect(putJsonMock).toHaveBeenCalledWith(
+      "books/book-1/story.json",
+      expect.objectContaining({
+        title: "Ava Saves"
+      })
+    );
+    expect(putBufferMock).toHaveBeenCalledWith(
+      "books/book-1/render/story-proof.pdf",
+      expect.any(Buffer),
+      "application/pdf"
+    );
 
     const artifactInsert = txExecuteMock.mock.calls.find((call) =>
       String(call[1]).includes("INSERT INTO book_artifacts") &&
@@ -363,6 +375,20 @@ describe("pipeline beat-planning failure persistence", () => {
       )
     );
     expect(artifactInsert).toBeDefined();
+    const storyProofInsert = txExecuteMock.mock.calls.find((call) =>
+      String(call[1]).includes("INSERT INTO book_artifacts") &&
+      Array.isArray(call[2]) &&
+      call[2].some(
+        (parameter) =>
+          parameter &&
+          typeof parameter === "object" &&
+          "name" in parameter &&
+          parameter.name === "artifactType" &&
+          "value" in parameter &&
+          parameter.value?.stringValue === "story_proof_pdf"
+      )
+    );
+    expect(storyProofInsert).toBeDefined();
 
     const pageInsert = txExecuteMock.mock.calls.find((call) =>
       String(call[1]).includes("INSERT INTO pages")
@@ -396,5 +422,145 @@ describe("pipeline beat-planning failure persistence", () => {
         })
       ])
     );
+  });
+
+  it("persists story-proof.pdf before stopping on final story QA hard issues", async () => {
+    resolveLlmProviderMock.mockResolvedValue({
+      generateStoryConcept: vi.fn().mockResolvedValue({
+        concept,
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 100,
+          usage: null
+        }
+      }),
+      generateBeatSheet: vi.fn().mockResolvedValue({
+        beatSheet: {
+          beats: [
+            {
+              purpose: "Setup",
+              conflict: "Ava wants to save for later.",
+              sceneLocation: "Kitchen table",
+              sceneId: "kitchen_table",
+              sceneVisualDescription: "Sunny kitchen table with a blue coin jar and open notebook.",
+              emotionalTarget: "hopeful",
+              pageIndexEstimate: 0,
+              decodabilityTags: ["controlled_vocab", "repetition"],
+              newWordsIntroduced: ["save"],
+              bitcoinRelevanceScore: 0,
+              introduces: ["price tag", "coin jar"],
+              paysOff: [],
+              continuityFacts: [
+                "caregiver_label:Mom",
+                "deadline_event:Saturday game",
+                "forbid_term:grown-up",
+                "bitcoin_bridge_required:false"
+              ]
+            }
+          ]
+        },
+        audit: {
+          attempts: [],
+          rewritesApplied: 0,
+          passed: true,
+          finalIssues: [],
+          softIssues: []
+        },
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 123,
+          usage: null
+        }
+      }),
+      draftPages: vi.fn().mockResolvedValue({
+        story: {
+          title: "Ava Saves",
+          concept,
+          beats: [],
+          pages: Array.from({ length: 12 }, (_, index) => ({
+            pageIndex: index,
+            pageText: `Page ${index} text.`,
+            illustrationBrief: `Illustration ${index}`,
+            sceneId: `scene_${Math.floor(index / 2) + 1}`,
+            sceneVisualDescription: `Scene ${Math.floor(index / 2) + 1} watercolor setting.`,
+            newWordsIntroduced: ["save"],
+            repetitionTargets: ["save"]
+          })),
+          readingProfileId: "early_decoder_5_7",
+          moneyLessonKey: "saving_later"
+        },
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 234,
+          usage: null
+        }
+      }),
+      critic: vi.fn().mockResolvedValue({
+        verdict: {
+          ok: false,
+          issues: [
+            {
+              pageStart: 10,
+              pageEnd: 10,
+              issueType: "bitcoin_fit",
+              severity: "hard",
+              rewriteTarget: "page",
+              evidence: "The caregiver line is too generic.",
+              suggestedFix: "Use the concept bridge wording."
+            },
+            {
+              pageStart: 10,
+              pageEnd: 10,
+              issueType: "bitcoin_fit",
+              severity: "hard",
+              rewriteTarget: "page",
+              evidence: "The caregiver line is still too generic.",
+              suggestedFix: "Use the concept bridge wording exactly."
+            }
+          ],
+          rewriteInstructions: "Rewrite the final spread so the caregiver speaks the concept bridge line."
+        },
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 99,
+          usage: null
+        }
+      })
+    });
+
+    await expect(handler({ action: "prepare_story", bookId: "book-1" })).rejects.toThrow(
+      "BOOK_NEEDS_REVIEW:finalize_gate"
+    );
+
+    expect(putJsonMock).toHaveBeenCalledWith(
+      "books/book-1/story.json",
+      expect.objectContaining({
+        title: "Ava Saves"
+      })
+    );
+    expect(putBufferMock).toHaveBeenCalledWith(
+      "books/book-1/render/story-proof.pdf",
+      expect.any(Buffer),
+      "application/pdf"
+    );
+
+    const storyProofInsert = txExecuteMock.mock.calls.find((call) =>
+      String(call[1]).includes("INSERT INTO book_artifacts") &&
+      Array.isArray(call[2]) &&
+      call[2].some(
+        (parameter) =>
+          parameter &&
+          typeof parameter === "object" &&
+          "name" in parameter &&
+          parameter.name === "artifactType" &&
+          "value" in parameter &&
+          parameter.value?.stringValue === "story_proof_pdf"
+      )
+    );
+    expect(storyProofInsert).toBeDefined();
   });
 });

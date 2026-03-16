@@ -113,7 +113,7 @@ export function ReviewQueuePage() {
                   <TableHead>Lesson</TableHead>
                   <TableHead>Stage</TableHead>
                   <TableHead>Reason</TableHead>
-                  <TableHead>Pages</TableHead>
+                  <TableHead>Spreads</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>

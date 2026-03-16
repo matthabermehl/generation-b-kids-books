@@ -16,12 +16,14 @@ function buildFetchStub({
   canReview = false,
   queueCases = [],
   orderStatus,
-  characterState
+  characterState,
+  reviewCaseDetail
 }: {
   canReview?: boolean;
   queueCases?: Array<Record<string, unknown>>;
   orderStatus?: Record<string, unknown>;
   characterState?: Record<string, unknown>;
+  reviewCaseDetail?: Record<string, unknown>;
 } = {}) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -35,6 +37,61 @@ function buildFetchStub({
 
     if (url.includes("/v1/review/cases?status=open")) {
       return jsonResponse({ cases: queueCases });
+    }
+
+    if (url.includes("/v1/review/cases/case-1")) {
+      return jsonResponse(
+        reviewCaseDetail ?? {
+          caseId: "case-1",
+          status: "open",
+          stage: "finalize_gate",
+          reasonSummary: "Manual story review needed",
+          reason: {},
+          createdAt: "2026-03-16T12:00:00.000Z",
+          resolvedAt: null,
+          order: {
+            orderId: "order-1",
+            status: "needs_review"
+          },
+          book: {
+            bookId: "book-1",
+            status: "needs_review",
+            childFirstName: "Ava",
+            readingProfileId: "early_decoder_5_7",
+            moneyLessonKey: "saving_later",
+            spreadCount: 12,
+            physicalPageCount: 24
+          },
+          pdfUrl: null,
+          storyProofPdfUrl: "https://cdn.example.com/books/book-1/render/story-proof.pdf",
+          scenePlan: null,
+          imagePlan: null,
+          artifacts: [
+            {
+              artifactType: "story_proof_pdf",
+              createdAt: "2026-03-16T12:00:01.000Z",
+              url: "https://cdn.example.com/books/book-1/render/story-proof.pdf"
+            }
+          ],
+          evaluations: [],
+          events: [],
+          pages: [
+            {
+              pageId: "page-1",
+              pageIndex: 0,
+              spreadIndex: 0,
+              text: "Ava sees the red ball.",
+              templateId: "band_top_soft",
+              retryCount: 0,
+              latestQaIssues: [],
+              qaMetrics: {},
+              provenance: {},
+              previewImageUrl: null,
+              pageArtUrl: null
+            }
+          ]
+        }
+      );
     }
 
     if (url.includes("/v1/orders/order-1")) {
@@ -370,7 +427,32 @@ describe("web app", () => {
       expect(screen.getByRole("heading", { name: /manual qa queue/i })).toBeInTheDocument();
     });
     expect(screen.getByText("Ava")).toBeInTheDocument();
+    expect(screen.getByText("Spreads")).toBeInTheDocument();
     expect(screen.getByText(/text zone spill on page 3/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open/i })).toHaveAttribute("href", "/review/cases/case-1");
+  });
+
+  it("shows the story proof PDF link on review case pages before the final illustrated pdf exists", async () => {
+    localStorage.setItem(storageKeys.authToken, "session-token");
+    window.history.pushState({}, "", "/review/cases/case-1");
+
+    vi.stubGlobal(
+      "fetch",
+      buildFetchStub({
+        canReview: true
+      })
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /spread review/i })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("link", { name: /story proof pdf/i })).toHaveAttribute(
+      "href",
+      "https://cdn.example.com/books/book-1/render/story-proof.pdf"
+    );
+    expect(screen.queryByRole("link", { name: /final illustrated pdf/i })).not.toBeInTheDocument();
   });
 });

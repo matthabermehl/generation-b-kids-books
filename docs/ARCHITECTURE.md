@@ -26,7 +26,8 @@ For `picture_book_fixed_layout` books, the image/render chain is:
 3. single-pass `page_art` generation via OpenAI image edits using the approved character reference and up to two prior same-scene pages
 4. deterministic text-left / art-right spread composition with a text-only left page and masked watercolor art on the right page
 5. landscape spread preview PNG rendering
-6. final PDF rendering as separate physical pages in reading order
+6. story-proof PDF rendering from story text only so review/support always have a readable artifact
+7. final PDF rendering as separate physical pages in reading order
 
 ## Runtime Components
 
@@ -84,6 +85,7 @@ Cross-cutting:
   - blocking beat gates: deterministic + Montessori + Science-of-Reading
   - narrative freshness critic remains active but is advisory after max beat rewrites (captured as audit warning)
   - final story stage runs one Opus draft + one critic pass (no blind full-redraft loop)
+  - persists `story.json`, `story-qa-report.json`, and `render/story-proof.pdf` before any `finalize_gate` review stop
   - mock-provider authorization gate based on `mockRunTag`
 - `image-worker.ts`: OpenAI-backed `page_art` generation for picture books plus legacy page generation fallback, prompt safety checks, and page QA
 - `check-images.ts`: completion + image safety / picture-book QA escalation to `needs_review`
@@ -103,6 +105,7 @@ Cross-cutting:
 - legacy render path remains supported for fallback books
 - legacy render path fetches page images from S3 and embeds binaries into PDF
 - supports PNG/JPEG directly and SVG via deterministic rasterization
+- final illustrated `pdf` remains separate from the worker-generated `story_proof_pdf`
 
 ### Shared Packages
 - `packages/domain`: enums/types/validators (includes Montessori realism check)
@@ -170,6 +173,7 @@ Fixed-layout additions:
 3. Reviewer UI loads the current artifact set only:
    - `images.is_current = TRUE`
    - `book_artifacts.is_current = TRUE`
+   - `story_proof_pdf` is the readable fallback when the final illustrated `pdf` is not available yet
 4. Reviewer actions:
    - `approve_continue`: case moves to `retrying`, Step Functions resumes from the appropriate stage
    - `reject`: case resolves as rejected and the book/order become terminal `failed`
@@ -199,6 +203,7 @@ Fixed-layout additions:
 - Prompting evidence:
   - `books/<bookId>/beat-plan.json` stores planner + validator + critic + rewrite lineage
   - `books/<bookId>/beat-plan-failed.json` stores failed beat-planning lineage
+  - `books/<bookId>/story.json` and `books/<bookId>/render/story-proof.pdf` are persisted before final release gating
   - `evaluations.stage='beat_plan'` captures structured beat-planning audit metadata
 - Policy-triggered `needs_review` status blocks release/download path
 - Parent self-service deletion queues artifact purge and audits to `privacy_events`

@@ -1645,6 +1645,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       ]);
 
       const pdfArtifact = artifacts.find((artifact) => artifact.artifact_type === "pdf");
+      const storyProofArtifact = artifacts.find((artifact) => artifact.artifact_type === "story_proof_pdf");
       const scenePlanArtifact = artifacts.find((artifact) => artifact.artifact_type === "scene_plan");
       const imagePlanArtifact = artifacts.find((artifact) => artifact.artifact_type === "image_plan");
       return json(200, {
@@ -1669,6 +1670,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           physicalPageCount: pages.length * 2
         },
         pdfUrl: publicArtifactUrl(pdfArtifact?.s3_url ?? null),
+        storyProofPdfUrl: publicArtifactUrl(storyProofArtifact?.s3_url ?? null),
         scenePlan: scenePlanArtifact
           ? {
               url: publicArtifactUrl(scenePlanArtifact.s3_url),
