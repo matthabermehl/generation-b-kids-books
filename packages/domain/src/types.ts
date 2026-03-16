@@ -20,6 +20,30 @@ export interface CreateOrderInput {
   characterDescription: string;
 }
 
+export type StoryCaregiverLabel = "Mom" | "Dad";
+
+export interface StoryConceptEarningOption {
+  label: string;
+  action: string;
+  sceneLocation: string;
+}
+
+export interface StoryConcept {
+  premise: string;
+  caregiverLabel: StoryCaregiverLabel;
+  targetItem: string;
+  targetPrice: number;
+  startingAmount: number;
+  gapAmount: number;
+  earningOptions: [StoryConceptEarningOption, StoryConceptEarningOption];
+  temptation: string;
+  deadlineEvent: string | null;
+  bitcoinBridge: string;
+  requiredSetups: string[];
+  requiredPayoffs: string[];
+  forbiddenLateIntroductions: string[];
+}
+
 export interface PlannedBeat {
   purpose: string;
   conflict: string;
@@ -31,6 +55,9 @@ export interface PlannedBeat {
   decodabilityTags: string[];
   newWordsIntroduced: string[];
   bitcoinRelevanceScore: number;
+  introduces: string[];
+  paysOff: string[];
+  continuityFacts: string[];
 }
 
 export interface BeatSheet {
@@ -51,10 +78,40 @@ export interface StoryPage {
 
 export interface StoryPackage {
   title: string;
+  concept: StoryConcept;
   beats: StoryBeat[];
   pages: StoryPage[];
   readingProfileId: ReadingProfile;
   moneyLessonKey: MoneyLessonKey;
+}
+
+export type StoryCriticIssueType =
+  | "count_sequence"
+  | "caregiver_consistency"
+  | "setup_payoff"
+  | "action_continuity"
+  | "age_plausibility"
+  | "theme_integration"
+  | "bitcoin_fit"
+  | "reading_level";
+
+export type StoryCriticRewriteTarget = "concept" | "beat" | "page";
+export type StoryCriticIssueSeverity = "hard" | "soft";
+
+export interface StoryCriticIssue {
+  pageStart: number;
+  pageEnd: number;
+  issueType: StoryCriticIssueType;
+  severity: StoryCriticIssueSeverity;
+  rewriteTarget: StoryCriticRewriteTarget;
+  evidence: string;
+  suggestedFix: string;
+}
+
+export interface StoryCriticVerdict {
+  ok: boolean;
+  issues: StoryCriticIssue[];
+  rewriteInstructions: string;
 }
 
 export interface ScenePlanScene {

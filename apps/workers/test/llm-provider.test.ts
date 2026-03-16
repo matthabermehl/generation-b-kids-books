@@ -19,6 +19,25 @@ const context = {
   pageCount: 4
 };
 
+const compliantConcept = {
+  premise: "Ava wants a space soccer ball and must decide how to save for it.",
+  caregiverLabel: "Mom" as const,
+  targetItem: "space soccer ball",
+  targetPrice: 12,
+  startingAmount: 7,
+  gapAmount: 5,
+  earningOptions: [
+    { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
+    { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
+  ] as const,
+  temptation: "sticker pack",
+  deadlineEvent: "Saturday game",
+  bitcoinBridge: "Mom says Bitcoin is one adult saving idea tied to Ava's jar choice.",
+  requiredSetups: ["price tag", "coin jar", "Saturday game"],
+  requiredPayoffs: ["reach 12 coins", "buy the ball"],
+  forbiddenLateIntroductions: ["tournament", "sale", "third chore"]
+};
+
 const compliantBeatSheet = {
   beats: [
     {
@@ -31,7 +50,15 @@ const compliantBeatSheet = {
       pageIndexEstimate: 0,
       decodabilityTags: ["controlled_vocab", "repetition"],
       newWordsIntroduced: ["save"],
-      bitcoinRelevanceScore: 0.1
+      bitcoinRelevanceScore: 0.1,
+      introduces: ["price tag", "coin jar"],
+      paysOff: [],
+      continuityFacts: [
+        "caregiver_label:Mom",
+        "deadline_event:Saturday game",
+        "forbid_term:grown-up",
+        "bitcoin_bridge_required:false"
+      ]
     },
     {
       purpose: "Setback",
@@ -43,7 +70,15 @@ const compliantBeatSheet = {
       pageIndexEstimate: 1,
       decodabilityTags: ["controlled_vocab", "repetition"],
       newWordsIntroduced: ["plan"],
-      bitcoinRelevanceScore: 0.2
+      bitcoinRelevanceScore: 0.2,
+      introduces: ["temptation"],
+      paysOff: [],
+      continuityFacts: [
+        "caregiver_label:Mom",
+        "deadline_event:Saturday game",
+        "forbid_term:grown-up",
+        "count_target:12"
+      ]
     },
     {
       purpose: "Choice",
@@ -55,19 +90,35 @@ const compliantBeatSheet = {
       pageIndexEstimate: 2,
       decodabilityTags: ["controlled_vocab", "repetition"],
       newWordsIntroduced: ["wait"],
-      bitcoinRelevanceScore: 0.2
+      bitcoinRelevanceScore: 0.2,
+      introduces: [],
+      paysOff: ["price tag"],
+      continuityFacts: [
+        "caregiver_label:Mom",
+        "deadline_event:Saturday game",
+        "forbid_term:grown-up",
+        "chosen_earning_option:rake leaves"
+      ]
     },
     {
       purpose: "Resolution",
       conflict: "Ava learns one tool for long-term saving.",
       sceneLocation: "Family room",
       sceneId: "family_room",
-      sceneVisualDescription: "Family room sofa with evening light and a calm grown-up nearby.",
+      sceneVisualDescription: "Family room sofa with evening light and a calm Mom nearby.",
       emotionalTarget: "relieved",
       pageIndexEstimate: 3,
       decodabilityTags: ["controlled_vocab", "taught_words"],
       newWordsIntroduced: ["bitcoin"],
-      bitcoinRelevanceScore: 0.9
+      bitcoinRelevanceScore: 0.9,
+      introduces: [],
+      paysOff: ["reach 12 coins", "buy the ball"],
+      continuityFacts: [
+        "caregiver_label:Mom",
+        "deadline_event:Saturday game",
+        "forbid_term:grown-up",
+        "bitcoin_bridge_required:true"
+      ]
     }
   ]
 };
@@ -92,7 +143,15 @@ const oversizedBeatSheet = {
       pageIndexEstimate: 4,
       decodabilityTags: ["controlled_vocab"],
       newWordsIntroduced: ["bitcoin"],
-      bitcoinRelevanceScore: 0.9
+      bitcoinRelevanceScore: 0.9,
+      introduces: [],
+      paysOff: ["reach 12 coins"],
+      continuityFacts: [
+        "caregiver_label:Mom",
+        "deadline_event:Saturday game",
+        "forbid_term:grown-up",
+        "bitcoin_bridge_required:true"
+      ]
     }
   ]
 };
@@ -269,7 +328,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.beatSheet.beats).toHaveLength(4);
     expect(result.meta.provider).toBe("anthropic");
@@ -317,7 +376,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
     expect(result.audit.passed).toBe(true);
     expect(result.meta.provider).toBe("anthropic");
     expect(result.meta.fallbackFrom).toBe("openai");
@@ -343,7 +402,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.meta.provider).toBe("anthropic");
     expect(result.meta.fallbackFrom).toBe("openai");
@@ -369,7 +428,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.audit.passed).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(5);
@@ -394,7 +453,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.audit.passed).toBe(true);
     expect(result.beatSheet.beats).toHaveLength(context.pageCount);
@@ -428,7 +487,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.audit.passed).toBe(true);
     expect(result.audit.rewritesApplied).toBe(0);
@@ -449,6 +508,7 @@ describe("llm provider routing", () => {
               name: "StoryPackage",
               input: {
                 title: "Ava Saves for Later",
+                concept: compliantConcept,
                 beats: compliantBeatSheet.beats,
                 pages: [
                   {
@@ -483,7 +543,7 @@ describe("llm provider routing", () => {
                     pageText: "Ava learns how Bitcoin can support long-term saving.",
                     illustrationBrief: "Family room",
                     sceneId: "family_room",
-                    sceneVisualDescription: "Family room sofa with evening light and a calm grown-up nearby.",
+                    sceneVisualDescription: "Family room sofa with evening light and a calm Mom nearby.",
                     newWordsIntroduced: ["bitcoin"],
                     repetitionTargets: ["save"]
                   }
@@ -503,7 +563,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.draftPages(context, compliantBeatSheet);
+    const result = await provider.draftPages(context, compliantConcept, compliantBeatSheet);
 
     expect(result.meta.provider).toBe("anthropic");
     expect(result.meta.model).toBe("claude-opus-4-6");
@@ -540,7 +600,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    await provider.generateBeatSheet(context);
+    await provider.generateBeatSheet(context, compliantConcept);
 
     const openAiRequestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
       max_tokens?: number;
@@ -571,7 +631,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.audit.passed).toBe(true);
     expect(result.audit.rewritesApplied).toBe(1);
@@ -602,7 +662,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.audit.passed).toBe(true);
     expect(result.beatSheet.beats).toHaveLength(context.pageCount);
@@ -630,7 +690,7 @@ describe("llm provider routing", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await resolveLlmProvider();
-    const result = await provider.generateBeatSheet(context);
+    const result = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(result.audit.rewritesApplied).toBe(2);
     expect(result.audit.passed).toBe(true);
@@ -642,7 +702,7 @@ describe("llm provider routing", () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(true));
 
     const provider = await resolveLlmProvider({ mockRunTag: "test-run", source: "unit-test" });
-    const beatPlan = await provider.generateBeatSheet(context);
+    const beatPlan = await provider.generateBeatSheet(context, compliantConcept);
 
     expect(beatPlan.meta.provider).toBe("mock");
     expect(beatPlan.beatSheet.beats).toHaveLength(4);

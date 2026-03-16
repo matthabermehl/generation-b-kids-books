@@ -1,4 +1,10 @@
-import type { BeatSheet, CreateOrderInput, StoryPackage } from "./types.js";
+import type {
+  BeatSheet,
+  CreateOrderInput,
+  StoryConcept,
+  StoryCriticVerdict,
+  StoryPackage
+} from "./types.js";
 import type { MoneyLessonKey, ReadingProfile } from "./enums.js";
 
 export interface ProviderUsage {
@@ -36,15 +42,28 @@ export interface StoryGenerationContext {
 }
 
 export interface LlmProviderContract {
-  generateBeatSheet(context: StoryGenerationContext): Promise<{ beatSheet: BeatSheet; meta: LlmCallMetadata }>;
+  generateStoryConcept(context: StoryGenerationContext): Promise<{ concept: StoryConcept; meta: LlmCallMetadata }>;
+  generateBeatSheet(
+    context: StoryGenerationContext,
+    concept: StoryConcept
+  ): Promise<{ beatSheet: BeatSheet; meta: LlmCallMetadata }>;
+  reviseBeatSheet(
+    context: StoryGenerationContext,
+    concept: StoryConcept,
+    beatSheet: BeatSheet,
+    rewriteInstructions: string
+  ): Promise<{ beatSheet: BeatSheet; meta: LlmCallMetadata }>;
   draftPages(
     context: StoryGenerationContext,
-    beatSheet: BeatSheet
+    concept: StoryConcept,
+    beatSheet: BeatSheet,
+    rewriteInstructions?: string
   ): Promise<{ story: StoryPackage; meta: LlmCallMetadata }>;
   critic(
     context: StoryGenerationContext,
+    concept: StoryConcept,
     story: StoryPackage
-  ): Promise<{ ok: boolean; notes: string[]; meta: LlmCallMetadata }>;
+  ): Promise<{ verdict: StoryCriticVerdict; meta: LlmCallMetadata }>;
 }
 
 export interface ImageProviderContract {
