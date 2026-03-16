@@ -259,7 +259,6 @@ const storyCriticSchema = z.object({
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_OPUS_46_MODEL = "claude-opus-4-6";
 const MAX_BEAT_REWRITES = 2;
 
 class ProviderRequestError extends Error {
@@ -308,6 +307,7 @@ function parseWithSchema<T>(
 function normalizeStructuredToolInput(raw: unknown, schemaName: string): unknown {
   let candidate = raw;
   const seen = new Set<unknown>();
+  const normalizedSchemaName = schemaName.replace(/[^a-z0-9]/gi, "").toLowerCase();
 
   while (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
     if (seen.has(candidate)) {
@@ -316,8 +316,11 @@ function normalizeStructuredToolInput(raw: unknown, schemaName: string): unknown
     seen.add(candidate);
 
     const record = candidate as Record<string, unknown>;
-    if (record[schemaName] !== undefined) {
-      candidate = record[schemaName];
+    const wrappedSchemaKey = Object.keys(record).find(
+      (key) => key.replace(/[^a-z0-9]/gi, "").toLowerCase() === normalizedSchemaName
+    );
+    if (wrappedSchemaKey && record[wrappedSchemaKey] !== undefined) {
+      candidate = record[wrappedSchemaKey];
       continue;
     }
     if (record.output !== undefined) {
@@ -327,6 +330,19 @@ function normalizeStructuredToolInput(raw: unknown, schemaName: string): unknown
     if (record.data !== undefined) {
       candidate = record.data;
       continue;
+    }
+    if (schemaName === schemaNames.beatSheet) {
+      const values = Object.values(record);
+      if (Object.keys(record).length === 1 && values.length === 1) {
+        const [onlyValue] = values;
+        if (Array.isArray(onlyValue)) {
+          return { beats: onlyValue };
+        }
+        if (onlyValue && typeof onlyValue === "object") {
+          candidate = onlyValue;
+          continue;
+        }
+      }
     }
     break;
   }
@@ -977,19 +993,16 @@ class OpenAiAnthropicProvider implements LlmProvider {
     rewriteInstructions = ""
   ): Promise<{ story: StoryPackage; meta: LlmMetadata }> {
     const prompt = buildPageWriterPrompt(context, concept, beatSheet, context.pageCount, rewriteInstructions);
-    const result = await this.withRetries("anthropic", "draft_pages", () =>
-      this.callAnthropicStrict<z.infer<typeof storyPackageSchema>>({
-        stage: "draft_pages",
-        model: ANTHROPIC_OPUS_46_MODEL,
-        prompt,
-        systemPrompt:
-          "You write final story pages for children. Output only schema-valid structured data.",
-        schemaName: schemaNames.storyPackage,
-        jsonSchema: storyPackageJsonSchema,
-        parser: storyPackageSchema,
-        maxTokens: 5000
-      })
-    );
+    const result = await this.callWithFallbackStructured<z.infer<typeof storyPackageSchema>>({
+      stage: "draft_pages",
+      prompt,
+      systemPrompt:
+        "You write final story pages for children. Output only schema-valid structured data.",
+      schemaName: schemaNames.storyPackage,
+      jsonSchema: storyPackageJsonSchema,
+      parser: storyPackageSchema,
+      maxTokens: 5000
+    });
 
     const validated = result.data;
 
@@ -1019,10 +1032,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
 
     return {
       story,
-      meta: {
-        ...result.meta,
-        model: ANTHROPIC_OPUS_46_MODEL
-      }
+      meta: result.meta
     };
   }
 

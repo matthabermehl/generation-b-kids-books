@@ -460,6 +460,32 @@ describe("llm provider routing", () => {
     expect(result.meta.provider).toBe("anthropic");
   });
 
+  it("normalizes case-insensitive singleton Anthropic beat-sheet wrappers", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse({ beat_sheet: compliantBeatSheet }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
   it("allows soft beat-critic issues without triggering rewrites", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
@@ -496,68 +522,53 @@ describe("llm provider routing", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it("hard-pins Anthropic Opus 4.6 for final story writing", async () => {
+  it("uses structured OpenAI page writing when the configured JSON model is available", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
     const fetchMock = vi.fn().mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          content: [
-            {
-              type: "tool_use",
-              name: "StoryPackage",
-              input: {
-                title: "Ava Saves for Later",
-                concept: compliantConcept,
-                beats: compliantBeatSheet.beats,
-                pages: [
-                  {
-                    pageIndex: 0,
-                    pageText: "Ava sees something she wants.",
-                    illustrationBrief: "Toy aisle",
-                    sceneId: "toy_aisle",
-                    sceneVisualDescription: "Toy aisle with open shelf space and a bright yellow price tag.",
-                    newWordsIntroduced: ["save"],
-                    repetitionTargets: ["save"]
-                  },
-                  {
-                    pageIndex: 1,
-                    pageText: "Ava compares prices and feels unsure.",
-                    illustrationBrief: "Kitchen table",
-                    sceneId: "kitchen_table",
-                    sceneVisualDescription: "Kitchen table with a blue coin jar, pencil, and price note.",
-                    newWordsIntroduced: ["plan"],
-                    repetitionTargets: ["plan"]
-                  },
-                  {
-                    pageIndex: 2,
-                    pageText: "Ava decides to wait and plan ahead.",
-                    illustrationBrief: "Library desk",
-                    sceneId: "library_corner",
-                    sceneVisualDescription: "Quiet library corner with a notebook and warm daylight.",
-                    newWordsIntroduced: ["wait"],
-                    repetitionTargets: ["wait"]
-                  },
-                  {
-                    pageIndex: 3,
-                    pageText: "Ava learns how Bitcoin can support long-term saving.",
-                    illustrationBrief: "Family room",
-                    sceneId: "family_room",
-                    sceneVisualDescription: "Family room sofa with evening light and a calm Mom nearby.",
-                    newWordsIntroduced: ["bitcoin"],
-                    repetitionTargets: ["save"]
-                  }
-                ]
-              }
-            }
-          ],
-          usage: { input_tokens: 50, output_tokens: 120 }
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        }
-      )
+      openAiStructuredResponse({
+        title: "Ava Saves for Later",
+        concept: compliantConcept,
+        beats: compliantBeatSheet.beats,
+        pages: [
+          {
+            pageIndex: 0,
+            pageText: "Ava sees something she wants.",
+            illustrationBrief: "Toy aisle",
+            sceneId: "toy_aisle",
+            sceneVisualDescription: "Toy aisle with open shelf space and a bright yellow price tag.",
+            newWordsIntroduced: ["save"],
+            repetitionTargets: ["save"]
+          },
+          {
+            pageIndex: 1,
+            pageText: "Ava compares prices and feels unsure.",
+            illustrationBrief: "Kitchen table",
+            sceneId: "kitchen_table",
+            sceneVisualDescription: "Kitchen table with a blue coin jar, pencil, and price note.",
+            newWordsIntroduced: ["plan"],
+            repetitionTargets: ["plan"]
+          },
+          {
+            pageIndex: 2,
+            pageText: "Ava decides to wait and plan ahead.",
+            illustrationBrief: "Library desk",
+            sceneId: "library_corner",
+            sceneVisualDescription: "Quiet library corner with a notebook and warm daylight.",
+            newWordsIntroduced: ["wait"],
+            repetitionTargets: ["wait"]
+          },
+          {
+            pageIndex: 3,
+            pageText: "Ava learns how Bitcoin can support long-term saving.",
+            illustrationBrief: "Family room",
+            sceneId: "family_room",
+            sceneVisualDescription: "Family room sofa with evening light and a calm Mom nearby.",
+            newWordsIntroduced: ["bitcoin"],
+            repetitionTargets: ["save"]
+          }
+        ]
+      })
     );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -565,12 +576,17 @@ describe("llm provider routing", () => {
     const provider = await resolveLlmProvider();
     const result = await provider.draftPages(context, compliantConcept, compliantBeatSheet);
 
-    expect(result.meta.provider).toBe("anthropic");
-    expect(result.meta.model).toBe("claude-opus-4-6");
+    expect(result.meta.provider).toBe("openai");
+    expect(result.meta.model).toBe("gpt-5-mini-2025-08-07");
     expect(result.story.pages).toHaveLength(4);
 
-    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { model?: string };
-    expect(requestBody.model).toBe("claude-opus-4-6");
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      model?: string;
+      response_format?: { type?: string; json_schema?: { strict?: boolean } };
+    };
+    expect(requestBody.model).toBe("gpt-5-mini-2025-08-07");
+    expect(requestBody.response_format?.type).toBe("json_schema");
+    expect(requestBody.response_format?.json_schema?.strict).toBe(true);
   });
 
   it("uses legacy max_tokens for non-gpt-5 OpenAI models", async () => {
