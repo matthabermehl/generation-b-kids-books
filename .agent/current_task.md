@@ -1,27 +1,27 @@
 # Current Task
-Task ID: review-render-image-cutover-01
+Task ID: live-character-generation-timeout-01
 
 ## Goal
-Finish the OpenAI `page_art` cutover across workers, API, web, ops scripts, and docs, then verify the branch.
+Make the deployed pre-checkout character candidate loop operational end to end by eliminating the live `POST /v1/books/{bookId}/character/candidates` timeout in `dev`.
 
 ## Constraints
-- Fal-era runtime config and image-role compatibility are intentionally out of scope.
-- Full-book picture-book generation runs page-by-page in `page_index` order.
-- Live dev validation requires the current branch to be deployed before the new character approval endpoints exist remotely.
+- The OpenAI image cutover code is already merged on `master`; this is now a live-integration hardening task, not a Fal compatibility task.
+- API Gateway now exposes the character approval routes in `dev`, so the remaining blocker is the real request path inside `ApiFunction`.
+- The current `ApiFunction` timeout is 29 seconds, and live OpenAI character generation exceeded that budget during smoke validation.
 
 ## Plan (short)
-1) Keep `page_art` and provenance wired end to end across render/review/status paths.
-2) Verify with workers/API/web tests plus smoke and quality gates.
-3) Record the live-dev smoke blocker explicitly until this branch is deployed.
+1) Decide whether to reduce synchronous character-generation latency or move candidate generation to an async/polling flow.
+2) Implement the smallest safe change that keeps the parent dashboard approval loop usable.
+3) Redeploy `dev` and rerun `pnpm ops:picture-book-smoke` until it completes the character approval path.
 
 ## Evidence required
-- `pnpm --filter @book/workers test`
 - `pnpm --filter @book/api test`
-- `pnpm --filter @book/web test`
+- `pnpm --filter @book/cdk test`
 - `bash scripts/agent/smoke.sh`
-- `bash scripts/agent/quality.sh`
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke`
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke`
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS
-- work: completed locally
-- live validation: `pnpm ops:provider-smoke` PASS; `pnpm ops:picture-book-smoke` currently fails against deployed dev because `/v1/books/{bookId}/character/candidates` is not deployed there yet
+- deploy: `pnpm cdk:deploy:dev` PASS after fixing the migration SQL splitter and adding missing API Gateway character routes
+- live validation: `pnpm ops:provider-smoke` PASS; `pnpm ops:picture-book-smoke` now reaches the route but fails with `500`, and CloudWatch shows the `ApiFunction` request timing out after 29 seconds during character candidate generation

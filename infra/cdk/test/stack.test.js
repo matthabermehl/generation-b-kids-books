@@ -31,6 +31,15 @@ describe("AiChildrensBookDevStack", () => {
     template.hasOutput("WebDistributionId", {});
     template.hasOutput("PrivacyPurgeQueueUrl", {});
     expect(template.findResources("AWS::KMS::Key")).toBeTruthy();
+    template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      RouteKey: "GET /v1/books/{bookId}/character"
+    });
+    template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      RouteKey: "POST /v1/books/{bookId}/character/candidates"
+    });
+    template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      RouteKey: "POST /v1/books/{bookId}/character/select"
+    });
 
     const migrationResource = Object.values(template.findResources("AWS::CloudFormation::CustomResource")).find(
       (resource) => "MigrationVersion" in (resource.Properties ?? {})

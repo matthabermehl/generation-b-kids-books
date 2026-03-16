@@ -1,5 +1,6 @@
 import type { CloudFormationCustomResourceEvent, Handler } from "aws-lambda";
 import { execute } from "./lib/rds.js";
+import { splitSqlStatements } from "./lib/sql.js";
 
 const migrationSql = `
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -211,14 +212,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_review_cases_book_active ON review_cases(b
 CREATE INDEX IF NOT EXISTS idx_review_events_case ON review_events(review_case_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_privacy_events_user ON privacy_events(user_id);
 `;
-
-function splitSqlStatements(sql: string): string[] {
-  return sql
-    .split(";")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => `${part};`);
-}
 
 export const handler: Handler<CloudFormationCustomResourceEvent, { PhysicalResourceId: string; Data?: { statementCount: number } }> = async (event) => {
   const migrationVersion =

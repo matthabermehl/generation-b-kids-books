@@ -230,3 +230,18 @@ Evidence:
 - `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke` => FAIL (`POST /v1/books/{bookId}/character/candidates` returned 404 because the deployed dev API is behind this branch)
 Notes: local code, tests, and docs are complete; the only remaining live-validation blocker is deploying the branch to the shared dev stack before rerunning the end-to-end picture-book smoke.
 Commit: pending
+
+2026-03-16T00:14:10Z
+Task: live-character-generation-timeout-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: deployed `master` to `dev`, fixed the deploy-blocking migration SQL splitter so `RunMigrations` can execute dollar-quoted SQL safely, added the missing API Gateway character approval routes that were causing live `404`s, and reran live provider and picture-book smoke checks against the deployed stack.
+Evidence:
+- `pnpm --filter @book/workers test` => PASS
+- `pnpm --filter @book/cdk test` => PASS
+- `bash scripts/agent/smoke.sh` => PASS
+- `pnpm cdk:deploy:dev` => PASS
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke` => PASS
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke` => FAIL (`POST /v1/books/{bookId}/character/candidates` returned 500)
+- CloudWatch `/aws/lambda/AiChildrensBookDevStack-ApiFunctionCE271BD4-SHPZy7P1mDZB` => request timed out after 29s during character candidate generation
+Notes: the live flow now reaches the correct handler and provider wiring, but the synchronous character candidate request exceeds the current `ApiFunction` timeout budget. This means the OpenAI cutover is deployed and mostly wired, but not yet operationally complete end to end.
+Commit: pending
