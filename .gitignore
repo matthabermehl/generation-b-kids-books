@@ -17,3 +17,4 @@ coverage/
 .env
 .env.local
 infra/cdk/cdk.out/
+/output
