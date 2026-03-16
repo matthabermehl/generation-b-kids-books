@@ -133,6 +133,25 @@ describe("pipeline beat-planning failure persistence", () => {
     });
   });
 
+  const concept = {
+    premise: "Ava saves for a soccer ball.",
+    caregiverLabel: "Mom" as const,
+    targetItem: "soccer ball",
+    targetPrice: 12,
+    startingAmount: 7,
+    gapAmount: 5,
+    earningOptions: [
+      { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
+      { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
+    ] as const,
+    temptation: "sticker pack",
+    deadlineEvent: "Saturday game",
+    bitcoinBridge: "Mom says Bitcoin is one adult saving idea tied to Ava's jar choice.",
+    requiredSetups: ["price tag", "coin jar"],
+    requiredPayoffs: ["reach 12 coins", "buy the ball"],
+    forbiddenLateIntroductions: ["tournament", "sale"]
+  };
+
   it("persists beat-plan-failed artifact and evaluation then rethrows", async () => {
     const beatFailure = new BeatPlanningError(
       "Beat planning failed validation after rewrites: Bitcoin beat ratio 0.00 must be between 0.15 and 0.30.",
@@ -153,6 +172,15 @@ describe("pipeline beat-planning failure persistence", () => {
     );
 
     resolveLlmProviderMock.mockResolvedValue({
+      generateStoryConcept: vi.fn().mockResolvedValue({
+        concept,
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 100,
+          usage: null
+        }
+      }),
       generateBeatSheet: vi.fn().mockRejectedValue(beatFailure),
       draftPages: vi.fn(),
       critic: vi.fn()
@@ -193,6 +221,15 @@ describe("pipeline beat-planning failure persistence", () => {
 
   it("persists a beat-plan report when only soft issues remain", async () => {
     resolveLlmProviderMock.mockResolvedValue({
+      generateStoryConcept: vi.fn().mockResolvedValue({
+        concept,
+        meta: {
+          provider: "openai",
+          model: "gpt-5-mini-2025-08-07",
+          latencyMs: 100,
+          usage: null
+        }
+      }),
       generateBeatSheet: vi.fn().mockResolvedValue({
         beatSheet: {
           beats: [
@@ -206,7 +243,15 @@ describe("pipeline beat-planning failure persistence", () => {
               pageIndexEstimate: 0,
               decodabilityTags: ["controlled_vocab", "repetition"],
               newWordsIntroduced: ["save"],
-              bitcoinRelevanceScore: 0
+              bitcoinRelevanceScore: 0,
+              introduces: ["price tag", "coin jar"],
+              paysOff: [],
+              continuityFacts: [
+                "caregiver_label:Mom",
+                "deadline_event:Saturday game",
+                "forbid_term:grown-up",
+                "bitcoin_bridge_required:false"
+              ]
             }
           ]
         },
@@ -227,6 +272,7 @@ describe("pipeline beat-planning failure persistence", () => {
       draftPages: vi.fn().mockResolvedValue({
         story: {
           title: "Ava Saves",
+          concept,
           beats: [],
           pages: Array.from({ length: 12 }, (_, index) => ({
             pageIndex: index,
@@ -248,8 +294,11 @@ describe("pipeline beat-planning failure persistence", () => {
         }
       }),
       critic: vi.fn().mockResolvedValue({
-        ok: true,
-        notes: [],
+        verdict: {
+          ok: true,
+          issues: [],
+          rewriteInstructions: ""
+        },
         meta: {
           provider: "openai",
           model: "gpt-5-mini-2025-08-07",

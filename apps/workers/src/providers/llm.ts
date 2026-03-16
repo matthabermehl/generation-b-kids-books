@@ -1,4 +1,11 @@
-import type { BeatSheet, MoneyLessonKey, ReadingProfile, StoryPackage } from "@book/domain";
+import type {
+  BeatSheet,
+  MoneyLessonKey,
+  ReadingProfile,
+  StoryConcept,
+  StoryCriticVerdict,
+  StoryPackage
+} from "@book/domain";
 import {
   beatSheetJsonSchema,
   buildBeatPlannerPrompt,
@@ -8,12 +15,15 @@ import {
   buildMontessoriCriticPrompt,
   buildNarrativeFreshnessCriticPrompt,
   buildPageWriterPrompt,
+  buildStoryConceptPrompt,
+  buildStoryConceptSystemPrompt,
   buildScienceOfReadingCriticPrompt,
   criticVerdictJsonSchema,
   computeBitcoinBeatTargets,
   runDeterministicBeatChecks,
   runDeterministicStoryChecks,
   schemaNames,
+  storyConceptJsonSchema,
   storyCriticVerdictJsonSchema,
   storyPackageJsonSchema,
   type BitcoinBeatTargets,
@@ -90,12 +100,53 @@ export class BeatPlanningError extends Error {
 }
 
 export interface LlmProvider {
-  generateBeatSheet(
+  generateStoryConcept(
     context: StoryContext
+  ): Promise<{ concept: StoryConcept; meta: LlmMetadata }>;
+  generateBeatSheet(
+    context: StoryContext,
+    concept: StoryConcept
   ): Promise<{ beatSheet: BeatSheet; audit: BeatPlanningAudit; meta: LlmMetadata }>;
-  draftPages(context: StoryContext, beatSheet: BeatSheet): Promise<{ story: StoryPackage; meta: LlmMetadata }>;
-  critic(context: StoryContext, story: StoryPackage): Promise<{ ok: boolean; notes: string[]; meta: LlmMetadata }>;
+  reviseBeatSheet(
+    context: StoryContext,
+    concept: StoryConcept,
+    beatSheet: BeatSheet,
+    rewriteInstructions: string
+  ): Promise<{ beatSheet: BeatSheet; meta: LlmMetadata }>;
+  draftPages(
+    context: StoryContext,
+    concept: StoryConcept,
+    beatSheet: BeatSheet,
+    rewriteInstructions?: string
+  ): Promise<{ story: StoryPackage; meta: LlmMetadata }>;
+  critic(
+    context: StoryContext,
+    concept: StoryConcept,
+    story: StoryPackage
+  ): Promise<{ verdict: StoryCriticVerdict; meta: LlmMetadata }>;
 }
+
+const earningOptionSchema = z.object({
+  label: z.string().min(1),
+  action: z.string().min(1),
+  sceneLocation: z.string().min(1)
+});
+
+const storyConceptSchema: z.ZodType<StoryConcept> = z.object({
+  premise: z.string().min(1),
+  caregiverLabel: z.enum(["Mom", "Dad"]),
+  targetItem: z.string().min(1),
+  targetPrice: z.number().int().min(1).max(500),
+  startingAmount: z.number().int().min(0).max(500),
+  gapAmount: z.number().int().min(1).max(500),
+  earningOptions: z.tuple([earningOptionSchema, earningOptionSchema]),
+  temptation: z.string().min(1),
+  deadlineEvent: z.string().min(1).nullable(),
+  bitcoinBridge: z.string().min(1),
+  requiredSetups: z.array(z.string().min(1)).min(2).max(12),
+  requiredPayoffs: z.array(z.string().min(1)).min(2).max(12),
+  forbiddenLateIntroductions: z.array(z.string().min(1)).min(1).max(12)
+});
 
 const plannedBeatSchema = z.object({
   purpose: z.string().min(1),
@@ -107,7 +158,10 @@ const plannedBeatSchema = z.object({
   pageIndexEstimate: z.number().int().min(0).max(40),
   decodabilityTags: z.array(z.string().min(1)).min(1).max(16),
   newWordsIntroduced: z.array(z.string().min(1)).min(0).max(8),
-  bitcoinRelevanceScore: z.number().min(0).max(1)
+  bitcoinRelevanceScore: z.number().min(0).max(1),
+  introduces: z.array(z.string().min(1)).max(8),
+  paysOff: z.array(z.string().min(1)).max(8),
+  continuityFacts: z.array(z.string().min(1)).min(1).max(12)
 });
 
 const beatSheetSchema = z.object({
@@ -126,6 +180,7 @@ const storyPageSchema = z.object({
 
 const storyPackageSchema = z.object({
   title: z.string().min(1),
+  concept: storyConceptSchema,
   beats: z.array(plannedBeatSchema).min(4).max(32),
   pages: z.array(storyPageSchema).min(4).max(32)
 });
@@ -177,9 +232,29 @@ const beatCriticLenientParser = z.preprocess((raw) => {
   };
 }, beatCriticSchema);
 
+const storyCriticIssueSchema = z.object({
+  pageStart: z.number().int().min(0).max(40),
+  pageEnd: z.number().int().min(0).max(40),
+  issueType: z.enum([
+    "count_sequence",
+    "caregiver_consistency",
+    "setup_payoff",
+    "action_continuity",
+    "age_plausibility",
+    "theme_integration",
+    "bitcoin_fit",
+    "reading_level"
+  ]),
+  severity: z.enum(["hard", "soft"]),
+  rewriteTarget: z.enum(["concept", "beat", "page"]),
+  evidence: z.string().min(1),
+  suggestedFix: z.string().min(1)
+});
+
 const storyCriticSchema = z.object({
   ok: z.boolean(),
-  notes: z.array(z.string())
+  issues: z.array(storyCriticIssueSchema),
+  rewriteInstructions: z.string()
 });
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -333,6 +408,72 @@ function normalizeCriticVerdict(verdict: CriticVerdict): CriticVerdict {
   };
 }
 
+function normalizeStoryCriticVerdict(verdict: StoryCriticVerdict): StoryCriticVerdict {
+  const seen = new Set<string>();
+  const dedupedIssues = verdict.issues.filter((issue) => {
+    const key = [
+      issue.pageStart,
+      issue.pageEnd,
+      issue.issueType,
+      issue.severity,
+      issue.rewriteTarget,
+      issue.evidence.trim().toLowerCase()
+    ].join(":");
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  const hardIssues = dedupedIssues.filter((issue) => issue.severity === "hard").slice(0, 4);
+  const softIssues = dedupedIssues.filter((issue) => issue.severity === "soft").slice(0, 4);
+  const cappedIssues = [...hardIssues, ...softIssues];
+
+  return {
+    ok: hardIssues.length === 0,
+    issues: cappedIssues,
+    rewriteInstructions: verdict.rewriteInstructions.trim()
+  };
+}
+
+function normalizeStoryConcept(concept: StoryConcept): StoryConcept {
+  const targetPrice = Math.max(1, Math.round(concept.targetPrice));
+  const startingAmount = Math.max(0, Math.round(concept.startingAmount));
+  const gapAmount = Math.max(1, targetPrice - startingAmount);
+
+  return {
+    ...concept,
+    targetPrice,
+    startingAmount,
+    gapAmount
+  };
+}
+
+function inferStoryIssueType(
+  message: string
+): StoryCriticVerdict["issues"][number]["issueType"] {
+  const lowered = message.toLowerCase();
+  if (lowered.includes("count")) {
+    return "count_sequence";
+  }
+  if (lowered.includes("caregiver") || lowered.includes("mom") || lowered.includes("dad") || lowered.includes("grown-up")) {
+    return "caregiver_consistency";
+  }
+  if (lowered.includes("bitcoin")) {
+    return "bitcoin_fit";
+  }
+  if (lowered.includes("late") || lowered.includes("introduc") || lowered.includes("deadline")) {
+    return "setup_payoff";
+  }
+  if (lowered.includes("continuity") || lowered.includes("option") || lowered.includes("forbidden term")) {
+    return "action_continuity";
+  }
+  if (lowered.includes("read") || lowered.includes("decod")) {
+    return "reading_level";
+  }
+  return "theme_integration";
+}
+
 function hardCriticIssues(verdict: CriticVerdict): CriticVerdict["issues"] {
   return verdict.issues.filter((issue) => issue.tier === "hard");
 }
@@ -425,8 +566,50 @@ function buildRewriteInstructions(
 }
 
 class MockLlmProvider implements LlmProvider {
-  async generateBeatSheet(
+  async generateStoryConcept(
     context: StoryContext
+  ): Promise<{ concept: StoryConcept; meta: LlmMetadata }> {
+    const targetPrice = 12;
+    const startingAmount = 7;
+    return {
+      concept: {
+        premise: `${context.childFirstName} wants a special item and must decide how to save for it.`,
+        caregiverLabel: "Mom",
+        targetItem: `${context.interests[0] ?? "special"} ball`,
+        targetPrice,
+        startingAmount,
+        gapAmount: targetPrice - startingAmount,
+        earningOptions: [
+          {
+            label: "rake leaves",
+            action: "rake leaves in the yard with a small rake",
+            sceneLocation: "yard"
+          },
+          {
+            label: "help bake cookies",
+            action: "help bake cookies in the kitchen",
+            sceneLocation: "kitchen"
+          }
+        ],
+        temptation: "a small sweet from the store",
+        deadlineEvent: "Saturday game",
+        bitcoinBridge: "Mom says Bitcoin is one adult saving idea tied to Ava's jar choice.",
+        requiredSetups: ["price tag", "coin jar", "Saturday game"],
+        requiredPayoffs: ["reach the target price", "buy the item", "feel proud about saving"],
+        forbiddenLateIntroductions: ["tournament", "sale", "third chore"]
+      },
+      meta: {
+        provider: "mock",
+        model: "mock-llm",
+        latencyMs: 0,
+        usage: null
+      }
+    };
+  }
+
+  async generateBeatSheet(
+    context: StoryContext,
+    concept: StoryConcept
   ): Promise<{ beatSheet: BeatSheet; audit: BeatPlanningAudit; meta: LlmMetadata }> {
     const beatSheet: BeatSheet = {
       beats: Array.from({ length: context.pageCount }, (_, idx) => {
@@ -452,8 +635,18 @@ class MockLlmProvider implements LlmProvider {
           emotionalTarget: idx < context.pageCount - 2 ? "curious then determined" : "relieved and proud",
           pageIndexEstimate: idx,
           decodabilityTags: ["controlled_vocab", "repetition", "taught_words_late"],
-          newWordsIntroduced: idx >= context.pageCount - 2 ? ["bitcoin"] : ["save"],
-          bitcoinRelevanceScore: idx >= context.pageCount - 2 ? 0.85 : 0.2
+          newWordsIntroduced: ["save"],
+          bitcoinRelevanceScore: idx >= context.pageCount - 2 ? 0.85 : 0.2,
+          introduces: idx === 0 ? concept.requiredSetups.slice(0, 2) : [],
+          paysOff: idx === context.pageCount - 1 ? concept.requiredPayoffs.slice(0, 2) : [],
+          continuityFacts: [
+            `caregiver_label:${concept.caregiverLabel}`,
+            `deadline_event:${concept.deadlineEvent ?? "null"}`,
+            "forbid_term:grown-up",
+            ...(idx === 1 ? [`count_target:${concept.targetPrice}`] : []),
+            ...(idx === 3 ? [`chosen_earning_option:${concept.earningOptions[0].label}`] : []),
+            ...(idx >= context.pageCount - 2 ? ["bitcoin_bridge_required:true"] : ["bitcoin_bridge_required:false"])
+          ]
         };
       })
     };
@@ -491,16 +684,34 @@ class MockLlmProvider implements LlmProvider {
     };
   }
 
+  async reviseBeatSheet(
+    context: StoryContext,
+    concept: StoryConcept,
+    beatSheet: BeatSheet,
+    _rewriteInstructions: string
+  ): Promise<{ beatSheet: BeatSheet; meta: LlmMetadata }> {
+    return {
+      beatSheet,
+      meta: {
+        provider: "mock",
+        model: "mock-llm",
+        latencyMs: 0,
+        usage: null
+      }
+    };
+  }
+
   async draftPages(
     context: StoryContext,
+    concept: StoryConcept,
     beatSheet: BeatSheet
   ): Promise<{ story: StoryPackage; meta: LlmMetadata }> {
     const pages = beatSheet.beats.map((beat, idx) => ({
       pageIndex: idx,
       pageText:
         idx < beatSheet.beats.length - 2
-          ? `${context.childFirstName} notices prices changing and plans ahead.`
-          : `${context.childFirstName} learns Bitcoin can support long-term saving goals.`,
+          ? `${context.childFirstName} saves for the ${concept.targetItem} and keeps going.`
+          : `${concept.caregiverLabel} says, "${concept.bitcoinBridge}"`,
       illustrationBrief: `Calm watercolor scene for ${context.childFirstName}, page ${idx + 1}`,
       sceneId: beat.sceneId,
       sceneVisualDescription: beat.sceneVisualDescription,
@@ -511,6 +722,7 @@ class MockLlmProvider implements LlmProvider {
     return {
       story: {
         title: `${context.childFirstName}'s Bitcoin Adventure`,
+        concept,
         beats: beatSheet.beats,
         pages,
         readingProfileId: context.profile,
@@ -527,17 +739,30 @@ class MockLlmProvider implements LlmProvider {
 
   async critic(
     context: StoryContext,
+    concept: StoryConcept,
     story: StoryPackage
-  ): Promise<{ ok: boolean; notes: string[]; meta: LlmMetadata }> {
+  ): Promise<{ verdict: StoryCriticVerdict; meta: LlmMetadata }> {
     const quality = runDeterministicStoryChecks(
       context.profile,
-      story.pages,
+      story,
+      concept,
       boolFromEnv("ENABLE_STRICT_DECODABLE_CHECKS", true)
     );
 
     return {
-      ok: quality.ok,
-      notes: quality.issues,
+      verdict: {
+        ok: quality.ok,
+        issues: quality.issues.map((issue) => ({
+          pageStart: 0,
+          pageEnd: 0,
+          issueType: "theme_integration",
+          severity: "hard",
+          rewriteTarget: "page",
+          evidence: issue,
+          suggestedFix: issue
+        })),
+        rewriteInstructions: quality.issues.join(" | ")
+      },
       meta: {
         provider: "mock",
         model: "mock-llm",
@@ -568,12 +793,32 @@ class OpenAiAnthropicProvider implements LlmProvider {
     this.config = config;
   }
 
-  async generateBeatSheet(
+  async generateStoryConcept(
     context: StoryContext
+  ): Promise<{ concept: StoryConcept; meta: LlmMetadata }> {
+    const concept = await this.callWithFallbackStructured<StoryConcept>({
+      stage: "story_concept",
+      prompt: buildStoryConceptPrompt(context, context.pageCount),
+      systemPrompt: buildStoryConceptSystemPrompt(),
+      schemaName: schemaNames.storyConcept,
+      jsonSchema: storyConceptJsonSchema,
+      parser: storyConceptSchema,
+      maxTokens: 1400
+    });
+
+    return {
+      concept: normalizeStoryConcept(concept.data),
+      meta: concept.meta
+    };
+  }
+
+  async generateBeatSheet(
+    context: StoryContext,
+    concept: StoryConcept
   ): Promise<{ beatSheet: BeatSheet; audit: BeatPlanningAudit; meta: LlmMetadata }> {
     const bitcoinTargets = computeBitcoinBeatTargets(context.pageCount);
     const plannerSystemPrompt = buildBeatPlannerSystemPrompt();
-    const plannerPrompt = buildBeatPlannerPrompt(context, context.pageCount, bitcoinTargets);
+    const plannerPrompt = buildBeatPlannerPrompt(context, concept, context.pageCount, bitcoinTargets);
 
     const planner = await this.callWithFallbackStructured<BeatSheet>({
       stage: "beat_planner",
@@ -598,7 +843,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
         },
         currentBeatSheet
       );
-      const critics = await this.runBeatCritics(context, currentBeatSheet);
+      const critics = await this.runBeatCritics(context, concept, currentBeatSheet);
 
       attempts.push({ attempt, deterministic, critics });
 
@@ -642,6 +887,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
 
       const rewritePrompt = buildBeatRewritePrompt(
         context,
+        JSON.stringify(concept),
         JSON.stringify(currentBeatSheet),
         buildRewriteInstructions(attempts[attempt], bitcoinTargets, context),
         bitcoinTargets
@@ -664,8 +910,73 @@ class OpenAiAnthropicProvider implements LlmProvider {
     throw new Error("Beat planning reached an unreachable state");
   }
 
-  async draftPages(context: StoryContext, beatSheet: BeatSheet): Promise<{ story: StoryPackage; meta: LlmMetadata }> {
-    const prompt = buildPageWriterPrompt(context, beatSheet, context.pageCount);
+  async reviseBeatSheet(
+    context: StoryContext,
+    concept: StoryConcept,
+    beatSheet: BeatSheet,
+    rewriteInstructions: string
+  ): Promise<{ beatSheet: BeatSheet; meta: LlmMetadata }> {
+    const bitcoinTargets = computeBitcoinBeatTargets(context.pageCount);
+    const rewrite = await this.callWithFallbackStructured<BeatSheet>({
+      stage: "beat_rewrite",
+      prompt: buildBeatRewritePrompt(
+        context,
+        JSON.stringify(concept),
+        JSON.stringify(beatSheet),
+        rewriteInstructions,
+        bitcoinTargets
+      ),
+      systemPrompt: "You rewrite beat sheets precisely according to provided instructions.",
+      schemaName: schemaNames.beatSheet,
+      jsonSchema: beatSheetJsonSchema,
+      parser: beatSheetSchema,
+      maxTokens: 2200
+    });
+
+    const revisedBeatSheet = normalizeBeatSheetToPageCount(rewrite.data, context.pageCount);
+    const deterministic = runDeterministicBeatChecks(
+      {
+        profile: context.profile,
+        ageYears: context.ageYears,
+        pageCount: context.pageCount
+      },
+      revisedBeatSheet
+    );
+    const critics = await this.runBeatCritics(context, concept, revisedBeatSheet);
+    const issueSummary = collectBeatPlanningIssueSummary({
+      attempt: 0,
+      deterministic,
+      critics
+    });
+
+    if (issueSummary.hard.length > 0) {
+      throw new BeatPlanningError(
+        `Beat planning failed validation after story-level rewrite: ${issueSummary.hard.join(" | ")}`,
+        revisedBeatSheet,
+        {
+          attempts: [{ attempt: 0, deterministic, critics }],
+          rewritesApplied: 1,
+          passed: false,
+          finalIssues: issueSummary.hard,
+          softIssues: issueSummary.soft
+        },
+        rewrite.meta
+      );
+    }
+
+    return {
+      beatSheet: revisedBeatSheet,
+      meta: rewrite.meta
+    };
+  }
+
+  async draftPages(
+    context: StoryContext,
+    concept: StoryConcept,
+    beatSheet: BeatSheet,
+    rewriteInstructions = ""
+  ): Promise<{ story: StoryPackage; meta: LlmMetadata }> {
+    const prompt = buildPageWriterPrompt(context, concept, beatSheet, context.pageCount, rewriteInstructions);
     const result = await this.withRetries("anthropic", "draft_pages", () =>
       this.callAnthropicStrict<z.infer<typeof storyPackageSchema>>({
         stage: "draft_pages",
@@ -684,6 +995,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
 
     const story: StoryPackage = {
       title: validated.title,
+      concept,
       beats: validated.beats.slice(0, context.pageCount),
       pages: validated.pages
         .sort((a, b) => a.pageIndex - b.pageIndex)
@@ -716,9 +1028,10 @@ class OpenAiAnthropicProvider implements LlmProvider {
 
   async critic(
     context: StoryContext,
+    concept: StoryConcept,
     story: StoryPackage
-  ): Promise<{ ok: boolean; notes: string[]; meta: LlmMetadata }> {
-    const prompt = buildCriticPrompt(context, JSON.stringify(story));
+  ): Promise<{ verdict: StoryCriticVerdict; meta: LlmMetadata }> {
+    const prompt = buildCriticPrompt(context, concept, JSON.stringify(story));
     const result = await this.callWithFallbackStructured<z.infer<typeof storyCriticSchema>>({
       stage: "story_critic",
       prompt,
@@ -731,19 +1044,39 @@ class OpenAiAnthropicProvider implements LlmProvider {
 
     const deterministic = runDeterministicStoryChecks(
       context.profile,
-      story.pages,
+      story,
+      concept,
       boolFromEnv("ENABLE_STRICT_DECODABLE_CHECKS", true)
     );
+    const deterministicIssues = deterministic.issues.map((issue) => ({
+      pageStart: 0,
+      pageEnd: 0,
+      issueType: inferStoryIssueType(issue),
+      severity: "hard" as const,
+      rewriteTarget:
+        inferStoryIssueType(issue) === "setup_payoff" ? ("beat" as const) : ("page" as const),
+      evidence: issue,
+      suggestedFix: issue
+    }));
+    const normalizedVerdict = normalizeStoryCriticVerdict({
+      ok: result.data.ok,
+      issues: [...result.data.issues, ...deterministicIssues],
+      rewriteInstructions: result.data.rewriteInstructions
+    });
 
     return {
-      ok: result.data.ok && deterministic.ok,
-      notes: [...result.data.notes, ...deterministic.issues],
+      verdict: normalizedVerdict,
       meta: result.meta
     };
   }
 
-  private async runBeatCritics(context: StoryContext, beatSheet: BeatSheet): Promise<BeatCriticAudit[]> {
+  private async runBeatCritics(
+    context: StoryContext,
+    concept: StoryConcept,
+    beatSheet: BeatSheet
+  ): Promise<BeatCriticAudit[]> {
     const beatSheetJson = JSON.stringify(beatSheet);
+    const conceptJson = JSON.stringify(concept);
 
     const critics: Array<{
       critic: BeatCriticName;
@@ -753,17 +1086,17 @@ class OpenAiAnthropicProvider implements LlmProvider {
       {
         critic: "montessori",
         stage: "beat_critic_montessori",
-        prompt: buildMontessoriCriticPrompt(context, beatSheetJson)
+        prompt: buildMontessoriCriticPrompt(context, conceptJson, beatSheetJson)
       },
       {
         critic: "science_of_reading",
         stage: "beat_critic_sor",
-        prompt: buildScienceOfReadingCriticPrompt(context, beatSheetJson)
+        prompt: buildScienceOfReadingCriticPrompt(context, conceptJson, beatSheetJson)
       },
       {
         critic: "narrative_freshness",
         stage: "beat_critic_narrative",
-        prompt: buildNarrativeFreshnessCriticPrompt(context, beatSheetJson)
+        prompt: buildNarrativeFreshnessCriticPrompt(context, conceptJson, beatSheetJson)
       }
     ];
 

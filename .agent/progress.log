@@ -238,6 +238,18 @@ Change: deployed `master` to `dev`, fixed the deploy-blocking migration SQL spli
 Evidence:
 - `pnpm --filter @book/workers test` => PASS
 - `pnpm --filter @book/cdk test` => PASS
+
+2026-03-16T14:03:08-0400
+Task: story-quality-hardening-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: added a new `StoryConcept` stage ahead of beat planning, extended beat/story contracts with continuity metadata, upgraded the final story critic to structured QA issues plus rewrite targets, added deterministic validators for counts/caregiver consistency/Bitcoin timing/late setup/continuity facts, persisted `story-concept.json` and `story-qa-report.json`, and wired bounded page-vs-beat rewrite retries before image generation.
+Evidence:
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Notes: aligned prompt examples and mock fixtures to the new no-`grown-up` story-text rule, and tightened the runtime schema so `earningOptions` is exactly a two-option tuple in both TypeScript and zod validation.
+Commit: pending
 - `bash scripts/agent/smoke.sh` => PASS
 - `pnpm cdk:deploy:dev` => PASS
 - `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke` => PASS

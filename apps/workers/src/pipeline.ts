@@ -232,6 +232,30 @@ async function persistBeatPlanningReport(
   return { artifactKey };
 }
 
+async function persistStoryQaReport(
+  bookId: string,
+  payload: {
+    concept: unknown;
+    story: unknown;
+    verdict: unknown;
+    llmMeta: unknown;
+  }
+): Promise<{ artifactKey: string }> {
+  const artifactKey = `books/${bookId}/story-qa-report.json`;
+  await putJson(artifactKey, {
+    bookId,
+    ...payload,
+    generatedAt: new Date().toISOString()
+  });
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "story_qa_report",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${artifactKey}`
+  });
+
+  return { artifactKey };
+}
+
 async function prepareStory(
   bookId: string,
   mockRunTag?: string | null
@@ -252,6 +276,23 @@ async function prepareStory(
     mockRunTag
   } as const;
 
+  logStructured("StoryConceptStart", {
+    bookId,
+    pageCount,
+    profile: context.reading_profile_id
+  });
+  const storyConceptStartedAt = Date.now();
+  const conceptResult = await llm.generateStoryConcept(storyContext);
+  const storyConcept = conceptResult.concept;
+  logStructured("StoryConceptComplete", {
+    bookId,
+    durationMs: Date.now() - storyConceptStartedAt,
+    provider: conceptResult.meta.provider,
+    model: conceptResult.meta.model,
+    caregiverLabel: storyConcept.caregiverLabel,
+    deadlineEvent: storyConcept.deadlineEvent
+  });
+
   logStructured("BeatPlanningStart", {
     bookId,
     pageCount,
@@ -260,7 +301,7 @@ async function prepareStory(
   const beatPlanningStartedAt = Date.now();
   let beatPlanning: Awaited<ReturnType<typeof llm.generateBeatSheet>>;
   try {
-    beatPlanning = await llm.generateBeatSheet(storyContext);
+    beatPlanning = await llm.generateBeatSheet(storyContext, storyConcept);
   } catch (error) {
     if (error instanceof BeatPlanningError) {
       try {
@@ -297,7 +338,7 @@ async function prepareStory(
 
   logStructured("StoryDraftStart", { bookId, attempt: 0 });
   const initialDraftStartedAt = Date.now();
-  let drafted = await llm.draftPages(storyContext, beatPlanning.beatSheet);
+  let drafted = await llm.draftPages(storyContext, storyConcept, beatPlanning.beatSheet);
   logStructured("StoryDraftComplete", {
     bookId,
     attempt: 0,
@@ -307,35 +348,128 @@ async function prepareStory(
   });
   let story = drafted.story;
 
-  const critiques: string[] = [];
   const providerMeta = {
+    concept: conceptResult.meta,
     beatPlan: {
       planner: beatPlanning.meta,
       audit: beatPlanning.audit
     },
     drafts: [drafted.meta],
-    critics: [] as Array<{ provider: string; model: string; latencyMs: number }>
+    critics: [] as Array<{ provider: string; model: string; latencyMs: number; issueCount: number }>,
+    pageRewriteApplied: false,
+    beatRewriteApplied: false
   };
 
-  logStructured("StoryCriticStart", { bookId, rewriteAttempt: 0 });
-  const criticStartedAt = Date.now();
-  const verdict = await llm.critic(storyContext, story);
-  logStructured("StoryCriticComplete", {
-    bookId,
-    rewriteAttempt: 0,
-    durationMs: Date.now() - criticStartedAt,
-    ok: verdict.ok,
-    noteCount: verdict.notes.length,
-    provider: verdict.meta.provider,
-    model: verdict.meta.model
+  const runStoryCritic = async (rewriteAttempt: number) => {
+    logStructured("StoryCriticStart", { bookId, rewriteAttempt });
+    const criticStartedAt = Date.now();
+    const verdict = await llm.critic(storyContext, storyConcept, story);
+    const hardIssueCount = verdict.verdict.issues.filter((issue) => issue.severity === "hard").length;
+    logStructured("StoryCriticComplete", {
+      bookId,
+      rewriteAttempt,
+      durationMs: Date.now() - criticStartedAt,
+      ok: verdict.verdict.ok,
+      issueCount: verdict.verdict.issues.length,
+      hardIssueCount,
+      provider: verdict.meta.provider,
+      model: verdict.meta.model
+    });
+
+    providerMeta.critics.push({
+      provider: verdict.meta.provider,
+      model: verdict.meta.model,
+      latencyMs: verdict.meta.latencyMs,
+      issueCount: verdict.verdict.issues.length
+    });
+
+    return verdict;
+  };
+
+  let verdict = await runStoryCritic(0);
+  const hardIssues = verdict.verdict.issues.filter((issue) => issue.severity === "hard");
+  if (hardIssues.length > 0) {
+    const requiresBeatRewrite = hardIssues.some(
+      (issue) => issue.rewriteTarget === "beat" || issue.rewriteTarget === "concept"
+    );
+
+    if (requiresBeatRewrite) {
+      providerMeta.beatRewriteApplied = true;
+      const revisedBeatSheet = await llm.reviseBeatSheet(
+        storyContext,
+        storyConcept,
+        beatPlanning.beatSheet,
+        verdict.verdict.rewriteInstructions
+      );
+      beatPlanning = {
+        ...beatPlanning,
+        beatSheet: revisedBeatSheet.beatSheet,
+        meta: revisedBeatSheet.meta
+      };
+      logStructured("StoryBeatRewriteComplete", {
+        bookId,
+        provider: revisedBeatSheet.meta.provider,
+        model: revisedBeatSheet.meta.model
+      });
+
+      logStructured("StoryDraftStart", { bookId, attempt: 1 });
+      const revisedDraftStartedAt = Date.now();
+      drafted = await llm.draftPages(storyContext, storyConcept, beatPlanning.beatSheet);
+      logStructured("StoryDraftComplete", {
+        bookId,
+        attempt: 1,
+        durationMs: Date.now() - revisedDraftStartedAt,
+        provider: drafted.meta.provider,
+        model: drafted.meta.model
+      });
+      providerMeta.drafts.push(drafted.meta);
+      story = drafted.story;
+      verdict = await runStoryCritic(1);
+    } else {
+      providerMeta.pageRewriteApplied = true;
+      logStructured("StoryDraftStart", { bookId, attempt: 1 });
+      const revisedDraftStartedAt = Date.now();
+      drafted = await llm.draftPages(
+        storyContext,
+        storyConcept,
+        beatPlanning.beatSheet,
+        verdict.verdict.rewriteInstructions
+      );
+      logStructured("StoryDraftComplete", {
+        bookId,
+        attempt: 1,
+        durationMs: Date.now() - revisedDraftStartedAt,
+        provider: drafted.meta.provider,
+        model: drafted.meta.model
+      });
+      providerMeta.drafts.push(drafted.meta);
+      story = drafted.story;
+      verdict = await runStoryCritic(1);
+    }
+  }
+
+  const storyQaReport = await persistStoryQaReport(bookId, {
+    concept: storyConcept,
+    story,
+    verdict: verdict.verdict,
+    llmMeta: {
+      concept: conceptResult.meta,
+      beatPlan: beatPlanning.meta,
+      story: providerMeta
+    }
   });
 
-  providerMeta.critics.push({
-    provider: verdict.meta.provider,
-    model: verdict.meta.model,
-    latencyMs: verdict.meta.latencyMs
-  });
-  critiques.push(...verdict.notes);
+  const remainingHardIssues = verdict.verdict.issues.filter((issue) => issue.severity === "hard");
+  if (remainingHardIssues.length > 0) {
+    const storyQaNotes = remainingHardIssues.map(
+      (issue) => `${issue.issueType}: ${issue.evidence}. Fix: ${issue.suggestedFix}`
+    );
+    await markBookNeedsReview(bookId, context.order_id, "finalize_gate", storyQaNotes, {
+      artifactKey: storyQaReport.artifactKey,
+      rewriteInstructions: verdict.verdict.rewriteInstructions
+    });
+    throw new Error(`BOOK_NEEDS_REVIEW:finalize_gate:${storyQaNotes[0] ?? "story_quality"}`);
+  }
 
   logStructured("StoryModerationStart", { bookId, pageCount: story.pages.length });
   const moderationStartedAt = Date.now();
@@ -358,8 +492,22 @@ async function prepareStory(
   }
 
   const beatPlanKey = `books/${bookId}/beat-plan.json`;
+  const storyConceptKey = `books/${bookId}/story-concept.json`;
+  await putJson(storyConceptKey, {
+    bookId,
+    concept: storyConcept,
+    llmMeta: conceptResult.meta,
+    generatedAt: new Date().toISOString()
+  });
+  await insertCurrentBookArtifact({
+    bookId,
+    artifactType: "story_concept",
+    s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${storyConceptKey}`
+  });
+
   await putJson(beatPlanKey, {
     bookId,
+    concept: storyConcept,
     beatSheet: beatPlanning.beatSheet,
     audit: beatPlanning.audit,
     llmMeta: beatPlanning.meta,
@@ -469,6 +617,9 @@ async function prepareStory(
 
     const finalCritic = providerMeta.critics[providerMeta.critics.length - 1];
     const modelUsed = finalCritic ? `${finalCritic.provider}:${finalCritic.model}` : "unknown";
+    const finalStoryIssues = verdict.verdict.issues.map(
+      (issue) => `${issue.issueType}: ${issue.evidence}. Fix: ${issue.suggestedFix}`
+    );
 
     await txExecute(
       tx,
@@ -484,17 +635,22 @@ async function prepareStory(
           name: "score",
           value: {
             stringValue: JSON.stringify({
-              critiqueCount: critiques.length,
+              critiqueCount: finalStoryIssues.length,
               beatPlanArtifactKey: beatPlanKey,
+              storyConceptArtifactKey: storyConceptKey,
+              storyQaArtifactKey: storyQaReport.artifactKey,
               llm: providerMeta
             })
           }
         },
-        { name: "verdict", value: { stringValue: critiques.length === 0 ? "pass" : "warning" } },
+        {
+          name: "verdict",
+          value: { stringValue: finalStoryIssues.length === 0 ? "pass" : "warning" }
+        },
         {
           name: "notes",
           value: {
-            stringValue: critiques.join(" | ") || "No issues"
+            stringValue: finalStoryIssues.join(" | ") || "No issues"
           }
         }
       ]
@@ -514,6 +670,7 @@ async function prepareStory(
   await putJson(promptKey, {
     bookId,
     stylePrefix: "Muted watercolor palette, matte texture, calm composition.",
+    concept: storyConcept,
     beats: beatPlanning.beatSheet.beats,
     generatedAt
   });
