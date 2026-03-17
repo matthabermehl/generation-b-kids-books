@@ -1,3 +1,5 @@
+import type { PageArtVisualGuidance } from "./types.js";
+
 export const maxCharacterGenerationsPerBook = 10;
 
 export const watercolorStyleGuide = [
@@ -32,10 +34,18 @@ export function buildPageArtPrompt(input: {
   pageText: string;
   illustrationBrief: string;
   sceneVisualDescription: string;
+  visualGuidance?: Partial<PageArtVisualGuidance>;
 }): string {
   const illustrationBrief = cleanPromptSection(input.illustrationBrief);
   const pageText = cleanPromptSection(input.pageText);
   const sceneVisualDescription = cleanPromptSection(input.sceneVisualDescription);
+  const visualGuidance = input.visualGuidance ?? {};
+  const mustShow = (visualGuidance.mustShow ?? []).map(cleanPromptSection).filter(Boolean);
+  const mustMatch = (visualGuidance.mustMatch ?? []).map(cleanPromptSection).filter(Boolean);
+  const showExactly = (visualGuidance.showExactly ?? []).map(cleanPromptSection).filter(Boolean);
+  const mustNotShow = (visualGuidance.mustNotShow ?? []).map(cleanPromptSection).filter(Boolean);
+  const settingAnchors = (visualGuidance.settingAnchors ?? []).map(cleanPromptSection).filter(Boolean);
+  const continuityNotes = (visualGuidance.continuityNotes ?? []).map(cleanPromptSection).filter(Boolean);
 
   return [
     "Task:",
@@ -47,6 +57,48 @@ export function buildPageArtPrompt(input: {
     "Page moment:",
     illustrationBrief,
     "",
+    ...(mustShow.length > 0
+      ? [
+          "Must show:",
+          ...mustShow.map((item) => `- ${item}`),
+          ""
+        ]
+      : []),
+    ...(mustMatch.length > 0
+      ? [
+          "Must match:",
+          ...mustMatch.map((item) => `- ${item}`),
+          ""
+        ]
+      : []),
+    ...(showExactly.length > 0
+      ? [
+          "Show exactly:",
+          ...showExactly.map((item) => `- ${item}`),
+          ""
+        ]
+      : []),
+    ...(mustNotShow.length > 0
+      ? [
+          "Must not show:",
+          ...mustNotShow.map((item) => `- ${item}`),
+          ""
+        ]
+      : []),
+    ...(settingAnchors.length > 0
+      ? [
+          "Setting anchors:",
+          ...settingAnchors.map((item) => `- ${item}`),
+          ""
+        ]
+      : []),
+    ...(continuityNotes.length > 0
+      ? [
+          "Continuity notes:",
+          ...continuityNotes.map((item) => `- ${item}`),
+          ""
+        ]
+      : []),
     "Reading text for context only:",
     pageText,
     "",

@@ -1,6 +1,12 @@
 import type { SQSHandler } from "aws-lambda";
 import sharp from "sharp";
-import { buildPageArtPrompt, type PageCompositionSpec } from "@book/domain";
+import {
+  buildPageArtPrompt,
+  type PageArtVisualGuidance,
+  type PageCompositionSpec,
+  type VisualPageContract,
+  type VisualQaVerdict
+} from "@book/domain";
 import { execute } from "./lib/rds.js";
 import { putBuffer, presignGetObjectFromS3Url } from "./lib/storage.js";
 import { fileExtensionForContentType, logStructured } from "./lib/helpers.js";
@@ -14,6 +20,7 @@ import {
   type PictureBookQaCategory
 } from "./lib/page-qa.js";
 import { selectAlternatePictureBookComposition } from "./lib/page-template-select.js";
+import { evaluateVisualContinuity } from "./lib/visual-qa.js";
 import {
   OpenAiImageRequestError,
   resolveImageProvider,
@@ -57,10 +64,23 @@ interface PictureBookJobPayload {
     sceneId: string;
     sceneVisualDescription: string;
     pageArtPrompt: string;
+    pageContract: VisualPageContract | null;
+    visualGuidance: PageArtVisualGuidance;
     priorSameScenePageIds: string[];
+    continuityReferencePageIds: string[];
     characterReferenceImageId: string;
     characterReferenceS3Url: string;
     characterReferenceUrl: string;
+    supportingCharacterReferenceImageIds: string[];
+    supportingCharacterReferenceS3Urls: string[];
+    supportingCharacterReferenceUrls: string[];
+    supportingCharacterReferences: Array<{
+      imageId: string;
+      entityId: string;
+      label: string;
+      s3Url: string;
+      url: string;
+    }>;
     sameSceneReferenceImageIds: string[];
     sameSceneReferenceS3Urls: string[];
     sameSceneReferenceUrls: string[];
@@ -72,6 +92,7 @@ type JobPayload = LegacyJobPayload | PictureBookJobPayload;
 interface PictureBookQaPayload extends Record<string, unknown> {
   passed: boolean;
   issues: string[];
+  visualQa?: VisualQaVerdict | null;
 }
 
 function legacyImagePrompt(job: LegacyJobPayload): string {
@@ -100,18 +121,25 @@ function pictureBookQaPayload(input: {
   promptSafetyTerms: string[];
   textFit: PageQaResult["textFit"];
   metrics: PageQaResult["metrics"];
+  visualQa: VisualQaVerdict;
 }): PictureBookQaPayload {
   const issues = [
     ...input.generated.qa.issues,
     ...input.promptSafetyTerms.map((term) => `safety_flagged_prompt:${term}`),
-    ...input.pageQaIssues
+    ...input.pageQaIssues,
+    ...(input.visualQa.passed ? [] : input.visualQa.issues.map((issue) => `visual_qa:${issue.code}`))
   ];
   return {
     ...input.generated.qa,
-    passed: input.generated.qa.passed && input.pageQaIssues.length === 0 && input.promptSafetyTerms.length === 0,
+    passed:
+      input.generated.qa.passed &&
+      input.pageQaIssues.length === 0 &&
+      input.promptSafetyTerms.length === 0 &&
+      input.visualQa.passed,
     issues,
     metrics: input.metrics,
-    textFit: input.textFit
+    textFit: input.textFit,
+    visualQa: input.visualQa
   };
 }
 
@@ -242,11 +270,16 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
     source: "image_worker_picture_book"
   });
   const promptSafetyTerms = blockedTermsInText(job.brief.pageArtPrompt);
-  const referenceImageUrls = [job.brief.characterReferenceUrl, ...job.brief.sameSceneReferenceUrls];
+  const referenceImageUrls = [
+    job.brief.characterReferenceUrl,
+    ...job.brief.supportingCharacterReferenceUrls,
+    ...job.brief.sameSceneReferenceUrls
+  ];
 
   let activeComposition = job.composition;
   let finalQa: PictureBookQaPayload | null = null;
   let stopAfterSpreadQaFailure = false;
+  let hasRenderablePageArtCandidate = false;
 
   await persistPageComposition(job.pageId, activeComposition);
 
@@ -271,15 +304,27 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
     const inputAssets = {
       sceneId: job.brief.sceneId,
       sceneVisualDescription: job.brief.sceneVisualDescription,
+      pageContract: job.brief.pageContract,
+      visualGuidance: job.brief.visualGuidance,
       characterReferenceImageId: job.brief.characterReferenceImageId,
       characterReferenceS3Url: job.brief.characterReferenceS3Url,
+      supportingCharacterReferenceImageIds: job.brief.supportingCharacterReferenceImageIds,
+      supportingCharacterReferenceS3Urls: job.brief.supportingCharacterReferenceS3Urls,
+      supportingCharacterReferences: job.brief.supportingCharacterReferences.map((reference) => ({
+        imageId: reference.imageId,
+        entityId: reference.entityId,
+        label: reference.label,
+        s3Url: reference.s3Url
+      })),
       sameSceneReferenceImageIds: job.brief.sameSceneReferenceImageIds,
       sameSceneReferenceS3Urls: job.brief.sameSceneReferenceS3Urls,
       priorSameScenePageIds: job.brief.priorSameScenePageIds,
+      continuityReferencePageIds: job.brief.continuityReferencePageIds,
       pageArtPromptInputs: {
         pageText: job.text,
         illustrationBrief: job.brief.illustrationBrief,
-        sceneVisualDescription: job.brief.sceneVisualDescription
+        sceneVisualDescription: job.brief.sceneVisualDescription,
+        visualGuidance: job.brief.visualGuidance
       },
       canvasS3Url,
       maskS3Url,
@@ -310,13 +355,33 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
       );
       const fadedBackground = await createFadedArtBackground(normalizedPageArt, activeComposition);
       const qa = await evaluatePictureBookPage(fadedBackground, activeComposition, job.text);
+      const pageArtUrl = await presignGetObjectFromS3Url(pageArtS3Url);
+      const visualQa = await evaluateVisualContinuity({
+        imageUrl: pageArtUrl,
+        pageText: job.text,
+        illustrationBrief: job.brief.illustrationBrief,
+        sceneVisualDescription: job.brief.sceneVisualDescription,
+        pageContract: job.brief.pageContract,
+        visualGuidance: job.brief.visualGuidance,
+        mainCharacterReferenceUrl: job.brief.characterReferenceUrl,
+        supportingCharacterReferences: job.brief.supportingCharacterReferences.map((reference) => ({
+          label: reference.label,
+          url: reference.url
+        })),
+        continuityReferenceImages: job.brief.sameSceneReferenceUrls.map((url, index) => ({
+          label: job.brief.continuityReferencePageIds[index] ?? `page-reference-${index + 1}`,
+          url
+        }))
+      });
       const qaPayload = pictureBookQaPayload({
         generated: pageArt,
         pageQaIssues: qa.issues,
         promptSafetyTerms,
         metrics: qa.metrics,
-        textFit: qa.textFit
+        textFit: qa.textFit,
+        visualQa
       });
+      inputAssets.visualQa = visualQa;
       const category = classifyPictureBookIssues(qaPayload.issues);
       finalQa = qaPayload;
 
@@ -336,6 +401,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         inputAssets,
         maskS3Url
       });
+      hasRenderablePageArtCandidate = true;
 
       logStructured("PictureBookPageQaEvaluated", {
         bookId: job.bookId,
@@ -400,18 +466,20 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
       finalQa = qaPayloadFromError(error);
       const category = qaCategoryFromError(error);
 
-      await insertCurrentImageRecord({
-        pageId: job.pageId,
-        role: "page_art",
-        bookId: job.bookId,
-        endpoint: error instanceof OpenAiImageRequestError ? error.endpoint ?? "provider-timeout" : "page-art-error",
-        prompt: job.brief.pageArtPrompt,
-        seed: 0,
-        qaJson: finalQa,
-        status: "failed",
-        inputAssets,
-        maskS3Url
-      });
+      if (!hasRenderablePageArtCandidate) {
+        await insertCurrentImageRecord({
+          pageId: job.pageId,
+          role: "page_art",
+          bookId: job.bookId,
+          endpoint: error instanceof OpenAiImageRequestError ? error.endpoint ?? "provider-timeout" : "page-art-error",
+          prompt: job.brief.pageArtPrompt,
+          seed: 0,
+          qaJson: finalQa,
+          status: "failed",
+          inputAssets,
+          maskS3Url
+        });
+      }
 
       logStructured("PictureBookPageQaEvaluated", {
         bookId: job.bookId,
@@ -438,7 +506,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
     { name: "pageId", value: { stringValue: job.pageId } }
   ]);
 
-  if (finalQa) {
+  if (finalQa && !hasRenderablePageArtCandidate) {
     await insertCurrentImageRecord({
       pageId: job.pageId,
       role: "page_art",
@@ -451,13 +519,27 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
       inputAssets: {
         sceneId: job.brief.sceneId,
         sceneVisualDescription: job.brief.sceneVisualDescription,
+        pageContract: job.brief.pageContract,
+        visualGuidance: job.brief.visualGuidance,
         characterReferenceImageId: job.brief.characterReferenceImageId,
+        characterReferenceS3Url: job.brief.characterReferenceS3Url,
+        supportingCharacterReferenceImageIds: job.brief.supportingCharacterReferenceImageIds,
+        supportingCharacterReferenceS3Urls: job.brief.supportingCharacterReferenceS3Urls,
+        supportingCharacterReferences: job.brief.supportingCharacterReferences.map((reference) => ({
+          imageId: reference.imageId,
+          entityId: reference.entityId,
+          label: reference.label,
+          s3Url: reference.s3Url
+        })),
         sameSceneReferenceImageIds: job.brief.sameSceneReferenceImageIds,
+        sameSceneReferenceS3Urls: job.brief.sameSceneReferenceS3Urls,
         priorSameScenePageIds: job.brief.priorSameScenePageIds,
+        continuityReferencePageIds: job.brief.continuityReferencePageIds,
         pageArtPromptInputs: {
           pageText: job.text,
           illustrationBrief: job.brief.illustrationBrief,
-          sceneVisualDescription: job.brief.sceneVisualDescription
+          sceneVisualDescription: job.brief.sceneVisualDescription,
+          visualGuidance: job.brief.visualGuidance
         }
       }
     });
@@ -487,6 +569,7 @@ export function pictureBookPageArtPrompt(input: {
   pageText: string;
   illustrationBrief: string;
   sceneVisualDescription: string;
+  visualGuidance?: PageArtVisualGuidance;
 }): string {
   return buildPageArtPrompt(input);
 }

@@ -125,6 +125,7 @@ describe("review and render cutover http routes", () => {
     queryMock.mockReset();
     executeMock.mockReset();
     publicArtifactUrlMock.mockClear();
+    sendMock.mockReset();
     verifySessionTokenMock.mockResolvedValue({
       userId: "user-1",
       email: "reviewer@example.com"
@@ -380,5 +381,232 @@ describe("review and render cutover http routes", () => {
     );
     expect(imageInvalidation).toBeDefined();
     expect(normalizeSql(String(imageInvalidation?.[0]))).toContain("role IN ('page', 'page_art', 'page_preview')");
+  });
+
+  it("marks finalize-gate approvals retrying before resuming the pipeline", async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      const normalized = normalizeSql(sql);
+      if (normalized.includes("FROM review_cases rc")) {
+        return [
+          {
+            review_case_id: "case-1",
+            review_case_status: "open",
+            review_stage: "finalize_gate",
+            reason_summary: "Finalize gate needs review",
+            reason_json: "{\"artifactKey\":\"books/book-1/story-qa-report.json\"}",
+            created_at: "2026-03-15T10:00:00.000Z",
+            resolved_at: null,
+            book_id: "book-1",
+            book_status: "needs_review",
+            order_id: "order-1",
+            order_status: "needs_review",
+            child_first_name: "Ava",
+            reading_profile_id: "early_decoder_5_7",
+            money_lesson_key: "saving_later"
+          }
+        ];
+      }
+      if (normalized.includes("FROM orders o INNER JOIN books b ON b.order_id = o.id")) {
+        return [
+          {
+            order_id: "order-1",
+            order_status: "needs_review",
+            book_id: "book-1",
+            book_status: "needs_review",
+            child_profile_id: "child-1",
+            selected_character_image_id: "char-ref-1"
+          }
+        ];
+      }
+      if (normalized.includes("SELECT status FROM orders")) {
+        return [{ status: "needs_review" }];
+      }
+      if (normalized.includes("SELECT status FROM books")) {
+        return [{ status: "needs_review" }];
+      }
+
+      return [];
+    });
+
+    const response = await handler(
+      makeEvent({
+        method: "POST",
+        path: "/v1/review/cases/case-1/approve",
+        headers: {
+          authorization: "Bearer reviewer-session"
+        },
+        body: {
+          notes: "Manual review accepted. Continue finalization."
+        }
+      }) as never
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          input: expect.stringContaining("\"resumeStage\":\"resume_story_review\"")
+        })
+      })
+    );
+    const reviewCaseUpdateIndex = executeMock.mock.calls.findIndex((call) =>
+      normalizeSql(String(call[0])).includes("UPDATE review_cases SET status = :status")
+    );
+    expect(reviewCaseUpdateIndex).toBeGreaterThanOrEqual(0);
+    const reviewCaseUpdateOrder = executeMock.mock.invocationCallOrder[reviewCaseUpdateIndex];
+    expect(reviewCaseUpdateOrder).toBeLessThan(sendMock.mock.invocationCallOrder[0]);
+  });
+
+  it("resumes direct finalization for post-render finalize-gate approvals", async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      const normalized = normalizeSql(sql);
+      if (normalized.includes("FROM review_cases rc")) {
+        return [
+          {
+            review_case_id: "case-2",
+            review_case_status: "open",
+            review_stage: "finalize_gate",
+            reason_summary: "Finalize gate blocked after render",
+            reason_json: "{\"needsReviewCount\":1}",
+            created_at: "2026-03-15T10:00:00.000Z",
+            resolved_at: null,
+            book_id: "book-2",
+            book_status: "needs_review",
+            order_id: "order-2",
+            order_status: "needs_review",
+            child_first_name: "Ava",
+            reading_profile_id: "early_decoder_5_7",
+            money_lesson_key: "saving_later"
+          }
+        ];
+      }
+      if (normalized.includes("FROM orders o INNER JOIN books b ON b.order_id = o.id")) {
+        return [
+          {
+            order_id: "order-2",
+            order_status: "needs_review",
+            book_id: "book-2",
+            book_status: "needs_review",
+            child_profile_id: "child-2",
+            selected_character_image_id: "char-ref-2"
+          }
+        ];
+      }
+      if (normalized.includes("SELECT status FROM orders")) {
+        return [{ status: "needs_review" }];
+      }
+      if (normalized.includes("SELECT status FROM books")) {
+        return [{ status: "needs_review" }];
+      }
+
+      return [];
+    });
+
+    const response = await handler(
+      makeEvent({
+        method: "POST",
+        path: "/v1/review/cases/case-2/approve",
+        headers: {
+          authorization: "Bearer reviewer-session"
+        },
+        body: {
+          notes: "Release gate accepted after render."
+        }
+      }) as never
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          input: expect.stringContaining("\"resumeStage\":\"finalize_gate\"")
+        })
+      })
+    );
+  });
+
+  it("accepts the current image-review page and resumes page generation after image_qa approval", async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      const normalized = normalizeSql(sql);
+      if (normalized.includes("FROM review_cases rc")) {
+        return [
+          {
+            review_case_id: "case-3",
+            review_case_status: "open",
+            review_stage: "image_qa",
+            reason_summary: "1 page images exhausted QA retry budget.",
+            reason_json: "{\"pageId\":\"page-3\",\"failed\":1}",
+            created_at: "2026-03-15T10:00:00.000Z",
+            resolved_at: null,
+            book_id: "book-3",
+            book_status: "needs_review",
+            order_id: "order-3",
+            order_status: "needs_review",
+            child_first_name: "Ava",
+            reading_profile_id: "early_decoder_5_7",
+            money_lesson_key: "saving_later"
+          }
+        ];
+      }
+      if (normalized.includes("FROM orders o INNER JOIN books b ON b.order_id = o.id")) {
+        return [
+          {
+            order_id: "order-3",
+            order_status: "needs_review",
+            book_id: "book-3",
+            book_status: "needs_review",
+            child_profile_id: "child-3",
+            selected_character_image_id: "char-ref-3"
+          }
+        ];
+      }
+      if (normalized.includes("SELECT status FROM orders")) {
+        return [{ status: "needs_review" }];
+      }
+      if (normalized.includes("SELECT status FROM books")) {
+        return [{ status: "needs_review" }];
+      }
+      if (normalized.includes("WITH selected_candidate AS")) {
+        return [{ image_id: "img-3" }];
+      }
+
+      return [];
+    });
+
+    const response = await handler(
+      makeEvent({
+        method: "POST",
+        path: "/v1/review/cases/case-3/approve",
+        headers: {
+          authorization: "Bearer reviewer-session"
+        },
+        body: {
+          notes: "Accept the current page art and continue."
+        }
+      }) as never
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          input: expect.stringContaining("\"resumeStage\":\"resume_page_review\"")
+        })
+      })
+    );
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          input: expect.stringContaining("\"pageId\":\"page-3\"")
+        })
+      })
+    );
+
+    const promotionQuery = queryMock.mock.calls.find((call) =>
+      normalizeSql(String(call[0])).includes("WITH selected_candidate AS")
+    );
+    expect(promotionQuery).toBeDefined();
+    expect(normalizeSql(String(promotionQuery?.[0]))).toContain("s3_url IS NOT NULL");
+    expect(promotionQuery?.[1]).toEqual([{ name: "pageId", value: { stringValue: "page-3" } }]);
   });
 });

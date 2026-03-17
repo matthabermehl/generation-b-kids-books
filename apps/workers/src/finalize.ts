@@ -8,6 +8,23 @@ interface Event {
   outputPdfKey?: string;
 }
 
+async function hasApprovedFinalizeOverride(bookId: string): Promise<boolean> {
+  const rows = await query<{ review_case_id: string }>(
+    `
+      SELECT rc.id::text AS review_case_id
+      FROM review_cases rc
+      WHERE rc.book_id = CAST(:bookId AS uuid)
+        AND rc.stage = 'finalize_gate'
+        AND rc.status = 'retrying'
+      ORDER BY rc.created_at DESC
+      LIMIT 1
+    `,
+    [{ name: "bookId", value: { stringValue: bookId } }]
+  );
+
+  return Boolean(rows[0]?.review_case_id);
+}
+
 export const handler: Handler<Event> = async (event) => {
   if (!event?.bookId) {
     throw new Error("bookId is required");
@@ -33,7 +50,20 @@ export const handler: Handler<Event> = async (event) => {
 
   const needsReviewCount = Number(reviewRows[0]?.needs_review_count ?? 0);
   const orderId = reviewRows[0]?.order_id;
-  if (needsReviewCount > 0 && orderId) {
+  const approvedFinalizeOverride =
+    needsReviewCount > 0 ? await hasApprovedFinalizeOverride(event.bookId) : false;
+
+  if (needsReviewCount > 0 && approvedFinalizeOverride) {
+    console.log(
+      JSON.stringify({
+        event: "FINALIZE_GATE_OVERRIDE_APPLIED",
+        bookId: event.bookId,
+        needsReviewCount
+      })
+    );
+  }
+
+  if (needsReviewCount > 0 && orderId && !approvedFinalizeOverride) {
     await execute(`UPDATE books SET status = 'needs_review' WHERE id = CAST(:bookId AS uuid)`, [
       { name: "bookId", value: { stringValue: event.bookId } }
     ]);

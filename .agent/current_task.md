@@ -1,30 +1,26 @@
 # Current Task
-Task ID: spread-contract-proof-pdf-01
+Task ID: live-character-generation-timeout-01
 
 ## Goal
-Make picture-book spread semantics explicit and add a first-class story proof PDF so reviewers always get a readable book artifact, even before the final illustrated PDF exists.
+Deploy the current picture-book spread layout to dev, run the live full flow, and confirm the parent path completes all the way to a downloadable PDF.
 
 ## Constraints
-- Keep `pages` rows and `story.pages[]` as spread units in this slice; no repo-wide rename.
-- Keep `pdf` as the final illustrated artifact and `/download?format=pdf` final-only.
-- Do not revert unrelated local changes in `.gitignore`, `apps/workers/src/providers/llm.ts`, or `apps/workers/test/llm-provider.test.ts`.
+- Validate against the deployed dev stack, not local mocks.
+- Prefer the existing smoke scripts and deployment workflow over ad-hoc commands.
+- Do not treat the story-proof PDF as success; the target artifact is the final illustrated `pdf`.
 
 ## Plan (short)
-1) Persist `story.json` plus `story-proof.pdf` before story-review stops.
-2) Expose the proof artifact distinctly from the final PDF in reviewer/API surfaces.
-3) Clarify spread vs physical-page semantics in docs and tests.
+1. Keep baseline green and deploy `master` to dev with the standard CDK + web publish flow.
+2. Run the live picture-book smoke and full paid-flow smoke against the deployed API.
+3. Download the resulting final PDF locally, or triage and fix the live blocker if the flow still fails.
 
 ## Evidence required
-- `pnpm --filter @book/workers test`
-- `pnpm --filter @book/api test`
-- `pnpm --filter @book/web test`
-- `bash scripts/agent/quality.sh`
+- `bash scripts/agent/smoke.sh`
+- `pnpm cdk:deploy:dev`
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke`
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> pnpm ops:picture-book-smoke`
+- `AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=<api-url> pnpm ops:phase2-e2e`
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS
-- work: completed on `codex/spread-proof-pdf`
-- verification:
-  - `pnpm --filter @book/workers test` PASS
-  - `pnpm --filter @book/api test` PASS
-  - `pnpm --filter @book/web test` PASS
-  - `bash scripts/agent/quality.sh` PASS
+- work: in progress
