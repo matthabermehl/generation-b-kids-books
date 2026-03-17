@@ -60,6 +60,9 @@ export function classifyPictureBookIssues(issues: string[]): PictureBookQaCatego
   if (issues.some((issue) => issue === "provider_timeout" || issue.toLowerCase().includes("timed out"))) {
     return "provider_timeout";
   }
+  if (issues.some((issue) => issue.startsWith("visual_qa:"))) {
+    return "art_strength";
+  }
   if (issues.some((issue) => issue === "weak_art")) {
     return "art_strength";
   }

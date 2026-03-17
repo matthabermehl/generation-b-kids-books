@@ -150,6 +150,98 @@ export interface ImagePlanArtifact {
   generatedAt: string;
 }
 
+export type VisualEntityKind = "main_character" | "supporting_character" | "prop" | "setting";
+export type VisualEntityImportance = "story_critical" | "supporting";
+export type VisualReferenceStrategy =
+  | "approved_character"
+  | "generated_supporting_reference"
+  | "prompt_only"
+  | "scene_anchor";
+
+export interface VisualEntity {
+  entityId: string;
+  kind: VisualEntityKind;
+  label: string;
+  description: string;
+  anchors: string[];
+  pageIndices: number[];
+  sceneIds: string[];
+  importance: VisualEntityImportance;
+  recurring: boolean;
+  referenceStrategy: VisualReferenceStrategy;
+}
+
+export interface VisualCountConstraint {
+  entityId: string;
+  label: string;
+  quantity: number;
+  sourceText: string;
+}
+
+export interface VisualStateConstraint {
+  entityId: string;
+  label: string;
+  state: string;
+  sourceText: string;
+}
+
+export interface VisualPageContract {
+  pageIndex: number;
+  sceneId: string;
+  settingEntityId: string | null;
+  requiredCharacterIds: string[];
+  supportingCharacterIds: string[];
+  requiredPropIds: string[];
+  exactCountConstraints: VisualCountConstraint[];
+  stateConstraints: VisualStateConstraint[];
+  settingAnchors: string[];
+  continuityNotes: string[];
+  mustNotShow: string[];
+}
+
+export interface VisualStoryBible {
+  bookId: string;
+  title: string;
+  childFirstName: string;
+  generatedAt: string;
+  entities: VisualEntity[];
+  pages: VisualPageContract[];
+}
+
+export interface PageArtVisualGuidance {
+  mustShow: string[];
+  mustMatch: string[];
+  showExactly: string[];
+  mustNotShow: string[];
+  settingAnchors: string[];
+  continuityNotes: string[];
+}
+
+export type VisualQaIssueCode =
+  | "supporting_character_mismatch"
+  | "prop_count_mismatch"
+  | "prop_state_mismatch"
+  | "setting_anchor_mismatch"
+  | "forbidden_extra_entity"
+  | "low_confidence";
+
+export interface VisualQaIssue {
+  code: VisualQaIssueCode;
+  message: string;
+  entityId?: string;
+  expected?: string;
+  observed?: string;
+  confidence?: number | null;
+}
+
+export interface VisualQaVerdict {
+  passed: boolean;
+  issues: VisualQaIssue[];
+  confidence: number | null;
+  summary: string;
+  mode: "mock" | "openai" | "skipped";
+}
+
 export interface NormalizedRect {
   x: number;
   y: number;

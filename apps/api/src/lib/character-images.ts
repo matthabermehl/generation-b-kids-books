@@ -1,6 +1,7 @@
 import { buildCharacterCandidatePrompt } from "@book/domain";
 
 const openAiImageGenerationsUrl = "https://api.openai.com/v1/images/generations";
+const synchronousCharacterCandidateQuality = "low";
 
 export interface CharacterImageGenerationResult {
   bytes: Buffer;
@@ -66,7 +67,8 @@ export async function generateCharacterCandidateImage(
       model: input.model,
       prompt,
       size: "1024x1536",
-      quality: "high",
+      // Keep the synchronous approval-step render inside the API timeout budget.
+      quality: synchronousCharacterCandidateQuality,
       background: "opaque",
       output_format: "png",
       moderation: "auto",

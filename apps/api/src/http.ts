@@ -331,7 +331,13 @@ interface CharacterCandidateRow {
   created_at: string;
 }
 
-type ResumeStage = "text_moderation" | "prepare_render" | "retry_page" | "finalize_gate";
+type ResumeStage =
+  | "resume_story_review"
+  | "resume_page_review"
+  | "text_moderation"
+  | "prepare_render"
+  | "retry_page"
+  | "finalize_gate";
 
 interface ReviewCaseRow {
   review_case_id: string;
@@ -722,15 +728,90 @@ async function startReviewResumeExecution(
   };
 }
 
-function resumeStageForCase(stage: ReviewStage): ResumeStage {
-  if (stage === "text_moderation") {
-    return "text_moderation";
+function resumeStageForCase(reviewCase: Pick<ReviewCaseRow, "review_stage" | "reason_json">): ResumeStage {
+  if (reviewCase.review_stage === "text_moderation") {
+    return "resume_story_review";
   }
-  if (stage === "finalize_gate") {
-    return "finalize_gate";
+  if (reviewCase.review_stage === "image_qa" || reviewCase.review_stage === "image_safety") {
+    return "resume_page_review";
+  }
+  if (reviewCase.review_stage === "finalize_gate") {
+    const reason = parseJsonText<Record<string, unknown>>(reviewCase.reason_json, {});
+    return typeof reason.needsReviewCount === "number" ? "finalize_gate" : "resume_story_review";
   }
 
   return "prepare_render";
+}
+
+function reviewCasePageId(reviewCase: Pick<ReviewCaseRow, "review_stage" | "reason_json">): string | null {
+  if (!["image_qa", "image_safety"].includes(reviewCase.review_stage)) {
+    return null;
+  }
+
+  const reason = parseJsonText<Record<string, unknown>>(reviewCase.reason_json, {});
+  return typeof reason.pageId === "string" && reason.pageId.length > 0 ? reason.pageId : null;
+}
+
+async function acceptReviewedPage(pageId: string): Promise<void> {
+  const promoted = await query<{ image_id: string }>(
+    `
+      WITH selected_candidate AS (
+        SELECT id
+        FROM images
+        WHERE page_id = CAST(:pageId AS uuid)
+          AND role IN ('page', 'page_art')
+          AND s3_url IS NOT NULL
+        ORDER BY
+          CASE WHEN role = 'page_art' THEN 0 ELSE 1 END,
+          CASE WHEN is_current THEN 0 ELSE 1 END,
+          created_at DESC
+        LIMIT 1
+      ),
+      demoted_images AS (
+        UPDATE images
+        SET is_current = FALSE
+        WHERE page_id = CAST(:pageId AS uuid)
+          AND role IN ('page', 'page_art')
+          AND is_current = TRUE
+      ),
+      promoted_image AS (
+        UPDATE images
+        SET is_current = TRUE,
+            status = 'ready'
+        WHERE id = (SELECT id FROM selected_candidate)
+        RETURNING id
+      ),
+      ready_page AS (
+        UPDATE pages
+        SET status = 'ready'
+        WHERE id = CAST(:pageId AS uuid)
+          AND EXISTS (SELECT 1 FROM promoted_image)
+      )
+      SELECT id::text AS image_id
+      FROM promoted_image
+    `,
+    [{ name: "pageId", value: { stringValue: pageId } }]
+  );
+
+  if (!promoted[0]?.image_id) {
+    throw new Error(`No renderable reviewed image found for page ${pageId}`);
+  }
+}
+
+async function revertAcceptedReviewedPage(pageId: string): Promise<void> {
+  await execute(
+    `
+      UPDATE images
+      SET status = 'failed'
+      WHERE page_id = CAST(:pageId AS uuid)
+        AND role IN ('page', 'page_art')
+        AND is_current = TRUE
+    `,
+    [{ name: "pageId", value: { stringValue: pageId } }]
+  );
+  await execute(`UPDATE pages SET status = 'failed' WHERE id = CAST(:pageId AS uuid)`, [
+    { name: "pageId", value: { stringValue: pageId } }
+  ]);
 }
 
 async function hasPaymentEvent(stripeEventId: string): Promise<boolean> {
@@ -1597,7 +1678,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             FROM book_artifacts
             WHERE book_id = CAST(:bookId AS uuid)
               AND is_current = TRUE
-              AND artifact_type IN ('pdf', 'beat_plan_report', 'beat_plan', 'prompt_pack', 'scene_plan', 'image_plan')
+              AND artifact_type IN (
+                'pdf',
+                'story_proof_pdf',
+                'beat_plan_report',
+                'beat_plan',
+                'prompt_pack',
+                'scene_plan',
+                'image_plan',
+                'visual_bible'
+              )
             ORDER BY created_at DESC
           `,
           [{ name: "bookId", value: { stringValue: reviewCase.book_id } }]
@@ -1740,14 +1830,34 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         return json(409, { error: "Review case is not open" });
       }
 
-      const resumeStage = resumeStageForCase(reviewCase.review_stage);
-      const started = await startReviewResumeExecution(requestId, {
-        orderId: reviewCase.order_id,
-        bookId: reviewCase.book_id,
-        source: `review-approve-${reviewCase.review_stage}`,
-        resumeStage
-      });
+      const resumeStage = resumeStageForCase(reviewCase);
+      const pageId = reviewCasePageId(reviewCase);
+      if (resumeStage === "resume_page_review" && !pageId) {
+        return json(409, { error: "Image review approvals require a pageId" });
+      }
       await updateReviewCaseStatus(caseId, "retrying");
+      let started;
+      try {
+        if (pageId) {
+          await acceptReviewedPage(pageId);
+        }
+        started = await startReviewResumeExecution(requestId, {
+          orderId: reviewCase.order_id,
+          bookId: reviewCase.book_id,
+          source: `review-approve-${reviewCase.review_stage}`,
+          resumeStage,
+          pageId: pageId ?? undefined
+        });
+      } catch (error) {
+        await transitionOrderStatus(reviewCase.order_id, "needs_review");
+        await transitionBookStatus(reviewCase.book_id, "needs_review");
+        await updateReviewCaseStatus(caseId, "open");
+        if (pageId) {
+          await revertAcceptedReviewedPage(pageId);
+        }
+        throw error;
+      }
+
       await insertReviewEvent({
         reviewCaseId: caseId,
         bookId: reviewCase.book_id,
@@ -1756,7 +1866,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         notes: payload.notes ?? null,
         metadata: {
           resumeStage,
-          executionArn: started.executionArn
+          executionArn: started.executionArn,
+          pageId
         }
       });
 

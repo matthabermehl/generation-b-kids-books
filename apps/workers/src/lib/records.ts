@@ -13,6 +13,7 @@ interface InsertImageRecordInput {
   bookId: string;
   pageId?: string | null;
   role: string;
+  scopeEntityId?: string | null;
   endpoint: string;
   prompt: string;
   seed: number;
@@ -66,10 +67,15 @@ export async function insertCurrentImageRecord(input: InsertImageRecordInput): P
   const id = makeId();
   const scopeSql = input.pageId
     ? "book_id = CAST(:bookId AS uuid) AND page_id = CAST(:pageId AS uuid) AND role = :role"
-    : "book_id = CAST(:bookId AS uuid) AND page_id IS NULL AND role = :role";
+    : input.scopeEntityId
+      ? "book_id = CAST(:bookId AS uuid) AND page_id IS NULL AND role = :role AND COALESCE(input_assets_json->>'entityId', '') = :scopeEntityId"
+      : "book_id = CAST(:bookId AS uuid) AND page_id IS NULL AND role = :role";
   const scopeParams: SqlParameter[] = [
     { name: "bookId", value: { stringValue: input.bookId } },
     ...(input.pageId ? [{ name: "pageId", value: { stringValue: input.pageId } }] : []),
+    ...(input.pageId || !input.scopeEntityId
+      ? []
+      : [{ name: "scopeEntityId", value: { stringValue: input.scopeEntityId } }]),
     { name: "role", value: { stringValue: input.role } }
   ];
 

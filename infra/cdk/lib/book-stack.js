@@ -132,7 +132,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const imageQueue = new sqs.Queue(this, "ImageQueue", {
       encryption: sqs.QueueEncryption.KMS,
       encryptionMasterKey: encryptionKey,
-      visibilityTimeout: cdk.Duration.minutes(5),
+      visibilityTimeout: cdk.Duration.minutes(10),
       deadLetterQueue: {
         queue: queueDlq,
         maxReceiveCount: 3
@@ -221,7 +221,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     const workerBundlingWithSharp = {
       externalModules: ["aws-sdk", "sharp"],
-      nodeModules: ["sharp"],
+      nodeModules: ["sharp", "pdfkit"],
       forceDockerBundling: true
     };
 
@@ -262,7 +262,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     const imageWorkerFunction = new lambdaNode.NodejsFunction(this, "ImageWorkerFunction", {
       runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.minutes(2),
+      timeout: cdk.Duration.minutes(5),
       memorySize: 1024,
       entry: path.resolve(repoRoot, "apps/workers/src/image-worker.ts"),
       projectRoot: repoRoot,
@@ -406,6 +406,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     artifactBucket.grantReadWrite(imageWorkerFunction);
     artifactBucket.grantReadWrite(finalizeFunction);
     artifactBucket.grantRead(apiFunction);
+    artifactBucket.grantPut(apiFunction, "books/*/characters/*");
     artifactBucket.grantDelete(privacyPurgeFunction);
 
     imageQueue.grantSendMessages(pipelineFunction);
@@ -612,6 +613,15 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       resultPath: "$.enqueueImage"
     });
 
+    const resumeAfterStoryReviewTask = new sfnTasks.LambdaInvoke(this, "ResumeAfterStoryReview", {
+      lambdaFunction: pipelineFunction,
+      payload: sfn.TaskInput.fromObject({
+        action: "resume_after_story_review",
+        bookId: sfn.JsonPath.stringAt("$.bookId")
+      }),
+      resultPath: "$.resumeStoryReview"
+    });
+
     const enqueueSinglePageImageTask = new sfnTasks.LambdaInvoke(this, "EnqueueSinglePageImage", {
       lambdaFunction: pipelineFunction,
       payload: sfn.TaskInput.fromObject({
@@ -787,6 +797,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       .next(finalizePreparedRenderResumeTask);
     const enqueueNextPageChain = enqueueNextPageImageTask.next(nextPageQueuedChoice);
     const enqueueNextPageResumeChain = enqueueNextPageImageResumeTask.next(nextPageQueuedChoice);
+    const resumeAfterStoryReviewChain = resumeAfterStoryReviewTask.next(enqueueNextPageResumeChain);
     const queuedPageStatusChain = waitForQueuedPageTask.next(pageImageDoneChoice);
     const retryPageStatusChain = waitForRetryPageImagesTask.next(retryPageDoneChoice);
     const retryPageEnqueueChain = enqueueSinglePageImageTask.next(retryPageStatusChain);
@@ -821,8 +832,16 @@ export class AiChildrensBookDevStack extends cdk.Stack {
     const resumeChoice = new sfn.Choice(this, "ResumeOrBuild");
     resumeChoice
       .when(
-        sfn.Condition.stringEquals("$.resumeStage", "text_moderation"),
+        sfn.Condition.stringEquals("$.resumeStage", "resume_story_review"),
+        resumeAfterStoryReviewChain
+      )
+      .when(
+        sfn.Condition.stringEquals("$.resumeStage", "resume_page_review"),
         enqueueNextPageResumeChain
+      )
+      .when(
+        sfn.Condition.stringEquals("$.resumeStage", "text_moderation"),
+        resumeAfterStoryReviewChain
       )
       .when(
         sfn.Condition.stringEquals("$.resumeStage", "retry_page"),

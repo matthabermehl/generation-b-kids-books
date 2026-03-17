@@ -11,7 +11,7 @@ export interface GenerateImageInput {
   bookId: string;
   pageIndex: number;
   prompt: string;
-  role: "page";
+  role: "page" | "supporting_character_reference";
 }
 
 export interface GeneratePageArtInput {
@@ -358,16 +358,13 @@ class OpenAiPageArtProvider extends OpenAiTransport implements PageArtProvider {
         input_fidelity: "high",
         images: [
           {
-            type: "image_url",
             image_url: input.canvasImageUrl
           },
           ...input.referenceImageUrls.map((referenceImageUrl) => ({
-            type: "image_url",
             image_url: referenceImageUrl
           }))
         ],
         mask: {
-          type: "image_url",
           image_url: input.maskImageUrl
         },
         user: `book:${input.bookId}:page:${input.pageIndex}`

@@ -142,7 +142,9 @@ describe("image provider", () => {
       "https://example.com/character.png",
       "https://example.com/page-1.png"
     ]);
+    expect(requestBody.images?.every((imageRef) => !("type" in imageRef))).toBe(true);
     expect(requestBody.mask?.image_url).toBe("https://example.com/mask.png");
+    expect(requestBody.mask && !("type" in requestBody.mask)).toBe(true);
     expect(requestBody.size).toBe("1024x1024");
     expect(requestBody.input_fidelity).toBe("high");
     expect(image.requestId).toBe("req-edit");
