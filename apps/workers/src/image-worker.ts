@@ -381,7 +381,6 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         textFit: qa.textFit,
         visualQa
       });
-      inputAssets.visualQa = visualQa;
       const category = classifyPictureBookIssues(qaPayload.issues);
       finalQa = qaPayload;
 
