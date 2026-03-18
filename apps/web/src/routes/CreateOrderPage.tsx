@@ -63,37 +63,37 @@ export function CreateOrderPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-      <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
-        <Card className="border-border/70 bg-white/95">
-          <CardHeader className="space-y-3">
-            <div className="inline-flex items-center gap-2 text-sm font-medium text-slate-500">
+    <main className="sw-page sw-container mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <section className="sw-split grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
+        <Card className="sw-panel sw-panel--tinted border-border/70 bg-white/95">
+          <CardHeader className="sw-page-intro space-y-3">
+            <div className="sw-eyebrow inline-flex items-center gap-2 text-sm font-medium text-slate-500">
               <UserRound className="size-4" />
               Step 1 of 3
             </div>
-            <h1 className="text-2xl font-semibold text-slate-950">Create the order and approve the character</h1>
+            <h1 className="sw-page-title text-2xl font-semibold text-slate-950">Create the order and approve the character</h1>
             <CardDescription className="text-base">
               Capture the child details once, then lock in the illustration reference before the checkout step.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-slate-600">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">1</div>
+            <div className="sw-list space-y-3">
+              <div className="sw-list-item flex items-center gap-3">
+                <div className="sw-list-index flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">1</div>
                 <div>
                   <p className="font-medium text-slate-900">Create the order</p>
                   <p>Choose the lesson, reading profile, and interests.</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">2</div>
+              <div className="sw-list-item flex items-center gap-3">
+                <div className="sw-list-index flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">2</div>
                 <div>
                   <p className="font-medium text-slate-900">Approve the character</p>
                   <p>Generate up to 10 watercolor character candidates and select one canonical reference.</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">3</div>
+              <div className="sw-list-item flex items-center gap-3">
+                <div className="sw-list-index flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">3</div>
                 <div>
                   <p className="font-medium text-slate-900">Checkout and track the build</p>
                   <p>Launch Stripe checkout, then switch to the live book workspace.</p>
@@ -119,7 +119,7 @@ export function CreateOrderPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 bg-white/95 shadow-sm">
+        <Card className="sw-panel border-border/70 bg-white/95 shadow-sm">
           <CardHeader>
             <h2 className="text-lg font-semibold text-slate-950">Order details</h2>
             <CardDescription>
@@ -170,9 +170,9 @@ export function CreateOrderPage() {
                     updateDraft("ageYears", event.target.value === "" ? Number.NaN : Number(event.target.value));
                   }}
                 />
-                <p className={ageError ? "text-sm text-rose-600" : "text-sm text-slate-500"}>
-                  {ageError ?? `${selectedProfile.label} supports ages ${selectedProfile.minAge}-${selectedProfile.maxAge}.`}
-                </p>
+              <p className={ageError ? "sw-field-note text-sm text-rose-600" : "sw-field-note text-sm text-slate-500"}>
+                {ageError ?? `${selectedProfile.label} supports ages ${selectedProfile.minAge}-${selectedProfile.maxAge}.`}
+              </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reading-profile">Reading profile</Label>
@@ -222,7 +222,7 @@ export function CreateOrderPage() {
                 onChange={(event) => updateDraft("interestTags", event.target.value)}
                 placeholder="baking, forest, bikes"
               />
-              <p className="text-sm text-slate-500">Use commas to separate a few interests for story specificity.</p>
+              <p className="sw-field-note text-sm text-slate-500">Use commas to separate a few interests for story specificity.</p>
             </div>
 
             <div className="space-y-2">
@@ -234,13 +234,13 @@ export function CreateOrderPage() {
                 onChange={(event) => updateDraft("characterDescription", event.target.value)}
                 placeholder="Describe the child's appearance, clothing, favorite props, and any must-keep illustration details."
               />
-              <p className="text-sm text-slate-500">
+              <p className="sw-field-note text-sm text-slate-500">
                 This description becomes the reusable illustration anchor for every scene in the book.
               </p>
             </div>
 
             {!hasActiveOrder ? (
-              <div className="flex flex-col gap-3 border-t border-border/80 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sw-action-bar flex flex-col gap-3 border-t border-border/80 pt-2 sm:flex-row sm:items-center sm:justify-between">
                 <Button variant="outline" asChild>
                   <Link to="/">Back</Link>
                 </Button>
@@ -255,7 +255,7 @@ export function CreateOrderPage() {
       </section>
 
       {isCharacterFlowActive ? (
-        <Card className="border-border/70 bg-white/95 shadow-sm">
+        <Card className="sw-panel border-border/70 bg-white/95 shadow-sm">
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>Character approval</CardTitle>
@@ -263,7 +263,7 @@ export function CreateOrderPage() {
                 Generate candidates in the watercolor house style, then select the one that should anchor the whole book.
               </CardDescription>
             </div>
-            <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+            <div className="sw-inline-pill rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
               {characterState?.generationCount ?? 0} / {characterState?.maxGenerations ?? 10} generations used
             </div>
           </CardHeader>
@@ -286,7 +286,7 @@ export function CreateOrderPage() {
               </Alert>
             )}
 
-            <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="sw-panel sw-panel--tinted flex flex-col gap-3 rounded-2xl border border-border/70 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-slate-900">
                   {characterState?.remainingGenerations ?? 10} generations remaining
@@ -302,21 +302,21 @@ export function CreateOrderPage() {
             </div>
 
             {characterState?.candidates.length ? (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="sw-gallery-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {characterState.candidates.map((candidate) => (
                   <Card
                     key={candidate.imageId}
-                    className={candidate.isSelected ? "border-emerald-300 shadow-sm" : "border-border/70"}
+                    className={`sw-gallery-card ${candidate.isSelected ? "sw-gallery-card--selected border-emerald-300 shadow-sm" : "border-border/70"}`}
                   >
                     <CardContent className="space-y-3 p-4">
                       {candidate.imageUrl ? (
                         <img
                           src={candidate.imageUrl}
                           alt="Generated character candidate"
-                          className="aspect-[2/3] w-full rounded-xl border border-border/60 object-cover bg-white"
+                          className="sw-gallery-media aspect-[2/3] w-full rounded-xl border border-border/60 object-cover bg-white"
                         />
                       ) : (
-                        <div className="flex aspect-[2/3] items-center justify-center rounded-xl border border-dashed border-border/60 bg-slate-50 text-sm text-slate-500">
+                        <div className="sw-empty flex aspect-[2/3] items-center justify-center rounded-xl border border-dashed border-border/60 bg-slate-50 text-sm text-slate-500">
                           Preview unavailable
                         </div>
                       )}
@@ -339,12 +339,12 @@ export function CreateOrderPage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-border/70 bg-slate-50/50 p-8 text-center text-sm text-slate-500">
+              <div className="sw-empty rounded-2xl border border-dashed border-border/70 bg-slate-50/50 p-8 text-center text-sm text-slate-500">
                 No character candidates yet. Generate the first watercolor portrait to start the approval loop.
               </div>
             )}
 
-            <div className="flex flex-col gap-3 border-t border-border/80 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="sw-action-bar flex flex-col gap-3 border-t border-border/80 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <Button variant="outline" asChild>
                 <Link to="/">Back</Link>
               </Button>

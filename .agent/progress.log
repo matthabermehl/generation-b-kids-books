@@ -283,3 +283,16 @@ Evidence:
 - `bash scripts/agent/quality.sh` => PASS
 Notes: `page_art` remains the canonical right-page illustration asset while `page_preview` now stores the landscape spread preview. Print/export now writes separate left/right physical pages per narrative spread, and the old text-zone knockout path is retired for picture-book spreads.
 Commit: pending
+
+2026-03-18T17:04:07-0400
+Task: storybook-brand-system-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: introduced a StoryWeaver-inspired master stylesheet for `apps/web`, added reusable shell/surface/layout classes, imported Merriweather for display typography, and restyled the existing parent/reviewer routes via class hooks while keeping the current page copy unchanged.
+Evidence:
+- `pnpm --filter @book/web test` => PASS
+- `pnpm --filter @book/web build` => PASS
+- Playwright preview validation on `http://127.0.0.1:4173/` => PASS (hero shell, serif typography, warm card/button theme, unchanged page copy)
+- `bash scripts/agent/quality.sh` => FAIL on unrelated existing `apps/workers` TypeScript issue: `src/image-worker.ts(384,19) Property 'visualQa' does not exist`
+Notes: the repo-wide quality failure is outside the web diff for this task; `git diff -- apps/workers/src/image-worker.ts` was empty during verification.
+Next: resolve the existing workers lint/type failure so repo-wide quality returns to green.
+Commit: pending

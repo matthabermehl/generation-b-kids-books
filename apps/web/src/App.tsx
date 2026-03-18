@@ -12,8 +12,8 @@ import { VerifyPage } from "./routes/VerifyPage";
 
 function LoadingState({ message }: { message: string }) {
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
-      <p className="text-sm text-slate-500">{message}</p>
+    <main className="sw-page sw-container mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+      <p className="sw-note text-sm text-slate-500">{message}</p>
     </main>
   );
 }

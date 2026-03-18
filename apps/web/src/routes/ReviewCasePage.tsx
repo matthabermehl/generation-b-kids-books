@@ -54,7 +54,7 @@ export function ReviewCasePage() {
 
   if (!caseId) {
     return (
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <main className="sw-page sw-container mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <Alert variant="destructive">
           <AlertTitle>Review case id missing</AlertTitle>
           <AlertDescription>The route needs a case id before the reviewer workspace can load.</AlertDescription>
@@ -91,7 +91,7 @@ export function ReviewCasePage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="sw-page sw-container mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
       <Button asChild variant="ghost" size="sm" className="w-fit px-0 text-slate-500">
         <Link to="/review">Review queue</Link>
       </Button>
@@ -108,9 +108,9 @@ export function ReviewCasePage() {
         </Alert>
       ) : null}
       {payload ? (
-        <section className="grid gap-6 lg:grid-cols-[0.95fr_1.25fr]">
-          <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
-            <Card className="border-border/70 bg-white/95">
+        <section className="sw-sidebar-layout grid gap-6 lg:grid-cols-[0.95fr_1.25fr]">
+          <aside className="sw-sidebar space-y-6 lg:sticky lg:top-24 lg:self-start">
+            <Card className="sw-panel border-border/70 bg-white/95">
               <CardHeader className="space-y-2">
                 <CardDescription>Review case</CardDescription>
                 <h1 className="text-2xl font-semibold text-slate-950">{payload.book.childFirstName}</h1>
@@ -130,14 +130,14 @@ export function ReviewCasePage() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/70 bg-white/95">
+            <Card className="sw-panel border-border/70 bg-white/95">
               <CardHeader>
                 <h2 className="text-lg font-semibold text-slate-950">Reason</h2>
               </CardHeader>
               <CardContent className="text-sm leading-6 text-slate-600">{payload.reasonSummary}</CardContent>
             </Card>
 
-            <Card className="border-border/70 bg-white/95">
+            <Card className="sw-panel border-border/70 bg-white/95">
               <CardHeader>
                 <h2 className="text-lg font-semibold text-slate-950">Reviewer actions</h2>
                 <CardDescription>Keep the resume, reject, and retry behaviors unchanged.</CardDescription>
@@ -165,7 +165,7 @@ export function ReviewCasePage() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/70 bg-white/95">
+            <Card className="sw-panel border-border/70 bg-white/95">
               <CardHeader>
                 <h2 className="text-lg font-semibold text-slate-950">Artifacts</h2>
               </CardHeader>
@@ -202,15 +202,15 @@ export function ReviewCasePage() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/70 bg-white/95">
+            <Card className="sw-panel border-border/70 bg-white/95">
               <CardHeader>
                 <h2 className="text-lg font-semibold text-slate-950">Audit trail</h2>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-72">
-                  <div className="space-y-4 pr-4">
+                  <div className="sw-audit-list space-y-4 pr-4">
                     {payload.events.map((event) => (
-                      <article key={event.id} className="rounded-xl border border-border/80 bg-slate-50 p-4 text-sm">
+                      <article key={event.id} className="sw-audit-item rounded-xl border border-border/80 bg-slate-50 p-4 text-sm">
                         <p className="font-medium text-slate-900">{event.action} by {event.reviewerEmail}</p>
                         <p className="mt-1 text-slate-500">{new Date(event.createdAt).toLocaleString()}</p>
                         {event.notes ? <p className="mt-3 text-slate-600">{event.notes}</p> : null}
@@ -223,7 +223,7 @@ export function ReviewCasePage() {
           </aside>
 
           <section className="space-y-6">
-            <Card className="border-border/70 bg-white/95">
+            <Card className="sw-panel border-border/70 bg-white/95">
               <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-2xl font-semibold text-slate-950">Spread review</h2>
@@ -244,28 +244,28 @@ export function ReviewCasePage() {
                   </ScrollArea>
                   {payload.pages.map((page) => (
                     <TabsContent key={page.pageId} value={page.pageId} className="space-y-6">
-                      <div className="grid gap-4 xl:grid-cols-2">
-                        <Card className="border-border/70 bg-slate-50/70">
+                      <div className="sw-two-up grid gap-4 xl:grid-cols-2">
+                        <Card className="sw-panel sw-preview-card border-border/70 bg-slate-50/70">
                           <CardHeader>
                             <h3 className="text-base font-semibold text-slate-950">Spread preview</h3>
                           </CardHeader>
                           <CardContent>
                             {page.previewImageUrl ? (
-                              <img src={page.previewImageUrl} alt="Spread preview" className="aspect-[2/1] w-full rounded-xl border border-border bg-white object-contain" />
+                              <img src={page.previewImageUrl} alt="Spread preview" className="sw-preview-media aspect-[2/1] w-full rounded-xl border border-border bg-white object-contain" />
                             ) : (
-                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No spread preview yet</div>
+                              <div className="sw-empty rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No spread preview yet</div>
                             )}
                           </CardContent>
                         </Card>
-                        <Card className="border-border/70 bg-slate-50/70">
+                        <Card className="sw-panel sw-preview-card sw-preview-card--art border-border/70 bg-slate-50/70">
                           <CardHeader>
                             <h3 className="text-base font-semibold text-slate-950">Right-page art</h3>
                           </CardHeader>
                           <CardContent>
                             {page.pageArtUrl ? (
-                              <img src={page.pageArtUrl} alt="Right-page art" className="aspect-square w-full rounded-xl border border-border bg-white object-contain" />
+                              <img src={page.pageArtUrl} alt="Right-page art" className="sw-preview-media aspect-square w-full rounded-xl border border-border bg-white object-contain" />
                             ) : (
-                              <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No right-page art</div>
+                              <div className="sw-empty rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">No right-page art</div>
                             )}
                           </CardContent>
                         </Card>
@@ -277,8 +277,8 @@ export function ReviewCasePage() {
             </Card>
 
             {selectedPage ? (
-              <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <Card className="border-border/70 bg-white/95">
+              <div className="sw-sidebar-layout grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                <Card className="sw-panel border-border/70 bg-white/95">
                   <CardHeader>
                     <h3 className="text-lg font-semibold text-slate-950">Text and metadata</h3>
                   </CardHeader>
@@ -307,12 +307,12 @@ export function ReviewCasePage() {
                         "n/a"
                       )}
                     </p>
-                    <pre className="overflow-auto rounded-xl border border-border bg-slate-950 p-4 text-xs text-slate-100">
+                    <pre className="sw-code-block overflow-auto rounded-xl border border-border bg-slate-950 p-4 text-xs text-slate-100">
                       {JSON.stringify(selectedPage.provenance, null, 2)}
                     </pre>
                   </CardContent>
                 </Card>
-                <Card className="border-border/70 bg-white/95">
+                <Card className="sw-panel border-border/70 bg-white/95">
                   <CardHeader>
                     <h3 className="text-lg font-semibold text-slate-950">QA details</h3>
                   </CardHeader>
@@ -327,7 +327,7 @@ export function ReviewCasePage() {
                     ) : (
                       <p>No current QA issues recorded.</p>
                     )}
-                    <pre className="overflow-auto rounded-xl border border-border bg-slate-950 p-4 text-xs text-slate-100">
+                    <pre className="sw-code-block overflow-auto rounded-xl border border-border bg-slate-950 p-4 text-xs text-slate-100">
                       {JSON.stringify(selectedPage.qaMetrics, null, 2)}
                     </pre>
                   </CardContent>

@@ -36,8 +36,8 @@ export function VerifyPage() {
   }, [navigate, setToken, tokenFromUrl]);
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-4xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-xl border-border/70 bg-white/95">
+    <main className="sw-page sw-container mx-auto flex min-h-[calc(100vh-8rem)] max-w-4xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+      <Card className="sw-panel w-full max-w-xl border-border/70 bg-white/95">
         <CardHeader>
           <h1 className="text-2xl font-semibold text-slate-950">Verify sign-in</h1>
           <CardDescription>We are exchanging the magic link for a parent session.</CardDescription>

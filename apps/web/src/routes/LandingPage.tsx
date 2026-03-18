@@ -75,8 +75,8 @@ export function LandingPage() {
 
   if (token && loading) {
     return (
-      <main className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl items-center justify-center">
-        <Card className="w-full max-w-md border-border/70 bg-card/95">
+      <main className="sw-page sw-container mx-auto flex min-h-[calc(100vh-8rem)] max-w-6xl items-center justify-center">
+        <Card className="sw-panel w-full max-w-md border-border/70 bg-card/95">
           <CardHeader>
             <CardTitle>Loading your parent workspace</CardTitle>
             <CardDescription>We are reconnecting your session and restoring the active order.</CardDescription>
@@ -87,24 +87,24 @@ export function LandingPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
-      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+    <main className="sw-page sw-container mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
+      <section className="sw-hero-band sw-hero-grid grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="sw-hero-copy space-y-6">
+          <div className="sw-kicker inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
             Parent-first picture books
           </div>
           <div className="space-y-4">
-            <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+            <h1 className="sw-display max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
               Personalized Bitcoin stories without turning the experience into an admin tool.
             </h1>
-            <p className="max-w-2xl text-lg text-slate-600">
+            <p className="sw-lead max-w-2xl text-lg text-slate-600">
               Sign in, create a child-safe order, move through checkout, and come back to follow the book build from one
               calm parent workspace.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card className="border-border/70 bg-white/90">
-              <CardHeader className="gap-3">
+          <div className="sw-card-grid grid gap-4 sm:grid-cols-3">
+            <Card className="sw-panel sw-step-card border-border/70 bg-white/90">
+              <CardHeader className="gap-3 text-center">
                 <ShieldCheck className="size-5 text-slate-700" />
                 <CardTitle className="text-sm font-semibold">Privacy-first</CardTitle>
               </CardHeader>
@@ -112,8 +112,8 @@ export function LandingPage() {
                 Parent email plus child first name, age, and interests only. No child photos.
               </CardContent>
             </Card>
-            <Card className="border-border/70 bg-white/90">
-              <CardHeader className="gap-3">
+            <Card className="sw-panel sw-step-card border-border/70 bg-white/90">
+              <CardHeader className="gap-3 text-center">
                 <Sparkles className="size-5 text-slate-700" />
                 <CardTitle className="text-sm font-semibold">Structured flow</CardTitle>
               </CardHeader>
@@ -121,8 +121,8 @@ export function LandingPage() {
                 Separate steps for creation, checkout, and book delivery keep each decision focused.
               </CardContent>
             </Card>
-            <Card className="border-border/70 bg-white/90">
-              <CardHeader className="gap-3">
+            <Card className="sw-panel sw-step-card border-border/70 bg-white/90">
+              <CardHeader className="gap-3 text-center">
                 <BookOpen className="size-5 text-slate-700" />
                 <CardTitle className="text-sm font-semibold">Live status</CardTitle>
               </CardHeader>
@@ -133,7 +133,7 @@ export function LandingPage() {
           </div>
         </div>
 
-        <Card className="border-border/70 bg-white/95 shadow-sm">
+        <Card id="parent-signin" className="sw-panel sw-panel--tinted sw-hero-signin border-border/70 bg-white/95 shadow-sm">
           <CardHeader className="space-y-2">
             <CardTitle>Parent sign-in</CardTitle>
             <CardDescription>Request a magic link to start or resume your active book flow.</CardDescription>

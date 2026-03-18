@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-17T12:51:25Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-18T20:48:24Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -142,6 +142,18 @@
     ],
     "passes": true,
     "evidence": "Implemented a Tailwind v4 + shadcn clean-product UI foundation for apps/web, replaced the single parent dashboard with routed /, /create, /checkout, and /books/current flows backed by a persisted ParentFlowProvider, and restyled /verify, /review, and /review/cases/:caseId on the same primitive layer without changing API contracts. Verification 2026-03-08: bash scripts/agent/smoke.sh => PASS; bash scripts/agent/quality.sh => PASS; bash scripts/agent/e2e.sh => WARN only (no runner detected, fallback allowed); pnpm --filter @book/web test => PASS; pnpm --filter @book/web build => PASS; pnpm run deploy:web:dev => PASS; live CloudFront validation on https://dazfa7oc8fu6h.cloudfront.net confirmed the new create flow on desktop/mobile and produced screenshots under output/playwright/."
+  },
+  {
+    "id": "storybook-brand-system-01",
+    "priority": 2,
+    "category": "functional",
+    "description": "Apply a StoryWeaver-inspired brand stylesheet across the current web routes",
+    "steps": [
+      "Create a master stylesheet with shared StoryWeaver tokens, typography, surfaces, form controls, and reusable layout classes",
+      "Restyle the existing landing, create, checkout, current-book, verify, and reviewer screens so they share the same branded visual language without changing API contracts"
+    ],
+    "passes": true,
+    "evidence": "pnpm --filter @book/web test (PASS); pnpm --filter @book/web build (PASS); Playwright preview validation on http://127.0.0.1:4173/ confirmed the StoryWeaver-style shell, hero, and card system with unchanged page copy; bash scripts/agent/quality.sh (FAIL on unrelated existing apps/workers TypeScript error: src/image-worker.ts(384,19) Property 'visualQa' does not exist)"
   },
   {
     "id": "merge-master-picture-book-01",

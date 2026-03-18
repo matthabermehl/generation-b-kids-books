@@ -63,11 +63,11 @@ export function ReviewQueuePage() {
   }, [stage, token]);
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-      <Card className="border-border/70 bg-white/95">
+    <main className="sw-page sw-container mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <Card className="sw-panel border-border/70 bg-white/95">
         <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-950">Manual QA queue</h1>
+            <h1 className="sw-page-title text-2xl font-semibold text-slate-950">Manual QA queue</h1>
             <CardDescription>Open review cases refresh automatically every 10 seconds.</CardDescription>
           </div>
           <div className="w-full max-w-xs space-y-2">
@@ -89,7 +89,7 @@ export function ReviewQueuePage() {
         </CardHeader>
       </Card>
 
-      <Card className="border-border/70 bg-white/95">
+      <Card className="sw-panel border-border/70 bg-white/95">
         <CardContent className="space-y-4 pt-6">
           {error ? (
             <Alert variant="destructive">
@@ -98,7 +98,7 @@ export function ReviewQueuePage() {
             </Alert>
           ) : null}
           {!payload?.cases.length ? (
-            <div className="rounded-xl border border-dashed border-border bg-slate-50 px-4 py-10 text-center">
+            <div className="sw-empty rounded-xl border border-dashed border-border bg-slate-50 px-4 py-10 text-center">
               <Inbox className="mx-auto mb-3 size-5 text-slate-400" />
               <p className="font-medium text-slate-900">No open review cases.</p>
               <p className="mt-1 text-sm text-slate-500">When the pipeline pauses a book for review, it will appear here.</p>

@@ -33,19 +33,19 @@ export function CheckoutPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-      <Card className="border-border/70 bg-white/95">
-        <CardHeader className="space-y-3">
-          <div className="inline-flex items-center gap-2 text-sm font-medium text-slate-500">
+    <main className="sw-page sw-container mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <Card className="sw-panel border-border/70 bg-white/95">
+        <CardHeader className="sw-page-intro space-y-3">
+          <div className="sw-eyebrow inline-flex items-center gap-2 text-sm font-medium text-slate-500">
             <CreditCard className="size-4" />
             Step 2 of 3
           </div>
-          <h1 className="text-2xl font-semibold text-slate-950">Review the order and start checkout</h1>
+          <h1 className="sw-page-title text-2xl font-semibold text-slate-950">Review the order and start checkout</h1>
           <CardDescription className="text-base">
             Payment stays behind the character approval gate so the selected illustration reference is locked first.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <CardContent className="sw-split grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-4">
             {banner ? (
               <Alert>
@@ -71,12 +71,12 @@ export function CheckoutPage() {
               </Alert>
             ) : null}
 
-            <Card className="border-border/70 bg-slate-50/80">
+            <Card className="sw-panel sw-panel--tinted border-border/70 bg-slate-50/80">
               <CardHeader>
                 <h2 className="text-lg font-semibold text-slate-950">Order summary</h2>
               </CardHeader>
               <CardContent className="space-y-4 text-sm">
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="sw-meta-grid sw-meta-grid--two grid gap-3 sm:grid-cols-2">
                   <div>
                     <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Child</p>
                     <p className="mt-1 font-medium text-slate-900">{draft.childFirstName}</p>
@@ -116,7 +116,7 @@ export function CheckoutPage() {
           </div>
 
           <div className="space-y-4">
-            <Card className="border-border/70 bg-white">
+            <Card className="sw-panel border-border/70 bg-white">
               <CardHeader>
                 <h2 className="text-lg font-semibold text-slate-950">Approved character</h2>
                 <CardDescription>The selected reference image will be fed into every subsequent page-art edit call.</CardDescription>
@@ -126,10 +126,10 @@ export function CheckoutPage() {
                   <img
                     src={characterState.selectedCharacterImageUrl}
                     alt="Approved character reference"
-                    className="aspect-[2/3] w-full rounded-2xl border border-border/70 object-cover bg-white"
+                    className="sw-gallery-media aspect-[2/3] w-full rounded-2xl border border-border/70 object-cover bg-white"
                   />
                 ) : (
-                  <div className="flex aspect-[2/3] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-slate-50 text-sm text-slate-500">
+                  <div className="sw-empty flex aspect-[2/3] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-slate-50 text-sm text-slate-500">
                     No approved character selected yet.
                   </div>
                 )}
@@ -153,7 +153,7 @@ export function CheckoutPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-amber-200 bg-amber-50/70">
+            <Card className="sw-panel border-amber-200 bg-amber-50/70">
               <CardHeader>
                 <h2 className="text-base font-semibold text-slate-950">Internal or dev fallback</h2>
                 <CardDescription>

@@ -28,12 +28,12 @@ export function CurrentBookPage() {
   } = useParentFlow();
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-      <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+    <main className="sw-page sw-container mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <section className="sw-split grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
-          <Card className="border-border/70 bg-white/95">
-            <CardHeader className="space-y-3">
-              <h1 className="text-2xl font-semibold text-slate-950">Current book workspace</h1>
+          <Card className="sw-panel border-border/70 bg-white/95">
+            <CardHeader className="sw-page-intro space-y-3">
+              <h1 className="sw-page-title text-2xl font-semibold text-slate-950">Current book workspace</h1>
               <CardDescription className="text-base">
                 Track build status, refresh the book state, and pull previews or the PDF from one place.
               </CardDescription>
@@ -69,7 +69,7 @@ export function CurrentBookPage() {
                     <StatusBadge value={orderStatus.status} />
                     <StatusBadge value={orderStatus.bookStatus} />
                   </div>
-                  <div className="grid gap-4 text-sm sm:grid-cols-3">
+                  <div className="sw-meta-grid grid gap-4 text-sm sm:grid-cols-3">
                     <div>
                       <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Order</p>
                       <p className="mt-1 text-slate-900">{orderStatus.orderId}</p>
@@ -84,7 +84,7 @@ export function CurrentBookPage() {
                     </div>
                   </div>
                   {bookPayload ? (
-                    <div className="grid gap-4 text-sm sm:grid-cols-2">
+                    <div className="sw-meta-grid sw-meta-grid--two grid gap-4 text-sm sm:grid-cols-2">
                       <div>
                         <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Spreads</p>
                         <p className="mt-1 text-slate-900">{bookPayload.spreadCount}</p>
@@ -97,7 +97,7 @@ export function CurrentBookPage() {
                   ) : null}
                 </>
               ) : null}
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="sw-action-row flex flex-col gap-3 sm:flex-row">
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -142,7 +142,7 @@ export function CurrentBookPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-border/70 bg-white/95">
+          <Card className="sw-panel border-border/70 bg-white/95">
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-slate-950">Reader spread previews</h2>
@@ -154,7 +154,7 @@ export function CurrentBookPage() {
             </CardHeader>
             <CardContent>
               {!bookPayload ? (
-                <div className="rounded-xl border border-dashed border-border bg-slate-50 px-4 py-8 text-sm text-slate-500">
+                <div className="sw-empty rounded-xl border border-dashed border-border bg-slate-50 px-4 py-8 text-sm text-slate-500">
                   No preview payload loaded yet. Use “Load previews” when the build has progressed far enough to expose pages.
                 </div>
               ) : (
@@ -164,11 +164,11 @@ export function CurrentBookPage() {
                     <TabsTrigger value="text">Story text</TabsTrigger>
                   </TabsList>
                   <TabsContent value="pages">
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="sw-preview-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       {bookPayload.pages.map((page) => {
                         const previewUrl = page.previewImageUrl ?? page.imageUrl;
                         return (
-                          <Card key={page.pageIndex} className="border-border/70 bg-slate-50/70">
+                          <Card key={page.pageIndex} className="sw-panel sw-preview-card border-border/70 bg-slate-50/70">
                             <CardHeader className="flex flex-row items-start justify-between gap-3">
                               <div>
                                 <h3 className="text-base font-semibold text-slate-950">Spread {page.spreadIndex + 1}</h3>
@@ -181,10 +181,10 @@ export function CurrentBookPage() {
                                 <img
                                   src={previewUrl}
                                   alt={`Spread ${page.spreadIndex + 1}`}
-                                  className="aspect-[2/1] w-full rounded-xl border border-border bg-white object-contain"
+                                  className="sw-preview-media aspect-[2/1] w-full rounded-xl border border-border bg-white object-contain"
                                 />
                               ) : (
-                                <div className="rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">
+                                <div className="sw-empty rounded-xl border border-dashed border-border bg-white px-4 py-10 text-center text-sm text-slate-500">
                                   No spread preview yet
                                 </div>
                               )}
@@ -197,9 +197,9 @@ export function CurrentBookPage() {
                   </TabsContent>
                   <TabsContent value="text">
                     <ScrollArea className="h-[32rem] rounded-xl border border-border bg-slate-50/70">
-                      <div className="grid gap-4 p-4">
+                      <div className="sw-transcript grid gap-4 p-4">
                         {bookPayload.pages.map((page) => (
-                          <Card key={page.pageIndex} size="sm" className="border-border/70 bg-white">
+                          <Card key={page.pageIndex} size="sm" className="sw-panel border-border/70 bg-white">
                             <CardHeader>
                               <h3 className="text-sm font-semibold text-slate-950">Spread {page.spreadIndex + 1}</h3>
                             </CardHeader>
@@ -215,7 +215,7 @@ export function CurrentBookPage() {
           </Card>
         </div>
 
-        <Card className="border-rose-200 bg-rose-50/70">
+        <Card className="sw-panel sw-panel--danger border-rose-200 bg-rose-50/70">
           <CardHeader>
             <h2 className="text-lg font-semibold text-slate-950">Privacy and reset</h2>
             <CardDescription>
