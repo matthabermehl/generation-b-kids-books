@@ -31,15 +31,10 @@ const beatSheet = {
       pageIndexEstimate: 0,
       decodabilityTags: ["controlled_vocab", "repetition"],
       newWordsIntroduced: ["save"],
-      bitcoinRelevanceScore: 0.1,
+      bitcoinRelevanceScore: 0.4,
       introduces: ["price tag", "coin jar"],
       paysOff: [],
-      continuityFacts: [
-        "caregiver_label:Mom",
-        "deadline_event:Saturday game",
-        "forbid_term:grown-up",
-        "bitcoin_bridge_required:false"
-      ]
+      continuityFacts: ["caregiver_label:Mom", "deadline_event:Saturday game"]
     }
   ]
 };
@@ -57,7 +52,7 @@ const concept = {
   ] as const,
   temptation: "sticker pack",
   deadlineEvent: "Saturday game",
-  bitcoinBridge: "Mom says Bitcoin is one adult saving idea tied to Maya's jar choice.",
+  bitcoinBridge: "Bitcoin can positively support Maya's long-term saving theme.",
   requiredSetups: ["price tag", "coin jar"],
   requiredPayoffs: ["reach 12 coins", "buy the puzzle"],
   forbiddenLateIntroductions: ["tournament", "sale", "third chore"]
@@ -94,56 +89,46 @@ describe("prompt principles", () => {
       context,
       JSON.stringify(concept),
       JSON.stringify(beatSheet),
-      "Fix beat 0 only.",
-      {
-        highScoreThreshold: 0.65,
-        minHighBeats: 1,
-        maxHighBeats: 1,
-        allowedHighStartIndex: 0
-      }
+      "Fix beat 0 only."
     );
     const [principle] = principlesFor("rewrite");
     expectSignals(prompt, principle.requiredSignals);
   });
 
-  it("planner prompt includes canonical tag and bitcoin-threshold constraints", () => {
-    const prompt = buildBeatPlannerPrompt(context, concept, 12, {
-      highScoreThreshold: 0.65,
-      minHighBeats: 2,
-      maxHighBeats: 3,
-      allowedHighStartIndex: 8
-    });
-    expectSignals(prompt, ["controlled_vocab", "repetition", "taught_words", ">= 0.65", "index >= 8"]);
-  });
-
-  it("planner prompt adds young-profile bitcoin guardrails", () => {
-    const prompt = buildBeatPlannerPrompt(context, concept, 12, {
-      highScoreThreshold: 0.65,
-      minHighBeats: 2,
-      maxHighBeats: 3,
-      allowedHighStartIndex: 8
-    });
-
+  it("planner prompt includes thematic Bitcoin guidance and decodability tags", () => {
+    const prompt = buildBeatPlannerPrompt(context, concept, 12);
     expectSignals(prompt, [
-      "exact word bitcoin",
-      "device-first",
-      "same coins buy",
-      "forbid_term:grown-up",
-      "chosen_earning_option"
+      "controlled_vocab",
+      "repetition",
+      "taught_words",
+      "thematic salience",
+      "positive bitcoin-saving connection"
     ]);
   });
 
-  it("sor critic preserves late-stage bitcoin invariant", () => {
+  it("planner prompt adds young-profile Bitcoin guardrails", () => {
+    const prompt = buildBeatPlannerPrompt(context, concept, 12);
+
+    expectSignals(prompt, [
+      "bitcoin must positively support the story theme",
+      "caregiver or narrator language",
+      "device-first",
+      "chosen_earning_option",
+      "count_target"
+    ]);
+  });
+
+  it("sor critic preserves child-safe Bitcoin expectations", () => {
     const prompt = buildScienceOfReadingCriticPrompt(
       context,
       JSON.stringify(concept),
       JSON.stringify(beatSheet)
     );
     expectSignals(prompt, [
-      "bitcoin",
-      "single caregiver line",
-      "extra or early mentions are hard issues",
-      "do not decode or repeat the word bitcoin"
+      "bitcoin may recur",
+      "do not decode or repeat the word bitcoin",
+      "child-facing newwordsintroduced item",
+      "technical/device-first explanation"
     ]);
   });
 
@@ -153,14 +138,14 @@ describe("prompt principles", () => {
     expectSignals(prompt, principle.requiredSignals);
   });
 
-  it("writer prompt forbids device-led bitcoin exposition for young readers", () => {
+  it("writer prompt allows generic class words while keeping Bitcoin child-safe", () => {
     const prompt = buildPageWriterPrompt(context, concept, beatSheet, 1);
     expectSignals(prompt, [
-      "use the caregiverlabel",
-      "do not emit 'grown-up'",
-      "exactly once",
+      "generic terms like people, adults, or grown-ups are fine",
+      "thematic guidance",
+      "bitcoin may recur briefly",
       "investment promises",
-      "bitcoinbridge"
+      "child should not say, decode, or explain bitcoin"
     ]);
   });
 });

@@ -12,9 +12,7 @@ const fantasyTerms = [
 ];
 
 const taughtWords = ["bitcoin"];
-const defaultHighScoreThreshold = 0.65;
-const defaultRatioMin = 0.15;
-const defaultRatioMax = 0.3;
+const defaultThemeThreshold = 0.35;
 
 export interface BeatDeterministicIssue {
   code: string;
@@ -32,15 +30,6 @@ export interface BeatValidationContext {
   profile: ReadingProfile;
   ageYears: number;
   pageCount: number;
-}
-
-export interface BitcoinBeatTargets {
-  highScoreThreshold: number;
-  ratioMin: number;
-  ratioMax: number;
-  minHighBeats: number;
-  maxHighBeats: number;
-  allowedHighStartIndex: number;
 }
 
 function includesSignal(value: string, signal: string): boolean {
@@ -70,44 +59,12 @@ function hasRequiredDecodabilityTag(tags: string[]): boolean {
   });
 }
 
-export function computeBitcoinBeatTargets(
-  pageCount: number,
-  highScoreThreshold = defaultHighScoreThreshold,
-  ratioMin = defaultRatioMin,
-  ratioMax = defaultRatioMax
-): BitcoinBeatTargets {
-  if (pageCount <= 0) {
-    return {
-      highScoreThreshold,
-      ratioMin,
-      ratioMax,
-      minHighBeats: 0,
-      maxHighBeats: 0,
-      allowedHighStartIndex: 0
-    };
-  }
-
-  const minHighBeats = Math.ceil(pageCount * ratioMin);
-  const maxFromRatio = Math.floor(pageCount * ratioMax);
-  const maxHighBeats = Math.min(pageCount, Math.max(minHighBeats, maxFromRatio));
-
-  return {
-    highScoreThreshold,
-    ratioMin,
-    ratioMax,
-    minHighBeats,
-    maxHighBeats,
-    allowedHighStartIndex: Math.floor(pageCount * 0.7)
-  };
-}
-
 export function runDeterministicBeatChecks(
   context: BeatValidationContext,
   beatSheet: BeatSheet
 ): BeatDeterministicSummary {
   const issues: BeatDeterministicIssue[] = [];
   const beats = beatSheet.beats;
-  const bitcoinTargets = computeBitcoinBeatTargets(context.pageCount);
 
   if (beats.length !== context.pageCount) {
     issues.push({
@@ -122,40 +79,20 @@ export function runDeterministicBeatChecks(
 
   const bitcoinBeatIndexes = beats
     .map((beat, index) => ({ index, score: beat.bitcoinRelevanceScore }))
-    .filter((entry) => entry.score >= bitcoinTargets.highScoreThreshold)
+    .filter((entry) => entry.score >= defaultThemeThreshold)
     .map((entry) => entry.index);
 
-  const bitcoinRatio = beats.length === 0 ? 0 : bitcoinBeatIndexes.length / beats.length;
-  if (bitcoinRatio < bitcoinTargets.ratioMin || bitcoinRatio > bitcoinTargets.ratioMax) {
+  if (bitcoinBeatIndexes.length === 0) {
     issues.push({
-      code: "BITCOIN_RATIO",
-      message: `Bitcoin beat ratio ${bitcoinRatio.toFixed(2)} must be between ${bitcoinTargets.ratioMin.toFixed(2)} and ${bitcoinTargets.ratioMax.toFixed(2)}. High-score beats: ${bitcoinBeatIndexes.length}, required: ${bitcoinTargets.minHighBeats}-${bitcoinTargets.maxHighBeats} at score >= ${bitcoinTargets.highScoreThreshold}.`,
+      code: "BITCOIN_THEME_INTEGRATION",
+      message: `At least one beat must use bitcoinRelevanceScore >= ${defaultThemeThreshold} to show Bitcoin positively supporting the story theme.`,
       details: {
-        highScoreThreshold: bitcoinTargets.highScoreThreshold,
-        ratioMin: bitcoinTargets.ratioMin,
-        ratioMax: bitcoinTargets.ratioMax,
         highBeatIndexes: bitcoinBeatIndexes,
         highBeatCount: bitcoinBeatIndexes.length,
-        requiredMinHighBeats: bitcoinTargets.minHighBeats,
-        requiredMaxHighBeats: bitcoinTargets.maxHighBeats
+        requiredThreshold: defaultThemeThreshold
       }
     });
   }
-
-  bitcoinBeatIndexes.forEach((index) => {
-    if (index < bitcoinTargets.allowedHighStartIndex) {
-      issues.push({
-        code: "BITCOIN_POSITION",
-        beatIndex: index,
-        message: `High bitcoin relevance beats must be in the final 30% of the arc (index >= ${bitcoinTargets.allowedHighStartIndex}).`,
-        details: {
-          beatIndex: index,
-          allowedHighStartIndex: bitcoinTargets.allowedHighStartIndex,
-          highScoreThreshold: bitcoinTargets.highScoreThreshold
-        }
-      });
-    }
-  });
 
   if (requiresMontessoriRealism(context.profile, context.ageYears)) {
     beats.forEach((beat, index) => {
@@ -193,20 +130,18 @@ export function runDeterministicBeatChecks(
         });
       }
 
-      const taughtWordTooEarly = beat.newWordsIntroduced.some((word) => {
+      const bitcoinAsChildWord = beat.newWordsIntroduced.some((word) => {
         const lowered = word.toLowerCase();
         return taughtWords.some((taughtWord) => includesSignal(lowered, taughtWord));
       });
 
-      const finalTwentyPercentIndex = Math.floor(beats.length * 0.8);
-      if (taughtWordTooEarly && index < finalTwentyPercentIndex) {
+      if (bitcoinAsChildWord) {
         issues.push({
-          code: "TAUGHT_WORD_POSITION",
+          code: "BITCOIN_CHILD_LANGUAGE",
           beatIndex: index,
-          message: `Taught words like Bitcoin must appear only in the final 20% of beats (index >= ${finalTwentyPercentIndex}).`,
+          message: "Bitcoin may not appear in newWordsIntroduced for child-facing reading instruction.",
           details: {
-            beatIndex: index,
-            finalTwentyPercentIndex
+            beatIndex: index
           }
         });
       }

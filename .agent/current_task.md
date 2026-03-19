@@ -1,23 +1,22 @@
 # Current Task
-Task ID: storybook-brand-system-01
+Task ID: bitcoin-story-rewrites-01
 
 ## Goal
-Create a reusable StoryWeaver-style master stylesheet and apply it across the current web UI so the routed app matches the provided visual direction.
+Replace the late-only Bitcoin story policy with positive thematic Bitcoin integration, fix the critic/validator false positives, and add a bounded multi-round story rewrite loop with full draft-and-critic history.
 
 ## Constraints
-- Keep the existing parent/reviewer route behavior and API contracts unchanged.
-- Put the shared styling in the web app's master stylesheet instead of scattering one-off route overrides.
-- Cover current screens plus reusable future-facing elements such as forms, badges, content sections, previews, and review panels.
+- Keep `StoryConcept.bitcoinBridge` as the existing schema field, but reinterpret it as thematic guidance instead of an exact quote.
+- Preserve manual review fallback after the configured rewrite budget is exhausted.
+- Keep Bitcoin child-safe: no hype, no technical/device-first framing, no child decoding or explaining Bitcoin.
 
 ## Plan (short)
-1. Define the StoryWeaver theme tokens and reusable classes in `apps/web/src/styles.css`.
-2. Restyle the shell and current routes to use the new shared classes while preserving flow logic.
-3. Run focused web verification plus repo quality checks, then record evidence and update the task state.
+1. Remove late-only Bitcoin rules from prompts, critics, and deterministic beat/story validators.
+2. Add rewrite-history support to the story writer LLM call and loop story draft/critic passes in the worker pipeline.
+3. Update tests and docs, then run repo quality gates.
 
 ## Evidence required
 - `bash scripts/agent/smoke.sh`
-- `pnpm --filter @book/web test`
-- `pnpm --filter @book/web build`
+- `bash scripts/agent/test.sh`
 - `bash scripts/agent/quality.sh`
 
 ## Status

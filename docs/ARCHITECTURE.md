@@ -84,8 +84,9 @@ Cross-cutting:
   - beat critics emit `hard` and `soft` issues; soft-only approvals persist `beat-plan-report.json` without blocking the book
   - blocking beat gates: deterministic + Montessori + Science-of-Reading
   - narrative freshness critic remains active but is advisory after max beat rewrites (captured as audit warning)
-  - final story stage runs one Opus draft + one critic pass (no blind full-redraft loop)
+  - final story stage runs a recursive author/critic rewrite loop with history (`STORY_MAX_REWRITES`, default `2`) before manual review
   - persists `story.json`, `story-qa-report.json`, and `render/story-proof.pdf` before any `finalize_gate` review stop
+  - `story-qa-report.json` now includes per-attempt story draft/critic audit and final pass vs review status
   - mock-provider authorization gate based on `mockRunTag`
 - `image-worker.ts`: OpenAI-backed `page_art` generation for picture books plus legacy page generation fallback, prompt safety checks, and page QA
 - `check-images.ts`: completion + image safety / picture-book QA escalation to `needs_review`
@@ -108,7 +109,7 @@ Cross-cutting:
 - final illustrated `pdf` remains separate from the worker-generated `story_proof_pdf`
 
 ### Shared Packages
-- `packages/domain`: enums/types/validators (includes Montessori realism check)
+- `packages/domain`: enums/types/validators (includes Montessori realism check plus lighter Bitcoin/caregiver validation)
 - `packages/prompts`: schema-first planner/critic/rewrite/writer templates + deterministic beat/story quality checks + prompt-principle invariants
 
 ## AWS Infrastructure (CDK JavaScript)
@@ -120,7 +121,7 @@ Cross-cutting:
 - Aurora Serverless v2 PostgreSQL with Data API
 - DynamoDB idempotency table
 - ECS/Fargate renderer cluster and task
-- Pipeline Lambda timeout: 5 minutes (sized for strict beat planning + Opus final writing latency)
+- Pipeline Lambda timeout: 5 minutes (sized for strict beat planning + bounded multi-round story rewrite latency)
 - CloudFront + S3 (web + artifacts)
 - EventBridge rules:
   - Step Functions execution status handling
@@ -185,7 +186,7 @@ Fixed-layout additions:
 - Deterministic spread template selection for fixed-layout books
 - Story checks:
   - strict beat sheet schema validation (planner, critics, rewrite, final writer)
-  - late Bitcoin reveal (~80/20 arc)
+  - positive Bitcoin-theme integration without late-only placement rules
   - banned financial claims
   - SoR decodability checks (beat planning + page-level checks)
   - low-variation/repetition guard for final story pages

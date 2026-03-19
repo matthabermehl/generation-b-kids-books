@@ -2,6 +2,7 @@ import type {
   BeatSheet,
   CreateOrderInput,
   StoryConcept,
+  StoryDraftOptions,
   StoryCriticVerdict,
   StoryPackage
 } from "./types.js";
@@ -57,7 +58,7 @@ export interface LlmProviderContract {
     context: StoryGenerationContext,
     concept: StoryConcept,
     beatSheet: BeatSheet,
-    rewriteInstructions?: string
+    options?: StoryDraftOptions
   ): Promise<{ story: StoryPackage; meta: LlmCallMetadata }>;
   critic(
     context: StoryGenerationContext,

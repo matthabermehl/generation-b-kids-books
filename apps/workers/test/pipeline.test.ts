@@ -130,6 +130,7 @@ describe("pipeline beat-planning failure persistence", () => {
     process.env.ARTIFACT_BUCKET = "artifact-bucket";
     process.env.BOOK_DEFAULT_SPREAD_COUNT = "12";
     process.env.BOOK_DEFAULT_PAGE_COUNT = "12";
+    delete process.env.STORY_MAX_REWRITES;
     queryMock.mockResolvedValue([
       {
         book_id: "book-1",
@@ -278,12 +279,7 @@ describe("pipeline beat-planning failure persistence", () => {
               bitcoinRelevanceScore: 0,
               introduces: ["price tag", "coin jar"],
               paysOff: [],
-              continuityFacts: [
-                "caregiver_label:Mom",
-                "deadline_event:Saturday game",
-                "forbid_term:grown-up",
-                "bitcoin_bridge_required:false"
-              ]
+              continuityFacts: ["caregiver_label:Mom", "deadline_event:Saturday game"]
             }
           ]
         },
@@ -482,6 +478,55 @@ describe("pipeline beat-planning failure persistence", () => {
   });
 
   it("persists story-proof.pdf before stopping on final story QA hard issues", async () => {
+    process.env.STORY_MAX_REWRITES = "2";
+    const draftPagesMock = vi.fn().mockResolvedValue({
+      story: {
+        title: "Ava Saves",
+        concept,
+        beats: [],
+        pages: Array.from({ length: 12 }, (_, index) => ({
+          pageIndex: index,
+          pageText: `Page ${index} text.`,
+          illustrationBrief: `Illustration ${index}`,
+          sceneId: `scene_${Math.floor(index / 2) + 1}`,
+          sceneVisualDescription: `Scene ${Math.floor(index / 2) + 1} watercolor setting.`,
+          newWordsIntroduced: ["save"],
+          repetitionTargets: ["save"]
+        })),
+        readingProfileId: "early_decoder_5_7",
+        moneyLessonKey: "saving_later"
+      },
+      meta: {
+        provider: "openai",
+        model: "gpt-5-mini-2025-08-07",
+        latencyMs: 234,
+        usage: null
+      }
+    });
+    const criticMock = vi.fn().mockResolvedValue({
+      verdict: {
+        ok: false,
+        issues: [
+          {
+            pageStart: 10,
+            pageEnd: 10,
+            issueType: "theme_integration",
+            severity: "hard",
+            rewriteTarget: "page",
+            evidence: "Bitcoin feels bolted on instead of tied to Ava's saving theme.",
+            suggestedFix: "Tie Bitcoin back to Ava's patient saving choice."
+          }
+        ],
+        rewriteInstructions: "Rewrite the story so Bitcoin clearly supports Ava's saving theme."
+      },
+      meta: {
+        provider: "openai",
+        model: "gpt-5-mini-2025-08-07",
+        latencyMs: 99,
+        usage: null
+      }
+    });
+
     resolveLlmProviderMock.mockResolvedValue({
       generateStoryConcept: vi.fn().mockResolvedValue({
         concept,
@@ -508,12 +553,7 @@ describe("pipeline beat-planning failure persistence", () => {
               bitcoinRelevanceScore: 0,
               introduces: ["price tag", "coin jar"],
               paysOff: [],
-              continuityFacts: [
-                "caregiver_label:Mom",
-                "deadline_event:Saturday game",
-                "forbid_term:grown-up",
-                "bitcoin_bridge_required:false"
-              ]
+              continuityFacts: ["caregiver_label:Mom", "deadline_event:Saturday game"]
             }
           ]
         },
@@ -531,62 +571,8 @@ describe("pipeline beat-planning failure persistence", () => {
           usage: null
         }
       }),
-      draftPages: vi.fn().mockResolvedValue({
-        story: {
-          title: "Ava Saves",
-          concept,
-          beats: [],
-          pages: Array.from({ length: 12 }, (_, index) => ({
-            pageIndex: index,
-            pageText: `Page ${index} text.`,
-            illustrationBrief: `Illustration ${index}`,
-            sceneId: `scene_${Math.floor(index / 2) + 1}`,
-            sceneVisualDescription: `Scene ${Math.floor(index / 2) + 1} watercolor setting.`,
-            newWordsIntroduced: ["save"],
-            repetitionTargets: ["save"]
-          })),
-          readingProfileId: "early_decoder_5_7",
-          moneyLessonKey: "saving_later"
-        },
-        meta: {
-          provider: "openai",
-          model: "gpt-5-mini-2025-08-07",
-          latencyMs: 234,
-          usage: null
-        }
-      }),
-      critic: vi.fn().mockResolvedValue({
-        verdict: {
-          ok: false,
-          issues: [
-            {
-              pageStart: 10,
-              pageEnd: 10,
-              issueType: "bitcoin_fit",
-              severity: "hard",
-              rewriteTarget: "page",
-              evidence: "The caregiver line is too generic.",
-              suggestedFix: "Use the concept bridge wording."
-            },
-            {
-              pageStart: 10,
-              pageEnd: 10,
-              issueType: "bitcoin_fit",
-              severity: "hard",
-              rewriteTarget: "page",
-              evidence: "The caregiver line is still too generic.",
-              suggestedFix: "Use the concept bridge wording exactly."
-            }
-          ],
-          rewriteInstructions: "Rewrite the final spread so the caregiver speaks the concept bridge line."
-        },
-        meta: {
-          provider: "openai",
-          model: "gpt-5-mini-2025-08-07",
-          latencyMs: 99,
-          usage: null
-        }
-      })
+      draftPages: draftPagesMock,
+      critic: criticMock
     });
 
     await expect(handler({ action: "prepare_story", bookId: "book-1" })).rejects.toThrow(
@@ -619,6 +605,23 @@ describe("pipeline beat-planning failure persistence", () => {
       )
     );
     expect(storyProofInsert).toBeDefined();
+    expect(draftPagesMock).toHaveBeenCalledTimes(3);
+    expect(criticMock).toHaveBeenCalledTimes(3);
+    expect(putJsonMock).toHaveBeenCalledWith(
+      "books/book-1/story-qa-report.json",
+      expect.objectContaining({
+        finalStatus: "needs_review",
+        storyAudit: expect.objectContaining({
+          maxRewrites: 2,
+          finalStatus: "needs_review",
+          attempts: expect.arrayContaining([
+            expect.objectContaining({ attempt: 0, rewriteAction: "page", status: "rewritten" }),
+            expect.objectContaining({ attempt: 1, rewriteAction: "page", status: "rewritten" }),
+            expect.objectContaining({ attempt: 2, rewriteAction: "none", status: "needs_review" })
+          ])
+        })
+      })
+    );
   });
 
   it("rebuilds pages from stored story data when resuming after manual story review", async () => {

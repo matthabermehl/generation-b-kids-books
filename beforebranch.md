@@ -1,49 +1,47 @@
-# Before Branch Snapshot
+## Current State
 
-## Source branch
-- `master`
-- upstream: `Github/master`
+- Branch at handoff: `master` tracking `Github/master`
+- Smoke baseline: `bash scripts/agent/smoke.sh` passed on 2026-03-18
+- In-progress structural change: rework Bitcoin story policy, remove late-only enforcement, fix story QA false positives, and add multi-round story rewrite loops
 
-## Objective
-- Implement the spread-count contract for 3-7 picture books.
-- Add a first-class `story_proof_pdf` artifact generated from story text only.
-- Keep the final illustrated `pdf` artifact separate and final-only.
-- Update reviewer/API/docs/tests so spread vs physical-page semantics are explicit.
+## Objectives
 
-## Current state
-- Picture-book generation already treats each persisted `pages` row as one narrative spread.
-- API payloads already expose both `spreadCount` and `physicalPageCount`.
-- Final renderer already outputs two physical PDF pages per spread: left text page and right art page.
-- Review flows currently expose only `pdfUrl`, which points at the final illustrated PDF artifact when it exists.
-- A failed story-quality run can persist `story-concept.json`, `story.json`, and `story-qa-report.json`, but there is no first-class readable proof PDF artifact.
+- Replace late-stage Bitcoin constraints with positive thematic integration across prompts, critics, validators, tests, and docs.
+- Fix known false positives in `count_sequence` and `reading_level`.
+- Preserve `bitcoinBridge` as a schema field, but reinterpret it as thematic guidance instead of an exact closing line.
+- Add a configurable multi-round story draft/critic loop with rewrite history and attempt-level QA reporting.
 
-## Constraints
-- No database migration.
-- No repo-wide rename from `page` to `spread`.
-- Keep `/v1/books/{bookId}/download?format=pdf` bound to the final illustrated `pdf` artifact only.
-- `story_proof_pdf` is internal/reviewer-facing support output, not the customer final download.
+## Existing Findings
 
-## Risks
-- Existing local changes on `master` are present in:
-  - `.gitignore`
-  - `.agent/current_task.md`
-  - `.agent/feature_list.json`
-  - `apps/workers/src/providers/llm.ts`
-  - `apps/workers/test/llm-provider.test.ts`
-- The `llm.ts` changes are unrelated provider-routing work and should not be reverted or overwritten.
-- `apps/web` test/build regenerates OpenAPI-derived files, so API schema changes will cascade into generated client output.
+- Recent `story-qa-report.json` artifacts show frequent failures in `bitcoin_fit`, `caregiver_consistency`, `count_sequence`, and `reading_level`.
+- Latest successful books still required manual `resume_after_story_review` after one failed rewrite pass.
+- Prompt/critic contradictions currently include:
+  - exact or near-exact `bitcoinBridge` wording enforcement
+  - `grown-ups` vs `people/adults` conflicts
+  - late-only Bitcoin placement requirements
+- Deterministic validator false positives currently include:
+  - spoken count pages being checked against unrelated later number words on the same page
+  - punctuated or hyphenated words being counted as too hard for early decoders
 
-## Expected implementation areas
-- `apps/workers/src/pipeline.ts`
-- `apps/workers/src/lib/*` for proof rendering/persistence
-- `apps/api/src/http.ts`
-- `apps/api/src/openapi/spec.ts`
-- `apps/web/src/routes/ReviewCasePage.tsx`
-- `apps/web/src/routes/ReviewQueuePage.tsx`
-- `apps/renderer/src/lib/render-book.ts`
-- tests in workers/api/web/renderer
-- product/architecture docs
+## Work Already Started
 
-## Verification target
-- targeted package tests for workers, renderer, api, and web
-- `bash scripts/agent/quality.sh`
+- `packages/domain/src/types.ts`
+  - added `StoryRewriteTurn`
+  - added `StoryDraftOptions`
+- `packages/domain/src/providers.ts`
+  - updated `draftPages(...)` to accept `options?: StoryDraftOptions`
+- `packages/domain/src/validators.ts`
+  - removed late-Bitcoin positional enforcement
+  - softened caregiver consistency to explicit caregiver labels
+  - narrowed count-sequence parsing to spoken counting scopes
+  - normalized reading-profile tokenization
+  - replaced Bitcoin usage checks with thematic/safety checks
+
+## Known Risk / Immediate Follow-Up
+
+- `packages/domain/src/validators.ts` still contains one stale `caregiverTerms` reference in `validateContinuityFacts` and will not compile until that is updated.
+
+## Pending Decisions
+
+- Default story rewrite budget is expected to be `STORY_MAX_REWRITES=2`, yielding 3 total drafts.
+- Attempt-level QA audit shape should be finalized while updating pipeline persistence so tests can lock it in.

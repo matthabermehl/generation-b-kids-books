@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  computeBitcoinBeatTargets,
-  runDeterministicBeatChecks,
-  type BeatValidationContext
-} from "../src/beat-quality.js";
+import { runDeterministicBeatChecks, type BeatValidationContext } from "../src/beat-quality.js";
 
 function makeContext(overrides: Partial<BeatValidationContext> = {}): BeatValidationContext {
   return {
@@ -14,7 +10,7 @@ function makeContext(overrides: Partial<BeatValidationContext> = {}): BeatValida
   };
 }
 
-function makeBeat(index: number, highBitcoin = false) {
+function makeBeat(index: number, bitcoinScore = 0.1) {
   return {
     purpose: `Beat ${index}`,
     conflict: "A real-world saving challenge at the grocery store.",
@@ -24,49 +20,35 @@ function makeBeat(index: number, highBitcoin = false) {
     emotionalTarget: "Curious",
     pageIndexEstimate: index,
     decodabilityTags: ["controlled_vocab", "repetition"],
-    newWordsIntroduced: index >= 8 ? ["bitcoin"] : ["save"],
-    bitcoinRelevanceScore: highBitcoin ? 0.8 : 0.2
+    newWordsIntroduced: ["save"],
+    bitcoinRelevanceScore: bitcoinScore,
+    introduces: [],
+    paysOff: [],
+    continuityFacts: ["caregiver_label:Mom", "deadline_event:Saturday game"]
   };
 }
 
 describe("runDeterministicBeatChecks", () => {
-  it("computes explicit bitcoin target bounds", () => {
-    const targets = computeBitcoinBeatTargets(12);
-    expect(targets.minHighBeats).toBe(2);
-    expect(targets.maxHighBeats).toBe(3);
-    expect(targets.allowedHighStartIndex).toBe(8);
-    expect(targets.highScoreThreshold).toBe(0.65);
-  });
-
-  it("passes a compliant beat sheet", () => {
-    const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, index >= 8));
+  it("passes a compliant beat sheet with recurring thematic Bitcoin salience", () => {
+    const beats = Array.from({ length: 10 }, (_, index) =>
+      makeBeat(index, index === 3 || index >= 8 ? 0.5 : 0.1)
+    );
     const result = runDeterministicBeatChecks(makeContext(), { beats });
     expect(result.ok).toBe(true);
   });
 
-  it("returns actionable ratio diagnostics when bitcoin ratio fails", () => {
-    const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, false));
+  it("requires at least one beat to tie Bitcoin positively into the theme", () => {
+    const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, 0));
     const result = runDeterministicBeatChecks(makeContext(), { beats });
-    const ratioIssue = result.issues.find((issue) => issue.code === "BITCOIN_RATIO");
+    const themeIssue = result.issues.find((issue) => issue.code === "BITCOIN_THEME_INTEGRATION");
     expect(result.ok).toBe(false);
-    expect(ratioIssue).toBeDefined();
-    expect(ratioIssue?.details?.requiredMinHighBeats).toBe(2);
-    expect(ratioIssue?.details?.requiredMaxHighBeats).toBe(3);
-    expect(ratioIssue?.details?.highBeatCount).toBe(0);
-  });
-
-  it("fails when bitcoin appears too early", () => {
-    const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, index === 3 || index >= 8));
-    const result = runDeterministicBeatChecks(makeContext(), { beats });
-    expect(result.ok).toBe(false);
-    const positionIssue = result.issues.find((issue) => issue.code === "BITCOIN_POSITION");
-    expect(positionIssue).toBeDefined();
-    expect(positionIssue?.details?.allowedHighStartIndex).toBe(7);
+    expect(themeIssue).toBeDefined();
+    expect(themeIssue?.details?.requiredThreshold).toBe(0.35);
   });
 
   it("fails montessori realism for under-6 fantasy beats", () => {
     const beats = Array.from({ length: 10 }, (_, index) => ({
-      ...makeBeat(index, index >= 8),
+      ...makeBeat(index, index >= 8 ? 0.5 : 0.1),
       conflict: index === 1 ? "A wizard gives magical coins." : "A practical-life money choice."
     }));
 
@@ -77,14 +59,14 @@ describe("runDeterministicBeatChecks", () => {
     expect(result.issues.some((issue) => issue.code === "MONTESSORI_REALISM")).toBe(true);
   });
 
-  it("fails when taught words are introduced too early", () => {
+  it("fails when Bitcoin is introduced as a child-facing taught word", () => {
     const beats = Array.from({ length: 10 }, (_, index) => ({
-      ...makeBeat(index, index >= 8),
+      ...makeBeat(index, index >= 8 ? 0.5 : 0.1),
       newWordsIntroduced: index === 2 ? ["bitcoin"] : ["save"]
     }));
 
     const result = runDeterministicBeatChecks(makeContext(), { beats });
     expect(result.ok).toBe(false);
-    expect(result.issues.some((issue) => issue.code === "TAUGHT_WORD_POSITION")).toBe(true);
+    expect(result.issues.some((issue) => issue.code === "BITCOIN_CHILD_LANGUAGE")).toBe(true);
   });
 });

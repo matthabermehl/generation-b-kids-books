@@ -7,10 +7,10 @@ export interface PromptPrinciple {
 
 export const promptPrinciples: PromptPrinciple[] = [
   {
-    id: "bitcoin_80_20",
-    summary: "Most beats teach the money problem first; Bitcoin appears mainly near resolution.",
+    id: "bitcoin_theme_positive",
+    summary: "Bitcoin supports the saving theme in a positive, child-safe way without needing to wait for the ending.",
     appliesTo: "planner",
-    requiredSignals: ["80%", "20%", "bitcoin", "late"]
+    requiredSignals: ["bitcoin", "positive", "theme", "saving"]
   },
   {
     id: "child_agency",
@@ -46,7 +46,7 @@ export const promptPrinciples: PromptPrinciple[] = [
     id: "writer_grounding",
     summary: "Final pages stay age-appropriate, concrete, and consequence-driven.",
     appliesTo: "writer",
-    requiredSignals: ["age-appropriate", "concrete", "consequence", "hype"]
+    requiredSignals: ["age-appropriate", "concrete", "consequence", "child should not say"]
   }
 ];
 
