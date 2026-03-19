@@ -13,7 +13,9 @@ import {
   type PictureBookReadingProfile,
   type ReviewStage,
   type ReadingProfile,
+  type StoryCriticVerdict,
   type StoryPackage,
+  type StoryRewriteTurn,
   type VisualPageContract,
   type VisualStoryBible
 } from "@book/domain";
@@ -95,6 +97,16 @@ async function loadBookContext(bookId: string): Promise<BookContextRow> {
 
 function isPictureBookReadingProfile(profile: ReadingProfile): profile is PictureBookReadingProfile {
   return pictureBookReadingProfiles.includes(profile as PictureBookReadingProfile);
+}
+
+function parseNonNegativeIntEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return parsed;
+  }
+
+  return fallback;
 }
 
 async function markBookNeedsReview(
@@ -251,6 +263,8 @@ async function persistStoryQaReport(
     story: unknown;
     verdict: unknown;
     llmMeta: unknown;
+    storyAudit?: unknown;
+    finalStatus?: string;
   }
 ): Promise<{ artifactKey: string }> {
   const artifactKey = `books/${bookId}/story-qa-report.json`;
@@ -348,17 +362,23 @@ async function prepareStory(
     model: beatPlanning.meta.model
   });
 
-  logStructured("StoryDraftStart", { bookId, attempt: 0 });
-  const initialDraftStartedAt = Date.now();
-  let drafted = await llm.draftPages(storyContext, storyConcept, beatPlanning.beatSheet);
-  logStructured("StoryDraftComplete", {
-    bookId,
-    attempt: 0,
-    durationMs: Date.now() - initialDraftStartedAt,
-    provider: drafted.meta.provider,
-    model: drafted.meta.model
-  });
-  let story = drafted.story;
+  type StoryAttemptAudit = {
+    attempt: number;
+    draftMeta: unknown;
+    criticMeta?: unknown;
+    criticVerdict?: StoryCriticVerdict;
+    rewriteInstructions: string;
+    rewriteAction: "none" | "page" | "beat";
+    status: "passed" | "rewritten" | "needs_review";
+    hardIssueCount: number;
+  };
+
+  const maxStoryRewrites = parseNonNegativeIntEnv("STORY_MAX_REWRITES", 2);
+  const rewriteHistory: StoryRewriteTurn[] = [];
+  const storyAttempts: StoryAttemptAudit[] = [];
+  let story: StoryPackage | null = null;
+  let verdict: { verdict: StoryCriticVerdict; meta: { provider: string; model: string; latencyMs: number } } | null =
+    null;
 
   const providerMeta = {
     concept: conceptResult.meta,
@@ -366,47 +386,98 @@ async function prepareStory(
       planner: beatPlanning.meta,
       audit: beatPlanning.audit
     },
-    drafts: [drafted.meta],
+    drafts: [] as unknown[],
     critics: [] as Array<{ provider: string; model: string; latencyMs: number; issueCount: number }>,
     pageRewriteApplied: false,
-    beatRewriteApplied: false
+    beatRewriteApplied: false,
+    rewriteBudget: maxStoryRewrites,
+    attempts: storyAttempts,
+    finalStatus: "passed" as "passed" | "needs_review"
   };
 
-  const runStoryCritic = async (rewriteAttempt: number) => {
+  const runStoryCritic = async (rewriteAttempt: number, currentStory: StoryPackage) => {
     logStructured("StoryCriticStart", { bookId, rewriteAttempt });
     const criticStartedAt = Date.now();
-    const verdict = await llm.critic(storyContext, storyConcept, story);
-    const hardIssueCount = verdict.verdict.issues.filter((issue) => issue.severity === "hard").length;
+    const verdictResult = await llm.critic(storyContext, storyConcept, currentStory);
+    const hardIssueCount = verdictResult.verdict.issues.filter((issue) => issue.severity === "hard").length;
     logStructured("StoryCriticComplete", {
       bookId,
       rewriteAttempt,
       durationMs: Date.now() - criticStartedAt,
-      ok: verdict.verdict.ok,
-      issueCount: verdict.verdict.issues.length,
+      ok: verdictResult.verdict.ok,
+      issueCount: verdictResult.verdict.issues.length,
       hardIssueCount,
-      provider: verdict.meta.provider,
-      model: verdict.meta.model
+      provider: verdictResult.meta.provider,
+      model: verdictResult.meta.model
     });
 
     providerMeta.critics.push({
-      provider: verdict.meta.provider,
-      model: verdict.meta.model,
-      latencyMs: verdict.meta.latencyMs,
-      issueCount: verdict.verdict.issues.length
+      provider: verdictResult.meta.provider,
+      model: verdictResult.meta.model,
+      latencyMs: verdictResult.meta.latencyMs,
+      issueCount: verdictResult.verdict.issues.length
     });
 
-    return verdict;
+    return verdictResult;
   };
 
-  let verdict = await runStoryCritic(0);
-  const hardIssues = verdict.verdict.issues.filter((issue) => issue.severity === "hard");
-  if (hardIssues.length > 0) {
+  for (let attempt = 0; attempt <= maxStoryRewrites; attempt += 1) {
+    logStructured("StoryDraftStart", { bookId, attempt });
+    const draftStartedAt = Date.now();
+    const drafted = await llm.draftPages(storyContext, storyConcept, beatPlanning.beatSheet, {
+      rewriteHistory
+    });
+    logStructured("StoryDraftComplete", {
+      bookId,
+      attempt,
+      durationMs: Date.now() - draftStartedAt,
+      provider: drafted.meta.provider,
+      model: drafted.meta.model
+    });
+
+    providerMeta.drafts.push(drafted.meta);
+    story = drafted.story;
+
+    const attemptAudit: StoryAttemptAudit = {
+      attempt,
+      draftMeta: drafted.meta,
+      rewriteInstructions: "",
+      rewriteAction: "none",
+      status: "passed",
+      hardIssueCount: 0
+    };
+    storyAttempts.push(attemptAudit);
+
+    verdict = await runStoryCritic(attempt, story);
+    const hardIssues = verdict.verdict.issues.filter((issue) => issue.severity === "hard");
+    attemptAudit.criticMeta = verdict.meta;
+    attemptAudit.criticVerdict = verdict.verdict;
+    attemptAudit.rewriteInstructions = verdict.verdict.rewriteInstructions;
+    attemptAudit.hardIssueCount = hardIssues.length;
+
+    if (hardIssues.length === 0) {
+      attemptAudit.status = "passed";
+      break;
+    }
+
+    if (attempt >= maxStoryRewrites) {
+      attemptAudit.status = "needs_review";
+      break;
+    }
+
+    rewriteHistory.push({
+      story,
+      criticVerdict: verdict.verdict
+    });
+
     const requiresBeatRewrite = hardIssues.some(
       (issue) => issue.rewriteTarget === "beat" || issue.rewriteTarget === "concept"
     );
 
     if (requiresBeatRewrite) {
       providerMeta.beatRewriteApplied = true;
+      attemptAudit.rewriteAction = "beat";
+      attemptAudit.status = "rewritten";
       const revisedBeatSheet = await llm.reviseBeatSheet(
         storyContext,
         storyConcept,
@@ -420,45 +491,28 @@ async function prepareStory(
       };
       logStructured("StoryBeatRewriteComplete", {
         bookId,
+        attempt,
         provider: revisedBeatSheet.meta.provider,
         model: revisedBeatSheet.meta.model
       });
-
-      logStructured("StoryDraftStart", { bookId, attempt: 1 });
-      const revisedDraftStartedAt = Date.now();
-      drafted = await llm.draftPages(storyContext, storyConcept, beatPlanning.beatSheet);
-      logStructured("StoryDraftComplete", {
-        bookId,
-        attempt: 1,
-        durationMs: Date.now() - revisedDraftStartedAt,
-        provider: drafted.meta.provider,
-        model: drafted.meta.model
-      });
-      providerMeta.drafts.push(drafted.meta);
-      story = drafted.story;
-      verdict = await runStoryCritic(1);
-    } else {
-      providerMeta.pageRewriteApplied = true;
-      logStructured("StoryDraftStart", { bookId, attempt: 1 });
-      const revisedDraftStartedAt = Date.now();
-      drafted = await llm.draftPages(
-        storyContext,
-        storyConcept,
-        beatPlanning.beatSheet,
-        verdict.verdict.rewriteInstructions
-      );
-      logStructured("StoryDraftComplete", {
-        bookId,
-        attempt: 1,
-        durationMs: Date.now() - revisedDraftStartedAt,
-        provider: drafted.meta.provider,
-        model: drafted.meta.model
-      });
-      providerMeta.drafts.push(drafted.meta);
-      story = drafted.story;
-      verdict = await runStoryCritic(1);
+      continue;
     }
+
+    providerMeta.pageRewriteApplied = true;
+    attemptAudit.rewriteAction = "page";
+    attemptAudit.status = "rewritten";
   }
+
+  if (!story || !verdict) {
+    throw new Error("Story drafting reached an unreachable state");
+  }
+
+  const remainingHardIssues = verdict.verdict.issues.filter((issue) => issue.severity === "hard");
+  providerMeta.finalStatus = remainingHardIssues.length === 0 ? "passed" : "needs_review";
+  providerMeta.beatPlan = {
+    planner: beatPlanning.meta,
+    audit: beatPlanning.audit
+  };
 
   const storyQaReport = await persistStoryQaReport(bookId, {
     concept: storyConcept,
@@ -468,7 +522,13 @@ async function prepareStory(
       concept: conceptResult.meta,
       beatPlan: beatPlanning.meta,
       story: providerMeta
-    }
+    },
+    storyAudit: {
+      maxRewrites: maxStoryRewrites,
+      attempts: storyAttempts,
+      finalStatus: providerMeta.finalStatus
+    },
+    finalStatus: providerMeta.finalStatus
   });
   const storyKey = `books/${bookId}/story.json`;
   await putJson(storyKey, story);
@@ -497,7 +557,6 @@ async function prepareStory(
     durationMs: Date.now() - storyProofStartedAt
   });
 
-  const remainingHardIssues = verdict.verdict.issues.filter((issue) => issue.severity === "hard");
   if (remainingHardIssues.length > 0) {
     const storyQaNotes = remainingHardIssues.map(
       (issue) => `${issue.issueType}: ${issue.evidence}. Fix: ${issue.suggestedFix}`

@@ -296,3 +296,13 @@ Evidence:
 Notes: the repo-wide quality failure is outside the web diff for this task; `git diff -- apps/workers/src/image-worker.ts` was empty during verification.
 Next: resolve the existing workers lint/type failure so repo-wide quality returns to green.
 Commit: pending
+
+2026-03-18T23:22:44-0400
+Task: bitcoin-story-rewrites-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: replaced the late-only Bitcoin prompt policy with positive thematic integration across concept/beat/page/critic prompts, softened the deterministic caregiver and Bitcoin validators to eliminate false positives, fixed spoken-count and reading-level validation edge cases, and added a bounded multi-round story draft/critic loop that feeds prior drafts plus critic verdicts back into the writer conversation. The worker pipeline now persists per-attempt story QA audit data, honors `STORY_MAX_REWRITES` (default `2`), and falls back to manual review only after the rewrite budget is exhausted.
+Evidence:
+- `bash scripts/agent/test.sh` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Notes: `story-qa-report.json` now records attempt-level rewrite lineage and final pass vs review status. Docs were updated to remove the old 80/20 late-Bitcoin rule and describe the recursive story-review flow.
+Commit: pending

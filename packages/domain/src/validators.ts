@@ -22,7 +22,20 @@ const montessoriFantasyTerms = [
   "magic wand",
   "sorcerer"
 ];
-const caregiverTerms = ["mom", "dad", "grown-up", "grown up", "grown-ups", "grown ups"];
+const explicitCaregiverTerms = ["mom", "dad"];
+const bitcoinTechnicalTerms = [
+  "app",
+  "phone",
+  "tablet",
+  "wallet",
+  "password",
+  "qr code",
+  "transfer",
+  "blockchain",
+  "market",
+  "chart"
+];
+const bitcoinChildActionTerms = ["say bitcoin", "repeat bitcoin", "spell bitcoin", "read bitcoin", "decode bitcoin"];
 const numberWords = [
   "zero",
   "one",
@@ -59,6 +72,40 @@ function pageMentions(page: StoryPage, phrase: string): boolean {
   return normalizedLower(page.pageText).includes(normalizedLower(phrase));
 }
 
+function tokenizePageWords(text: string): string[] {
+  const rawTokens = text.match(/[A-Za-z]+(?:['-][A-Za-z]+)*/g) ?? [];
+  return rawTokens.flatMap((token) =>
+    token
+      .split("-")
+      .map((part) => part.replace(/^'+|'+$/g, ""))
+      .filter(Boolean)
+  );
+}
+
+function sentenceFragments(text: string): string[] {
+  return text.match(/[^.!?]+[.!?]?/g) ?? [text];
+}
+
+function numberWordIndexes(text: string): number[] {
+  const matches = Array.from(
+    normalizedLower(text).matchAll(new RegExp(`\\b(${numberWords.join("|")})\\b`, "g"))
+  ).map((match) => match[1]);
+
+  return matches
+    .map((word) => numberWords.indexOf(word as (typeof numberWords)[number]))
+    .filter((index) => index >= 0);
+}
+
+function quotedNumberRuns(text: string): number[][] {
+  return Array.from(text.matchAll(/["“]([^"”]+)["”]/g))
+    .map((match) => numberWordIndexes(match[1] ?? ""))
+    .filter((indexes) => indexes.length >= 3);
+}
+
+function startsWithNumberWord(text: string): boolean {
+  return new RegExp(`^[\\s"'“”]*(?:${numberWords.join("|")})\\b`, "i").test(text.trim());
+}
+
 function jaccardSimilarity(left: Set<string>, right: Set<string>): number {
   if (left.size === 0 && right.size === 0) {
     return 1;
@@ -75,27 +122,6 @@ function jaccardSimilarity(left: Set<string>, right: Set<string>): number {
 }
 
 export function validateNarrativeRatio(pages: StoryPage[]): ValidationResult {
-  if (pages.length < 4) {
-    return {
-      ok: false,
-      issues: [{ code: "TOO_SHORT", message: "Story must have at least 4 pages." }]
-    };
-  }
-
-  const mentionIndexes = pages
-    .map((page) => page.pageText.toLowerCase().includes("bitcoin"))
-    .flatMap((isMentioned, idx) => (isMentioned ? [idx] : []));
-
-  const threshold = Math.floor(pages.length * 0.8);
-  const badMention = mentionIndexes.find((idx) => idx < threshold - 1);
-
-  if (badMention !== undefined) {
-    return {
-      ok: false,
-      issues: [{ code: "RATIO_FAIL", message: "Bitcoin appears too early in the story arc." }]
-    };
-  }
-
   return { ok: true, issues: [] };
 }
 
@@ -171,7 +197,7 @@ export function validateReadingProfile(
 
   pages.forEach((page) => {
     const sentenceCount = page.pageText.split(/[.!?]/).filter(Boolean).length;
-    const words = page.pageText.trim().split(/\s+/).filter(Boolean);
+    const words = tokenizePageWords(page.pageText);
 
     if (profile === "read_aloud_3_4" && sentenceCount > 4) {
       issues.push({
@@ -188,7 +214,7 @@ export function validateReadingProfile(
     }
 
     if (profile === "early_decoder_5_7") {
-      const hardWords = words.filter((word) => /[^a-zA-Z'-]/.test(word) || word.length > 10);
+      const hardWords = words.filter((word) => word.length > 10);
       if (hardWords.length > 5) {
         issues.push({
           code: "DECODABILITY",
@@ -230,24 +256,39 @@ export function validateCountSequences(pages: StoryPage[]): ValidationResult {
       return;
     }
 
-    const matches = Array.from(lowered.matchAll(new RegExp(`\\b(${numberWords.join("|")})\\b`, "g"))).map(
-      (match) => match[1]
-    );
-    if (matches.length < 3) {
-      return;
-    }
+    const sentences = sentenceFragments(page.pageText);
+    for (let sentenceIndex = 0; sentenceIndex < sentences.length; sentenceIndex += 1) {
+      const sentence = sentences[sentenceIndex] ?? "";
+      if (!/\bcount(?:ed|ing|s)?\b/i.test(sentence)) {
+        continue;
+      }
 
-    const indexes = matches
-      .map((word) => numberWords.indexOf(word as (typeof numberWords)[number]))
-      .filter((index) => index >= 0);
+      const combined = [sentence, sentences[sentenceIndex + 1] ?? ""].join(" ");
+      const quotedRuns = quotedNumberRuns(combined);
+      const candidates =
+        quotedRuns.length > 0
+          ? quotedRuns
+          : [
+              numberWordIndexes(
+                numberWordIndexes(sentence).length >= 3 || !startsWithNumberWord(sentences[sentenceIndex + 1] ?? "")
+                  ? sentence
+                  : `${sentence} ${sentences[sentenceIndex + 1] ?? ""}`
+              )
+            ];
 
-    for (let index = 1; index < indexes.length; index += 1) {
-      if (indexes[index] !== indexes[index - 1] + 1) {
-        issues.push({
-          code: "COUNT_SEQUENCE",
-          message: `Page ${page.pageIndex} has a non-sequential spoken count.`
-        });
-        break;
+      for (const indexes of candidates) {
+        if (indexes.length < 3) {
+          continue;
+        }
+
+        const sequential = indexes.every((value, index) => index === 0 || value === indexes[index - 1] + 1);
+        if (!sequential) {
+          issues.push({
+            code: "COUNT_SEQUENCE",
+            message: `Page ${page.pageIndex} has a non-sequential spoken count.`
+          });
+          return;
+        }
       }
     }
   });
@@ -261,7 +302,7 @@ export function validateCaregiverConsistency(
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
   const expected = concept.caregiverLabel.toLowerCase();
-  const forbiddenTerms = caregiverTerms.filter((term) => term !== expected);
+  const forbiddenTerms = explicitCaregiverTerms.filter((term) => term !== expected);
 
   pages.forEach((page) => {
     const lowered = normalizedLower(page.pageText);
@@ -288,34 +329,40 @@ export function validateBitcoinUsage(
     return { ok: true, issues: [] };
   }
 
-  const mentionIndexes = pages
-    .map((page, index) => (pageMentions(page, "bitcoin") ? index : -1))
-    .filter((index) => index >= 0);
-
-  if (mentionIndexes.length !== 1) {
+  const mentionPages = pages.filter((page) => pageMentions(page, "bitcoin"));
+  if (mentionPages.length === 0) {
     issues.push({
       code: "BITCOIN_USAGE",
-      message: `Story must mention Bitcoin exactly once for this profile; found ${mentionIndexes.length}.`
-    });
-    return { ok: false, issues };
-  }
-
-  const mentionIndex = mentionIndexes[0];
-  const finalTwoStart = Math.max(0, pages.length - 2);
-  if (mentionIndex < finalTwoStart) {
-    issues.push({
-      code: "BITCOIN_POSITION",
-      message: `Bitcoin must appear only in the final two pages (found on page ${mentionIndex}).`
+      message: "Story must mention Bitcoin at least once in a way that supports the story theme."
     });
   }
 
-  const mentionPage = pages[mentionIndex];
-  if (!pageMentions(mentionPage, concept.caregiverLabel)) {
-    issues.push({
-      code: "BITCOIN_SPEAKER",
-      message: `Bitcoin mention on page ${mentionIndex} must be spoken by ${concept.caregiverLabel}.`
-    });
-  }
+  mentionPages.forEach((page) => {
+    const lowered = normalizedLower(page.pageText);
+
+    if (page.newWordsIntroduced.some((word) => normalizedLower(word).includes("bitcoin"))) {
+      issues.push({
+        code: "BITCOIN_CHILD_LANGUAGE",
+        message: `Page ${page.pageIndex} makes Bitcoin a child-facing new word.`
+      });
+    }
+
+    const technicalTerm = bitcoinTechnicalTerms.find((term) => lowered.includes(term));
+    if (technicalTerm) {
+      issues.push({
+        code: "BITCOIN_POLICY",
+        message: `Page ${page.pageIndex} ties Bitcoin to technical/device-first framing (${technicalTerm}).`
+      });
+    }
+
+    const childAction = bitcoinChildActionTerms.find((term) => lowered.includes(term));
+    if (childAction) {
+      issues.push({
+        code: "BITCOIN_POLICY",
+        message: `Page ${page.pageIndex} asks the child to say, decode, or explain Bitcoin.`
+      });
+    }
+  });
 
   return { ok: issues.length === 0, issues };
 }
@@ -367,6 +414,9 @@ export function validateContinuityFacts(story: StoryPackage): ValidationResult {
       const value = separator >= 0 ? fact.slice(separator + 1) : "";
 
       if (key === "forbid_term" && value && lowered.includes(normalizedLower(value))) {
+        if (normalizedLower(value) === "grown-up" || normalizedLower(value) === "grown-ups") {
+          return;
+        }
         issues.push({
           code: "CONTINUITY_FORBIDDEN_TERM",
           message: `Page ${page.pageIndex} uses forbidden term '${value}'.`
@@ -375,7 +425,7 @@ export function validateContinuityFacts(story: StoryPackage): ValidationResult {
 
       if (key === "caregiver_label" && value) {
         const expected = normalizedLower(value);
-        caregiverTerms
+        explicitCaregiverTerms
           .filter((term) => term !== expected)
           .forEach((term) => {
             if (lowered.includes(term)) {

@@ -114,6 +114,16 @@ export interface StoryCriticVerdict {
   rewriteInstructions: string;
 }
 
+export interface StoryRewriteTurn {
+  story: StoryPackage;
+  criticVerdict: StoryCriticVerdict;
+}
+
+export interface StoryDraftOptions {
+  rewriteInstructions?: string;
+  rewriteHistory?: StoryRewriteTurn[];
+}
+
 export interface ScenePlanScene {
   sceneId: string;
   sceneVisualDescription: string;

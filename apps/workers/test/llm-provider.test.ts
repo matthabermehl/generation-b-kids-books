@@ -53,12 +53,7 @@ const compliantBeatSheet = {
       bitcoinRelevanceScore: 0.1,
       introduces: ["price tag", "coin jar"],
       paysOff: [],
-      continuityFacts: [
-        "caregiver_label:Mom",
-        "deadline_event:Saturday game",
-        "forbid_term:grown-up",
-        "bitcoin_bridge_required:false"
-      ]
+      continuityFacts: ["caregiver_label:Mom", "deadline_event:Saturday game"]
     },
     {
       purpose: "Setback",
@@ -76,7 +71,6 @@ const compliantBeatSheet = {
       continuityFacts: [
         "caregiver_label:Mom",
         "deadline_event:Saturday game",
-        "forbid_term:grown-up",
         "count_target:12"
       ]
     },
@@ -96,7 +90,6 @@ const compliantBeatSheet = {
       continuityFacts: [
         "caregiver_label:Mom",
         "deadline_event:Saturday game",
-        "forbid_term:grown-up",
         "chosen_earning_option:rake leaves"
       ]
     },
@@ -109,16 +102,11 @@ const compliantBeatSheet = {
       emotionalTarget: "relieved",
       pageIndexEstimate: 3,
       decodabilityTags: ["controlled_vocab", "taught_words"],
-      newWordsIntroduced: ["bitcoin"],
+      newWordsIntroduced: ["plan"],
       bitcoinRelevanceScore: 0.9,
       introduces: [],
       paysOff: ["reach 12 coins", "buy the ball"],
-      continuityFacts: [
-        "caregiver_label:Mom",
-        "deadline_event:Saturday game",
-        "forbid_term:grown-up",
-        "bitcoin_bridge_required:true"
-      ]
+      continuityFacts: ["caregiver_label:Mom", "deadline_event:Saturday game"]
     }
   ]
 };
@@ -142,16 +130,11 @@ const oversizedBeatSheet = {
       emotionalTarget: "confident",
       pageIndexEstimate: 4,
       decodabilityTags: ["controlled_vocab"],
-      newWordsIntroduced: ["bitcoin"],
+      newWordsIntroduced: ["plan"],
       bitcoinRelevanceScore: 0.9,
       introduces: [],
       paysOff: ["reach 12 coins"],
-      continuityFacts: [
-        "caregiver_label:Mom",
-        "deadline_event:Saturday game",
-        "forbid_term:grown-up",
-        "bitcoin_bridge_required:true"
-      ]
+      continuityFacts: ["caregiver_label:Mom", "deadline_event:Saturday game"]
     }
   ]
 };
@@ -589,6 +572,79 @@ describe("llm provider routing", () => {
     expect(requestBody.response_format?.json_schema?.strict).toBe(true);
   });
 
+  it("passes prior story drafts and critic feedback back as structured rewrite history", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiStructuredResponse({
+        title: "Ava Saves for Later",
+        concept: compliantConcept,
+        beats: compliantBeatSheet.beats,
+        pages: compliantBeatSheet.beats.map((beat, index) => ({
+          pageIndex: index,
+          pageText: `Rewritten page ${index + 1}`,
+          illustrationBrief: beat.sceneLocation,
+          sceneId: beat.sceneId,
+          sceneVisualDescription: beat.sceneVisualDescription,
+          newWordsIntroduced: [],
+          repetitionTargets: ["save"]
+        }))
+      })
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    await provider.draftPages(context, compliantConcept, compliantBeatSheet, {
+      rewriteHistory: [
+        {
+          story: {
+            title: "Ava Saves for Later",
+            concept: compliantConcept,
+            beats: compliantBeatSheet.beats,
+            pages: compliantBeatSheet.beats.map((beat, index) => ({
+              pageIndex: index,
+              pageText: `Draft page ${index + 1}`,
+              illustrationBrief: beat.sceneLocation,
+              sceneId: beat.sceneId,
+              sceneVisualDescription: beat.sceneVisualDescription,
+              newWordsIntroduced: [],
+              repetitionTargets: ["save"]
+            })),
+            readingProfileId: context.profile,
+            moneyLessonKey: context.lesson
+          },
+          criticVerdict: {
+            ok: false,
+            issues: [
+              {
+                pageStart: 3,
+                pageEnd: 3,
+                issueType: "theme_integration",
+                severity: "hard",
+                rewriteTarget: "page",
+                evidence: "Bitcoin feels bolted on instead of tied to Ava's saving choice.",
+                suggestedFix: "Tie Bitcoin back to Ava's patient saving theme."
+              }
+            ],
+            rewriteInstructions:
+              "Rewrite the story so Bitcoin clearly supports Ava's saving theme while preserving the valid pages."
+          }
+        }
+      ]
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const messages = requestBody.messages ?? [];
+    expect(messages.map((message) => message.role)).toEqual(["system", "user", "assistant", "user"]);
+    expect(messages[2]?.content).toContain("\"title\":\"Ava Saves for Later\"");
+    expect(messages[3]?.content).toContain("The critic rejected the previous draft");
+    expect(messages[3]?.content).toContain("Rewrite the story so it satisfies the critic");
+    expect(messages[3]?.content).toContain("\"issueType\":\"theme_integration\"");
+  });
+
   it("uses legacy max_tokens for non-gpt-5 OpenAI models", async () => {
     const config = runtimeConfig(false);
     config.models.openaiJson = "gpt-4.1-mini";
@@ -630,7 +686,7 @@ describe("llm provider routing", () => {
     expect(openAiRequestBody.reasoning_effort).toBeUndefined();
   });
 
-  it("injects explicit numeric bitcoin constraints into rewrite prompts", async () => {
+  it("injects thematic Bitcoin rewrite guidance into beat rewrite prompts", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
     const fetchMock = vi
@@ -657,12 +713,12 @@ describe("llm provider routing", () => {
     };
     const rewritePrompt =
       rewriteRequestBody.messages?.find((message) => message.role === "user")?.content ?? "";
-    expect(rewritePrompt).toContain("bitcoinRelevanceScore >= 0.65");
-    expect(rewritePrompt).toContain("Only beats with index >=");
-    expect(rewritePrompt).toContain("Numeric Bitcoin constraints");
+    expect(rewritePrompt).toContain("Bitcoin policy constraints");
+    expect(rewritePrompt).toContain("positive thematic relevance");
+    expect(rewritePrompt).toContain("thematic salience");
     expect(rewritePrompt).toContain("3-7 profile guardrails");
     expect(rewritePrompt).toContain("digital jar");
-    expect(rewritePrompt).toContain("one brief adult/caregiver aside");
+    expect(rewritePrompt).toContain("caregiver or narrator language");
   });
 
   it("normalizes oversized beat sheets back to pageCount before deterministic checks", async () => {

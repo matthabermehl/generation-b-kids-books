@@ -3,6 +3,7 @@ import type {
   MoneyLessonKey,
   ReadingProfile,
   StoryConcept,
+  StoryDraftOptions,
   StoryCriticVerdict,
   StoryPackage
 } from "@book/domain";
@@ -19,14 +20,12 @@ import {
   buildStoryConceptSystemPrompt,
   buildScienceOfReadingCriticPrompt,
   criticVerdictJsonSchema,
-  computeBitcoinBeatTargets,
   runDeterministicBeatChecks,
   runDeterministicStoryChecks,
   schemaNames,
   storyConceptJsonSchema,
   storyCriticVerdictJsonSchema,
   storyPackageJsonSchema,
-  type BitcoinBeatTargets,
   type BeatDeterministicSummary,
   type CriticVerdict
 } from "@book/prompts";
@@ -117,7 +116,7 @@ export interface LlmProvider {
     context: StoryContext,
     concept: StoryConcept,
     beatSheet: BeatSheet,
-    rewriteInstructions?: string
+    options?: StoryDraftOptions
   ): Promise<{ story: StoryPackage; meta: LlmMetadata }>;
   critic(
     context: StoryContext,
@@ -452,6 +451,65 @@ function normalizeStoryCriticVerdict(verdict: StoryCriticVerdict): StoryCriticVe
   };
 }
 
+interface StructuredMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+function buildStoryRewriteFeedbackMessage(verdict: StoryCriticVerdict): string {
+  const hardIssues = verdict.issues.filter((issue) => issue.severity === "hard");
+  const softIssues = verdict.issues.filter((issue) => issue.severity === "soft");
+
+  return [
+    "The critic rejected the previous draft. Rewrite the story so it satisfies the critic while preserving the parts that already work.",
+    "Prior critic verdict JSON:",
+    JSON.stringify(verdict),
+    "",
+    "Rewrite priorities:",
+    `- Hard issues to fix first: ${hardIssues.length}.`,
+    `- Soft issues to improve when possible: ${softIssues.length}.`,
+    "- Preserve the story concept, reading level, and any valid continuity that was not criticized.",
+    "- Do not answer with commentary. Return a full revised StoryPackage JSON only."
+  ].join("\n");
+}
+
+function buildStoryDraftMessages(
+  context: StoryContext,
+  concept: StoryConcept,
+  beatSheet: BeatSheet,
+  options?: StoryDraftOptions
+): StructuredMessage[] {
+  const messages: StructuredMessage[] = [
+    {
+      role: "user",
+      content: buildPageWriterPrompt(context, concept, beatSheet, context.pageCount)
+    }
+  ];
+
+  for (const turn of options?.rewriteHistory ?? []) {
+    messages.push({
+      role: "assistant",
+      content: JSON.stringify(turn.story)
+    });
+    messages.push({
+      role: "user",
+      content: buildStoryRewriteFeedbackMessage(turn.criticVerdict)
+    });
+  }
+
+  if ((options?.rewriteHistory?.length ?? 0) === 0 && options?.rewriteInstructions?.trim()) {
+    messages.push({
+      role: "user",
+      content: [
+        "Revise the story to satisfy these rewrite instructions while preserving the valid parts of the existing brief:",
+        options.rewriteInstructions
+      ].join("\n")
+    });
+  }
+
+  return messages;
+}
+
 function normalizeStoryConcept(concept: StoryConcept): StoryConcept {
   const targetPrice = Math.max(1, Math.round(concept.targetPrice));
   const startingAmount = Math.max(0, Math.round(concept.startingAmount));
@@ -524,7 +582,6 @@ function collectBeatPlanningIssueSummary(
 
 function buildRewriteInstructions(
   attempt: BeatPlanningAttempt,
-  bitcoinTargets: BitcoinBeatTargets,
   context: StoryContext
 ): string {
   const earlyReader =
@@ -533,7 +590,6 @@ function buildRewriteInstructions(
     context.profile === "read_aloud_3_4" ||
     context.profile === "early_decoder_5_7" ||
     context.ageYears <= 7;
-  const finalTwentyPercentIndex = Math.floor(context.pageCount * 0.8);
   const failingCritics = attempt.critics.filter((critic) => hardCriticIssues(critic.verdict).length > 0);
   const deterministicLines = attempt.deterministic.issues.map(
     (issue) =>
@@ -554,14 +610,15 @@ function buildRewriteInstructions(
     "Apply the following fixes:",
     ...deterministicLines,
     ...criticLines,
-    "- Numeric Bitcoin constraints:",
-    `- Set exactly ${bitcoinTargets.minHighBeats}-${bitcoinTargets.maxHighBeats} beats to bitcoinRelevanceScore >= ${bitcoinTargets.highScoreThreshold}.`,
-    `- Only beats with index >= ${bitcoinTargets.allowedHighStartIndex} may have bitcoinRelevanceScore >= ${bitcoinTargets.highScoreThreshold}.`,
+    "- Bitcoin policy constraints:",
+    "- Ensure at least one beat clearly gives Bitcoin positive thematic relevance to the story's saving arc.",
+    "- Treat bitcoinRelevanceScore as thematic salience, not a late-stage quota.",
+    "- Bitcoin may recur across the story where it fits naturally, but it must stay grounded and secondary to the child's concrete actions.",
     ...(earlyReader
       ? [
-          "- Numeric SoR constraints:",
+          "- Science-of-Reading constraints:",
           "- Keep newWordsIntroduced length <= 2 for every beat.",
-          `- Introduce taught words like Bitcoin only at index >= ${finalTwentyPercentIndex}.`,
+          "- Do not make Bitcoin a child-facing newWordsIntroduced item or decoding target.",
           "- Avoid abstract economic jargon unless rewritten into concrete child-level wording."
         ]
       : []),
@@ -570,8 +627,8 @@ function buildRewriteInstructions(
           "- 3-7 profile guardrails:",
           "- Keep the child's decisive actions physical and observable: count coins, save, wait, choose, earn, compare prices, or buy a smaller item.",
           "- Do not use device-first or fintech-first plot mechanics such as tablet, app, digital jar, wallet, password, transfer, QR code, blockchain, or chart.",
-          "- Do not make Bitcoin the child's decoding target or a newWordsIntroduced item unless a validator explicitly requires it.",
-          "- If Bitcoin appears, keep it to one brief adult/caregiver aside in the final beats while the child-facing language stays concrete.",
+          "- Do not make Bitcoin the child's decoding target or a newWordsIntroduced item.",
+          "- If Bitcoin appears, keep it in caregiver or narrator language while the child-facing language stays concrete.",
           "- Use exact, countable price-change examples instead of supply-shock, market, scarcity, or volatility explanations."
         ]
       : []),
@@ -658,10 +715,8 @@ class MockLlmProvider implements LlmProvider {
           continuityFacts: [
             `caregiver_label:${concept.caregiverLabel}`,
             `deadline_event:${concept.deadlineEvent ?? "null"}`,
-            "forbid_term:grown-up",
             ...(idx === 1 ? [`count_target:${concept.targetPrice}`] : []),
-            ...(idx === 3 ? [`chosen_earning_option:${concept.earningOptions[0].label}`] : []),
-            ...(idx >= context.pageCount - 2 ? ["bitcoin_bridge_required:true"] : ["bitcoin_bridge_required:false"])
+            ...(idx === 3 ? [`chosen_earning_option:${concept.earningOptions[0].label}`] : [])
           ]
         };
       })
@@ -720,7 +775,8 @@ class MockLlmProvider implements LlmProvider {
   async draftPages(
     context: StoryContext,
     concept: StoryConcept,
-    beatSheet: BeatSheet
+    beatSheet: BeatSheet,
+    _options?: StoryDraftOptions
   ): Promise<{ story: StoryPackage; meta: LlmMetadata }> {
     const pages = beatSheet.beats.map((beat, idx) => ({
       pageIndex: idx,
@@ -791,7 +847,8 @@ class MockLlmProvider implements LlmProvider {
 
 interface StructuredCallInput<T> {
   stage: string;
-  prompt: string;
+  prompt?: string;
+  messages?: StructuredMessage[];
   systemPrompt: string;
   schemaName: string;
   jsonSchema: Record<string, unknown>;
@@ -799,6 +856,18 @@ interface StructuredCallInput<T> {
   maxTokens: number;
   openAiModel?: string;
   anthropicModel?: string;
+}
+
+function resolveStructuredMessages(input: Pick<StructuredCallInput<unknown>, "prompt" | "messages">): StructuredMessage[] {
+  if (input.messages && input.messages.length > 0) {
+    return input.messages;
+  }
+
+  if (input.prompt) {
+    return [{ role: "user", content: input.prompt }];
+  }
+
+  throw new Error("Structured call requires either prompt or messages.");
 }
 
 class OpenAiAnthropicProvider implements LlmProvider {
@@ -832,9 +901,8 @@ class OpenAiAnthropicProvider implements LlmProvider {
     context: StoryContext,
     concept: StoryConcept
   ): Promise<{ beatSheet: BeatSheet; audit: BeatPlanningAudit; meta: LlmMetadata }> {
-    const bitcoinTargets = computeBitcoinBeatTargets(context.pageCount);
     const plannerSystemPrompt = buildBeatPlannerSystemPrompt();
-    const plannerPrompt = buildBeatPlannerPrompt(context, concept, context.pageCount, bitcoinTargets);
+    const plannerPrompt = buildBeatPlannerPrompt(context, concept, context.pageCount);
 
     const planner = await this.callWithFallbackStructured<BeatSheet>({
       stage: "beat_planner",
@@ -905,8 +973,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
         context,
         JSON.stringify(concept),
         JSON.stringify(currentBeatSheet),
-        buildRewriteInstructions(attempts[attempt], bitcoinTargets, context),
-        bitcoinTargets
+        buildRewriteInstructions(attempts[attempt], context)
       );
 
       const rewrite = await this.callWithFallbackStructured<BeatSheet>({
@@ -932,15 +999,13 @@ class OpenAiAnthropicProvider implements LlmProvider {
     beatSheet: BeatSheet,
     rewriteInstructions: string
   ): Promise<{ beatSheet: BeatSheet; meta: LlmMetadata }> {
-    const bitcoinTargets = computeBitcoinBeatTargets(context.pageCount);
     const rewrite = await this.callWithFallbackStructured<BeatSheet>({
       stage: "beat_rewrite",
       prompt: buildBeatRewritePrompt(
         context,
         JSON.stringify(concept),
         JSON.stringify(beatSheet),
-        rewriteInstructions,
-        bitcoinTargets
+        rewriteInstructions
       ),
       systemPrompt: "You rewrite beat sheets precisely according to provided instructions.",
       schemaName: schemaNames.beatSheet,
@@ -990,12 +1055,11 @@ class OpenAiAnthropicProvider implements LlmProvider {
     context: StoryContext,
     concept: StoryConcept,
     beatSheet: BeatSheet,
-    rewriteInstructions = ""
+    options?: StoryDraftOptions
   ): Promise<{ story: StoryPackage; meta: LlmMetadata }> {
-    const prompt = buildPageWriterPrompt(context, concept, beatSheet, context.pageCount, rewriteInstructions);
     const result = await this.callWithFallbackStructured<z.infer<typeof storyPackageSchema>>({
       stage: "draft_pages",
-      prompt,
+      messages: buildStoryDraftMessages(context, concept, beatSheet, options),
       systemPrompt:
         "You write final story pages for children. Output only schema-valid structured data.",
       schemaName: schemaNames.storyPackage,
@@ -1134,12 +1198,14 @@ class OpenAiAnthropicProvider implements LlmProvider {
   private async callWithFallbackStructured<T>(
     input: StructuredCallInput<T>
   ): Promise<{ data: T; meta: LlmMetadata }> {
+    const messages = resolveStructuredMessages(input);
+
     if (this.openAiBypassReason) {
       const fallback = await this.withRetries("anthropic", input.stage, () =>
         this.callAnthropicStrict<T>({
           stage: input.stage,
           model: input.anthropicModel ?? this.config.models.anthropicWriter,
-          prompt: input.prompt,
+          messages,
           systemPrompt: input.systemPrompt,
           schemaName: input.schemaName,
           jsonSchema: input.jsonSchema,
@@ -1162,7 +1228,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
         this.callOpenAiStrict<T>({
           stage: input.stage,
           model: input.openAiModel ?? this.config.models.openaiJson,
-          prompt: input.prompt,
+          messages,
           systemPrompt: input.systemPrompt,
           schemaName: input.schemaName,
           jsonSchema: input.jsonSchema,
@@ -1189,7 +1255,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
         this.callAnthropicStrict<T>({
           stage: input.stage,
           model: input.anthropicModel ?? this.config.models.anthropicWriter,
-          prompt: input.prompt,
+          messages,
           systemPrompt: input.systemPrompt,
           schemaName: input.schemaName,
           jsonSchema: input.jsonSchema,
@@ -1264,7 +1330,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
   private async callOpenAiStrict<T>(input: {
     stage: string;
     model: string;
-    prompt: string;
+    messages: StructuredMessage[];
     systemPrompt: string;
     schemaName: string;
     jsonSchema: Record<string, unknown>;
@@ -1299,10 +1365,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
               role: "system",
               content: input.systemPrompt
             },
-            {
-              role: "user",
-              content: input.prompt
-            }
+            ...input.messages
           ]
         }),
         signal: controller.signal
@@ -1376,7 +1439,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
   private async callAnthropicStrict<T>(input: {
     stage: string;
     model: string;
-    prompt: string;
+    messages: StructuredMessage[];
     systemPrompt: string;
     schemaName: string;
     jsonSchema: Record<string, unknown>;
@@ -1400,12 +1463,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
           max_tokens: input.maxTokens,
           temperature: 0.3,
           system: input.systemPrompt,
-          messages: [
-            {
-              role: "user",
-              content: input.prompt
-            }
-          ],
+          messages: input.messages,
           tools: [
             {
               name: input.schemaName,

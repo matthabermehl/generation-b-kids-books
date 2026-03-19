@@ -37,9 +37,7 @@ describe("runDeterministicStoryChecks", () => {
     continuityFacts: [
       "caregiver_label:Mom",
       "deadline_event:Saturday game",
-      "forbid_term:grown-up",
-      ...(idx === 1 ? ["count_target:12"] : []),
-      ...(idx === 10 ? ["bitcoin_bridge_required:true"] : ["bitcoin_bridge_required:false"])
+      ...(idx === 1 ? ["count_target:12"] : [])
     ]
   }));
 
@@ -47,11 +45,13 @@ describe("runDeterministicStoryChecks", () => {
     const pages = Array.from({ length: 12 }, (_, idx) => ({
       pageIndex: idx,
       pageText:
-        idx === 10
-          ? `Mia counts one, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve.`
-          : idx === 11
-            ? `Mom says, "Bitcoin is one adult saving idea tied to your jar choice." Mia smiles and buys the soccer ball.`
-            : `Mia saves one coin after task ${idx + 1}.`,
+        idx === 2
+          ? `Mom said Bitcoin can be one way grown-ups save for later, too.`
+          : idx === 10
+            ? `Mia counted, "One, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve."`
+            : idx === 11
+              ? `Mom said the same patient saving theme can fit Bitcoin for grown-ups. Mia smiled and bought the soccer ball.`
+              : `Mia saves one coin after task ${idx + 1}.`,
       illustrationBrief: "Calm room scene",
       sceneId: `scene-${Math.floor(idx / 2) + 1}`,
       sceneVisualDescription: "Calm room scene with a small coin jar.",

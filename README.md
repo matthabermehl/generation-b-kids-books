@@ -114,13 +114,14 @@ Primary files:
 Story generation now runs as a staged pipeline:
 
 1. Beat planner generates strict `BeatSheet` JSON with structured beat fields.
-2. Deterministic beat checks enforce 80/20 timing, Montessori realism, and SoR planning heuristics.
+2. Deterministic beat checks enforce Montessori realism, SoR planning heuristics, and at least one positive Bitcoin-theme beat without late-only placement rules.
 3. Three strict critics (Montessori, SoR, narrative freshness) score beats.
 4. Surgical rewrite loop fixes only flagged beats.
 5. Final page writer uses Anthropic Opus 4.6 (hard-pinned) with strict schema output.
 6. Beat-plan lineage is persisted to `books/<bookId>/beat-plan.json` and recorded in `evaluations` (`stage='beat_plan'`).
 7. If beat planning fails after rewrites, failure lineage is persisted to `books/<bookId>/beat-plan-failed.json` before the workflow fails.
-8. Deterministic final-story checks now include low-variation/repetition detection so boilerplate page text cannot pass silently.
+8. Story drafting runs a recursive author/critic loop with rewrite history (`STORY_MAX_REWRITES`, default `2`) before falling back to manual `finalize_gate` review.
+9. Deterministic final-story checks now include low-variation/repetition detection plus lighter Bitcoin/caregiver validation so false positives do not block valid stories.
 
 ## Runtime Config Source
 

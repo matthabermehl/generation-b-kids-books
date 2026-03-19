@@ -25,7 +25,7 @@ Use this runbook to debug `order -> build -> ready` failures in dev for the AI c
   - Montessori critic,
   - Science-of-Reading critic.
 - Narrative freshness is advisory after max beat rewrites (warning/audit, not a hard block).
-- `prepare_story` does one final story draft + one final story critic pass.
+- `prepare_story` runs a bounded story draft/critic loop with rewrite history (`STORY_MAX_REWRITES`, default `2`).
 - `PipelineFunction` timeout is 5 minutes.
 
 ## Known Failure Signatures
@@ -52,7 +52,7 @@ Where to inspect:
 - `evaluations` row with `stage='beat_plan'`, verdict `fail`.
 
 Action:
-- Inspect deterministic issues first (count/ratio/position/SoR/Montessori).
+- Inspect deterministic issues first (theme integration/SoR/Montessori/counts).
 - Then inspect critic issues and rewrite lineage in the artifact.
 
 ### 3) `prepare_story` timeout
@@ -68,7 +68,7 @@ Where to inspect:
 
 Action:
 - If timeout occurs near story stage, check for unexpected extra drafts/loops.
-- Confirm current code path still performs single draft + critic.
+- Confirm `STORY_MAX_REWRITES` is set as expected and inspect `story-qa-report.json` attempt audit for loop growth.
 
 ## Operational Commands
 
@@ -107,4 +107,3 @@ AWS_PROFILE=personal AWS_REGION=us-east-1 aws s3 cp \
 - Pipeline `RequestId`.
 - `beat-plan.json` or `beat-plan-failed.json` path.
 - Output PDF path (`books/<bookId>/render/book.pdf`) for successful runs.
-
