@@ -65,8 +65,8 @@ export function CreateOrderPage() {
   return (
     <main className="sw-page sw-container mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
       <section className="sw-split grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
-        <Card className="sw-panel sw-panel--tinted border-border/70 bg-white/95">
-          <CardHeader className="sw-page-intro space-y-3">
+        <Card className="sw-panel sw-panel--tinted border-border/70 bg-white/95 py-8">
+          <CardHeader className="sw-page-intro space-y-3 px-8">
             <div className="sw-eyebrow inline-flex items-center gap-2 text-sm font-medium text-slate-500">
               <UserRound className="size-4" />
               Step 1 of 3
@@ -76,7 +76,7 @@ export function CreateOrderPage() {
               Capture the child details once, then lock in the illustration reference before the checkout step.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm text-slate-600">
+          <CardContent className="space-y-4 px-8 text-sm text-slate-600">
             <div className="sw-list space-y-3">
               <div className="sw-list-item flex items-center gap-3">
                 <div className="sw-list-index flex size-8 items-center justify-center rounded-full bg-slate-100 text-slate-700">1</div>
@@ -119,8 +119,8 @@ export function CreateOrderPage() {
           </CardContent>
         </Card>
 
-        <Card className="sw-panel border-border/70 bg-white/95 shadow-sm">
-          <CardHeader>
+        <Card className="sw-panel border-border/70 bg-white/95 py-8 shadow-sm">
+          <CardHeader className="px-8">
             <h2 className="text-lg font-semibold text-slate-950">Order details</h2>
             <CardDescription>
               {isCharacterFlowActive
@@ -128,7 +128,7 @@ export function CreateOrderPage() {
                 : "These details stay in the current session until the order is submitted."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-5">
+          <CardContent className="grid gap-5 px-8">
             {error ? (
               <Alert variant="destructive">
                 <AlertTitle>Unable to continue</AlertTitle>
@@ -240,7 +240,7 @@ export function CreateOrderPage() {
             </div>
 
             {!hasActiveOrder ? (
-              <div className="sw-action-bar flex flex-col gap-3 border-t border-border/80 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="sw-action-bar flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
                 <Button variant="outline" asChild>
                   <Link to="/">Back</Link>
                 </Button>
@@ -255,8 +255,8 @@ export function CreateOrderPage() {
       </section>
 
       {isCharacterFlowActive ? (
-        <Card className="sw-panel border-border/70 bg-white/95 shadow-sm">
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <Card className="sw-panel border-border/70 bg-white/95 py-8 shadow-sm">
+          <CardHeader className="flex flex-col gap-3 px-8 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>Character approval</CardTitle>
               <CardDescription>
@@ -267,7 +267,7 @@ export function CreateOrderPage() {
               {characterState?.generationCount ?? 0} / {characterState?.maxGenerations ?? 10} generations used
             </div>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-5 px-8">
             {hasApprovedCharacter && characterState?.selectedCharacterImageUrl ? (
               <Alert>
                 <CheckCircle2 className="size-4" />
@@ -344,7 +344,7 @@ export function CreateOrderPage() {
               </div>
             )}
 
-            <div className="sw-action-bar flex flex-col gap-3 border-t border-border/80 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="sw-action-bar flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <Button variant="outline" asChild>
                 <Link to="/">Back</Link>
               </Button>
