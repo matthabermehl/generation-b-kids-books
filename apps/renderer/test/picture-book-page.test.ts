@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { compositionForTemplate, fitTextToBox as sharedFitTextToBox } from "@book/domain";
+import {
+  compositionForTemplate,
+  fitTextToBox as sharedFitTextToBox,
+  insetPixelRect,
+  rightPageGutterSafeRect
+} from "@book/domain";
 import { fitTextToBox, renderPictureBookPreview, type PageCompositionSpec } from "../src/templates/picture-book-page.js";
 
 const composition: PageCompositionSpec = compositionForTemplate("text_left_art_right_v1", "early_decoder_5_7");
@@ -10,6 +15,10 @@ She held her jar tight.
 "But if I spend a coin on a treat, I will have less for my night-light."
 Ava looked at her coins.
 Spend now, or save for later?`;
+
+function luminance(r: number, g: number, b: number): number {
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
 
 describe("picture book renderer", () => {
   it("renders a landscape spread preview plus separate left and right page images", async () => {
@@ -77,5 +86,31 @@ describe("picture book renderer", () => {
 
     expect(rendered.textFit).toEqual(sharedFit);
     expect(rendered.textFit.ok).toBe(true);
+  });
+
+  it("keeps the right-page gutter strip white in rendered previews", async () => {
+    const art = await sharp({
+      create: { width: 2048, height: 2048, channels: 4, background: { r: 140, g: 152, b: 170, alpha: 1 } }
+    })
+      .png()
+      .toBuffer();
+
+    const rendered = await renderPictureBookPreview({
+      artBytes: art,
+      text: "Mia keeps saving for the bike she wants.",
+      composition
+    });
+    const gutterRect = insetPixelRect(rightPageGutterSafeRect(composition), 24, composition.canvas);
+    const { data, info } = await sharp(rendered.rightPagePng).extract(gutterRect).ensureAlpha().raw().toBuffer({
+      resolveWithObject: true
+    });
+    let occupiedPixels = 0;
+    for (let index = 0; index < data.length; index += info.channels) {
+      if (luminance(data[index] ?? 255, data[index + 1] ?? 255, data[index + 2] ?? 255) < 0.96) {
+        occupiedPixels += 1;
+      }
+    }
+
+    expect(occupiedPixels).toBe(0);
   });
 });

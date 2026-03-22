@@ -33,6 +33,9 @@ const textLayoutIssues = new Set(["text_overflow"]);
 const gutterSafetyIssues = new Set(["gutter_intrusion", "gutter_low_luminance", "gutter_high_edge_density"]);
 export { fitTextToBox };
 
+const gutterOccupancyLuminanceThreshold = 0.96;
+const gutterOccupancyRatioThreshold = 0.015;
+
 function luminance(r: number, g: number, b: number): number {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }
@@ -94,7 +97,9 @@ export async function evaluatePictureBookPage(
     const b = gutterSample.data[i + 2] ?? 255;
     const lum = luminance(r, g, b);
     luminances.push(lum);
-    if (lum < 0.97) {
+    // Treat only clearly visible pigment as gutter occupancy. Very light paper wash
+    // is acceptable and should be caught by the darker/edge checks only if it becomes substantial.
+    if (lum < gutterOccupancyLuminanceThreshold) {
       occupiedPixels += 1;
     }
 
@@ -125,7 +130,7 @@ export async function evaluatePictureBookPage(
   if (gutterEdgeDensity > 0.03) {
     issues.push("gutter_high_edge_density");
   }
-  if (gutterOccupancyRatio > 0.015) {
+  if (gutterOccupancyRatio > gutterOccupancyRatioThreshold) {
     issues.push("gutter_intrusion");
   }
 

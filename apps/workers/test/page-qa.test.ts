@@ -72,6 +72,38 @@ describe("picture book page qa", () => {
     expect(result.issues).toContain("gutter_intrusion");
   });
 
+  it("allows a faint watercolor wash in the gutter margin", async () => {
+    const page = await sharp({
+      create: { width: 2048, height: 2048, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: { width: 980, height: 980, channels: 4, background: { r: 187, g: 208, b: 221, alpha: 1 } }
+          })
+            .png()
+            .toBuffer(),
+          left: 760,
+          top: 420
+        },
+        {
+          input: await sharp({
+            create: { width: 180, height: 1200, channels: 4, background: { r: 215, g: 188, b: 150, alpha: 0.14 } }
+          })
+            .png()
+            .toBuffer(),
+          left: 40,
+          top: 400
+        }
+      ])
+      .png()
+      .toBuffer();
+
+    const result = await evaluatePictureBookPage(page, composition, "Mia counts coins on the kitchen table.");
+    expect(result.passed).toBe(true);
+    expect(result.issues).not.toContain("gutter_intrusion");
+  });
+
   it("flags weak art when the painted area does not fill enough of the right-page art box", async () => {
     const page = await sharp({
       create: { width: 2048, height: 2048, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
