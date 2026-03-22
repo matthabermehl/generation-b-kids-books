@@ -306,3 +306,27 @@ Evidence:
 - `bash scripts/agent/quality.sh` => PASS
 Notes: `story-qa-report.json` now records attempt-level rewrite lineage and final pass vs review status. Docs were updated to remove the old 80/20 late-Bitcoin rule and describe the recursive story-review flow.
 Commit: pending
+
+2026-03-22T17:20:15-0400
+Task: visual-continuity-hardening-plan
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: created branch `codex/visual-continuity-hardening`, updated `beforebranch.md` for the new continuity initiative, added active execution plan `docs/exec-plans/active/002-visual-continuity-hardening.md`, appended five harness tasks covering prompt hardening, identity anchors, QA, deploy validation, and final sample-book download, and refreshed `.agent/current_task.md` to the first prompt-hardening slice.
+Evidence:
+- `git switch -c codex/visual-continuity-hardening` => PASS
+- `bash scripts/agent/smoke.sh` => PASS
+- `scripts/agent/feature_list.py list --limit 20` => showed existing open task inventory before reprioritization
+Notes: the final sample-book artifact remains a planned exit criterion and is intentionally not yet claimed.
+Commit: pending
+
+2026-03-22T18:10:35-0400
+Task: visual-continuity-style-prompts-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: added the shared watercolor style guide plus explicit identity-lock wording to supporting-character reference prompts, added page-art guardrails for no new prominent humans and no style-outlier extras while still allowing low-salience incidental people when scene semantics require them, and locked the new wording with domain and worker pipeline prompt tests.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `visual-continuity-style-prompts-01` passes=false -> true
+Next: `visual-identity-anchors-01`
+Notes: prompt hardening is landed without changing the visual-QA schema yet; the later `visual-style-outlier-qa-01` slice still needs to teach QA about style-outlier extras explicitly.
+Commit: pending

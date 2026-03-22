@@ -7,6 +7,7 @@ import type {
   VisualStateConstraint,
   VisualStoryBible
 } from "./types.js";
+import { watercolorStyleGuide } from "./image-prompts.js";
 
 const numberWords = new Map<string, number>([
   ["zero", 0],
@@ -474,10 +475,14 @@ export function buildSupportingCharacterReferencePrompt(entity: VisualEntity): s
     "Anchors:",
     entity.anchors.join(", ") || entity.label,
     "",
+    "Style:",
+    watercolorStyleGuide,
+    "",
     "Composition:",
     "Create one full-body supporting character portrait on bright white paper with generous breathing room.",
     "",
     "Constraints:",
+    "Keep the same visible identity anchors, face, hair, outfit palette, and proportions whenever this character reappears later in the book.",
     "Keep the background plain white or a minimal wash.",
     "No text, no logos, no frame, and no extra props unless directly required by the description."
   ].join("\n");

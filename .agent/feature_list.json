@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-19T02:53:52Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-22T22:07:19Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -85,7 +85,7 @@
   },
   {
     "id": "live-character-generation-timeout-01",
-    "priority": 1,
+    "priority": 2,
     "category": "integration",
     "description": "Make deployed character candidate generation complete reliably within the live parent approval flow budget",
     "steps": [
@@ -190,5 +190,65 @@
     ],
     "passes": true,
     "evidence": "Replaced the obsolete Fal-focused failing task with four concrete OpenAI image-pipeline tasks in .agent/feature_list.json on 2026-03-15."
+  },
+  {
+    "id": "visual-continuity-style-prompts-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Strengthen supporting-reference and page-art prompts so recurring humans stay on-style and incidental humans cannot become prominent style outliers",
+    "steps": [
+      "Add the shared watercolor style-guide text to supporting-character reference prompts and thread any needed identity/style clauses into the prompt builder",
+      "Add page-art prompt guardrails for no new prominent humans, no style-outlier extras, and style-matched incidental humans, then lock the behavior with targeted prompt tests"
+    ],
+    "passes": true,
+    "evidence": "Added supporting-reference watercolor style guidance plus page-art guardrails for new prominent humans and style-outlier extras. Verification 2026-03-22: pnpm --filter @book/domain test (PASS); pnpm --filter @book/workers test (PASS); bash scripts/agent/quality.sh (PASS)."
+  },
+  {
+    "id": "visual-identity-anchors-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Lock visible identity anchors for recurring humans and generate their references eagerly once the visual bible is known",
+    "steps": [
+      "Extend visual continuity entities/artifacts with locked identity anchors for recurring humans and thread the anchors into page job provenance",
+      "Move recurring supporting-human reference generation to an eager pre-page-art phase and cover the new lifecycle with worker and domain tests"
+    ],
+    "passes": false,
+    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; implementation not started."
+  },
+  {
+    "id": "visual-style-outlier-qa-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Teach visual QA to fail pages that introduce style-discordant incidental humans or other visually prominent extras outside the book language",
+    "steps": [
+      "Add `style_outlier_extra` to the QA schema, normalization, and review prompt contract",
+      "Feed recurring-human reference and identity-anchor context into QA and add regression tests for style-outlier detections versus harmless background extras"
+    ],
+    "passes": false,
+    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; implementation not started."
+  },
+  {
+    "id": "visual-continuity-deploy-smoke-01",
+    "priority": 2,
+    "category": "integration",
+    "description": "Deploy the continuity hardening to dev and prove the live picture-book flow still completes through the new prompt and QA constraints",
+    "steps": [
+      "Run local smoke/quality plus targeted package tests, then deploy dev with `pnpm cdk:deploy:dev`",
+      "Rerun provider and picture-book smoke for both 3-7 profiles, capturing `.agent/artifacts/picture-book-smoke-*.json` and any blocking live issues"
+    ],
+    "passes": false,
+    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; live validation pending."
+  },
+  {
+    "id": "visual-sample-book-download-01",
+    "priority": 2,
+    "category": "integration",
+    "description": "Finish the initiative with a successful dev sample book and a downloaded PDF artifact that demonstrates the continuity hardening",
+    "steps": [
+      "Produce a successful sample book build after the continuity changes are deployed and validated",
+      "Download the rendered PDF and store it with smoke metadata under `.agent/artifacts/visual-continuity-hardening/`"
+    ],
+    "passes": false,
+    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; sample-book artifact not yet produced."
   }
 ]

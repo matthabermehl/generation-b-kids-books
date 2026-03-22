@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPageArtPrompt,
   buildPageArtVisualGuidance,
+  buildSupportingCharacterReferencePrompt,
   buildVisualStoryBible,
   extractExactCountConstraints,
   extractStateConstraints,
@@ -120,6 +121,24 @@ describe("visual continuity builders", () => {
     );
   });
 
+  it("adds style-guide and locked-identity language to supporting reference prompts", () => {
+    const visualBible = buildVisualStoryBible({
+      bookId: "book-1",
+      title: story.title,
+      childFirstName: "Ava",
+      story,
+      generatedAt: "2026-03-17T12:00:00.000Z"
+    });
+
+    const mom = visualBible.entities.find((entity) => entity.entityId === "supporting_character_mom");
+    expect(mom).toBeDefined();
+
+    const prompt = buildSupportingCharacterReferencePrompt(mom!);
+    expect(prompt).toContain("Style:");
+    expect(prompt).toContain("Detailed children's book watercolor illustration on bright white paper.");
+    expect(prompt).toContain("Keep the same visible identity anchors, face, hair, outfit palette, and proportions");
+  });
+
   it("renders structured visual guidance into the page art prompt", () => {
     const prompt = buildPageArtPrompt({
       pageText: "Ava and Mom count 4 coins by the jar.",
@@ -141,5 +160,8 @@ describe("visual continuity builders", () => {
     expect(prompt).toContain("Must not show:");
     expect(prompt).toContain("Setting anchors:");
     expect(prompt).toContain("Continuity notes:");
+    expect(prompt).toContain("Human continuity:");
+    expect(prompt).toContain("new prominent humans");
+    expect(prompt).toContain("style-outlier extras");
   });
 });

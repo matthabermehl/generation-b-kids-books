@@ -22,6 +22,7 @@ const interestTags = (process.env.INTEREST_TAGS ?? "soccer,baking,space")
 const region = process.env.AWS_REGION ?? "us-east-1";
 const prefix = process.env.SSM_PREFIX ?? "/ai-childrens-book/dev";
 const stackName = process.env.STACK_NAME ?? "AiChildrensBookDevStack";
+const smokeTimeoutMinutes = Number(process.env.SMOKE_TIMEOUT_MINUTES ?? "30");
 
 if (!apiBaseUrl) {
   throw new Error("API_BASE_URL is required");
@@ -29,6 +30,10 @@ if (!apiBaseUrl) {
 
 if (!["read_aloud_3_4", "early_decoder_5_7"].includes(readingProfileId)) {
   throw new Error(`Unsupported READING_PROFILE_ID=${readingProfileId}`);
+}
+
+if (!Number.isFinite(smokeTimeoutMinutes) || smokeTimeoutMinutes <= 0) {
+  throw new Error(`Unsupported SMOKE_TIMEOUT_MINUTES=${process.env.SMOKE_TIMEOUT_MINUTES ?? "30"}`);
 }
 
 const ssm = new SSMClient({ region });
@@ -120,7 +125,7 @@ async function sleep(ms) {
 }
 
 async function waitForTerminal(orderId, token) {
-  const timeoutAt = Date.now() + 20 * 60_000;
+  const timeoutAt = Date.now() + smokeTimeoutMinutes * 60_000;
   while (Date.now() < timeoutAt) {
     const status = await get(`/v1/orders/${orderId}`, token);
     console.log(`order=${orderId} status=${status.status} bookStatus=${status.bookStatus}`);
@@ -130,7 +135,7 @@ async function waitForTerminal(orderId, token) {
     await sleep(10_000);
   }
 
-  throw new Error(`Timed out waiting for order ${orderId} to reach a terminal state`);
+  throw new Error(`Timed out waiting for order ${orderId} to reach a terminal state after ${smokeTimeoutMinutes} minutes`);
 }
 
 function fieldValue(field) {

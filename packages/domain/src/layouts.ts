@@ -180,6 +180,20 @@ export function rightPageGutterSafeRect(composition: PageCompositionSpec): Pixel
   };
 }
 
+export function rightPageFadeMaskSvg(composition: PageCompositionSpec): string {
+  const rect = rightPageMaskRect(composition);
+  const blur = Math.max(8, Math.round(composition.rightPage.fade.featherPx / 2));
+  const shape =
+    composition.rightPage.fade.shape === "soft_band"
+      ? `<rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" rx="72" ry="72" fill="white" filter="url(#blur)" />`
+      : `<ellipse cx="${rect.left + rect.width / 2}" cy="${rect.top + rect.height / 2}" rx="${rect.width / 2}" ry="${rect.height / 2}" fill="white" filter="url(#blur)" />`;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${composition.canvas.width}" height="${composition.canvas.height}" viewBox="0 0 ${composition.canvas.width} ${composition.canvas.height}">
+    <defs><filter id="blur"><feGaussianBlur stdDeviation="${blur}" /></filter></defs>
+    ${shape}
+  </svg>`;
+}
+
 export function selectPageComposition(input: {
   bookId: string;
   pageIndex: number;

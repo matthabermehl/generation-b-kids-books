@@ -8,6 +8,13 @@ export const watercolorStyleGuide = [
   "Warm, observant, emotionally grounded, and richly illustrated rather than flat or cartoony."
 ].join(" ");
 
+const incidentalHumanContinuityRules = [
+  "Do not introduce any new prominent humans unless the page contract explicitly requires them.",
+  "If the scene naturally needs background people, keep them sparse, distant, and low-salience so they never compete with the story-critical characters.",
+  "All incidental humans must match the same watercolor realism, palette, brushwork, and lighting as the rest of the book.",
+  "No style-outlier extras: avoid anime, comics, glossy 3D, photoreal, or any other figure treatment that breaks the established picture-book language."
+];
+
 function cleanPromptSection(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -104,6 +111,9 @@ export function buildPageArtPrompt(input: {
     "",
     "Style:",
     watercolorStyleGuide,
+    "",
+    "Human continuity:",
+    ...incidentalHumanContinuityRules,
     "",
     "Layout intent:",
     "This spread uses a text-only left page and an illustration-only right page.",
