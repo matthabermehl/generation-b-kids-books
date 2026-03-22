@@ -849,6 +849,8 @@ describe("pipeline beat-planning failure persistence", () => {
     expect(message.brief?.supportingCharacterReferenceUrls).toEqual(["https://example.com/supporting-mom.png"]);
     expect(message.brief?.pageArtPrompt).toContain("Show exactly:");
     expect(message.brief?.pageArtPrompt).toContain("Must not show:");
+    expect(message.brief?.pageArtPrompt).toContain("new prominent humans");
+    expect(message.brief?.pageArtPrompt).toContain("style-outlier extras");
   });
 
   it("rejects render preparation when a ready page image is missing its S3 url", async () => {
