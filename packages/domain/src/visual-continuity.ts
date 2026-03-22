@@ -3,6 +3,7 @@ import type {
   StoryPackage,
   VisualCountConstraint,
   VisualEntity,
+  VisualIdentityAnchor,
   VisualPageContract,
   VisualStateConstraint,
   VisualStoryBible
@@ -68,6 +69,20 @@ function slugify(value: string): string {
 
 function unique<T>(values: T[]): T[] {
   return Array.from(new Set(values));
+}
+
+function uniqueIdentityAnchors(values: VisualIdentityAnchor[]): VisualIdentityAnchor[] {
+  const seen = new Set<string>();
+  const result: VisualIdentityAnchor[] = [];
+  for (const anchor of values) {
+    const key = `${anchor.trait}::${anchor.value}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(anchor);
+  }
+  return result;
 }
 
 function normalizeSpace(value: string): string {
@@ -227,6 +242,74 @@ function supportingCharacterDescription(label: string, caregiverLabel: string): 
   return `${label} is a recurring supporting character who should keep the same face, hair, outfit colors, and proportions whenever they appear.`;
 }
 
+function buildMainCharacterIdentityAnchors(childFirstName: string): VisualIdentityAnchor[] {
+  return [
+    {
+      trait: "reference",
+      value: `Use the approved ${childFirstName} reference as the source of truth for face, hair, skin tone, outfit palette, and proportions.`
+    }
+  ];
+}
+
+function buildSupportingCharacterIdentityAnchors(label: string, caregiverLabel: string): VisualIdentityAnchor[] {
+  const lowered = label.toLowerCase();
+
+  if (label === caregiverLabel) {
+    return [
+      { trait: "role", value: "same calm caregiver adult across every page" },
+      { trait: "features", value: "same face shape, hair, and overall proportions whenever this caregiver appears" },
+      { trait: "expression", value: "gentle, reassuring expression" },
+      { trait: "wardrobe", value: "practical everyday clothes with a consistent outfit palette" }
+    ];
+  }
+
+  if (lowered === "teacher") {
+    return [
+      { trait: "role", value: "same warm classroom teacher whenever this adult appears" },
+      { trait: "features", value: "consistent face, hair, and adult proportions" },
+      { trait: "wardrobe", value: "classroom-ready clothes with a stable palette and silhouette" }
+    ];
+  }
+
+  if (lowered === "coach") {
+    return [
+      { trait: "role", value: "same friendly coach whenever this adult appears" },
+      { trait: "features", value: "consistent face, hair, and adult proportions" },
+      { trait: "wardrobe", value: "simple sporty clothes with a consistent palette and silhouette" }
+    ];
+  }
+
+  if (lowered === "friend") {
+    return [
+      { trait: "role", value: "same child friend whenever they reappear" },
+      { trait: "features", value: "consistent child face, hair, and proportions" },
+      { trait: "wardrobe", value: "stable outfit colors and recognizable silhouette" }
+    ];
+  }
+
+  if (lowered === "cashier" || lowered === "shopkeeper" || lowered === "clerk") {
+    return [
+      { trait: "role", value: "same friendly shop helper whenever this adult reappears" },
+      { trait: "features", value: "consistent face, hair, and adult proportions" },
+      { trait: "wardrobe", value: "simple store clothes with stable colors and silhouette" }
+    ];
+  }
+
+  return [
+    { trait: "identity", value: `${label} should read as the same recurring person whenever they appear` },
+    { trait: "features", value: "keep the same face shape, hair, and overall proportions across pages" },
+    { trait: "wardrobe", value: "keep a consistent outfit palette and recognizable silhouette" }
+  ];
+}
+
+function renderIdentityAnchors(identityAnchors: VisualIdentityAnchor[] | undefined): string | null {
+  if (!identityAnchors || identityAnchors.length === 0) {
+    return null;
+  }
+
+  return identityAnchors.map((anchor) => `${anchor.trait}: ${anchor.value}`).join("; ");
+}
+
 function ensureEntity(
   entities: Map<string, VisualEntity>,
   entity: VisualEntity
@@ -236,6 +319,7 @@ function ensureEntity(
     existing.pageIndices = unique([...existing.pageIndices, ...entity.pageIndices]).sort((left, right) => left - right);
     existing.sceneIds = unique([...existing.sceneIds, ...entity.sceneIds]).sort();
     existing.anchors = unique([...existing.anchors, ...entity.anchors]).slice(0, 8);
+    existing.identityAnchors = uniqueIdentityAnchors([...(existing.identityAnchors ?? []), ...(entity.identityAnchors ?? [])]);
     if (!existing.description && entity.description) {
       existing.description = entity.description;
     }
@@ -262,6 +346,7 @@ function propEntityFromLabel(label: string, pageIndex: number, sceneId: string):
     label: normalized,
     description: `Keep the ${normalized} visually recognizable and consistent whenever it matters to the story.`,
     anchors: [normalized],
+    identityAnchors: [],
     pageIndices: [pageIndex],
     sceneIds: [sceneId],
     importance: "story_critical",
@@ -286,6 +371,7 @@ export function buildVisualStoryBible(input: {
     label: input.childFirstName,
     description: `Use the approved ${input.childFirstName} character reference for face, hair, outfit colors, and proportions.`,
     anchors: [input.childFirstName.toLowerCase()],
+    identityAnchors: buildMainCharacterIdentityAnchors(input.childFirstName),
     pageIndices: input.story.pages.map((page) => page.pageIndex),
     sceneIds: input.story.pages.map((page) => page.sceneId),
     importance: "story_critical",
@@ -320,6 +406,7 @@ export function buildVisualStoryBible(input: {
       label: page.sceneId,
       description: page.sceneVisualDescription,
       anchors: settingAnchors,
+      identityAnchors: [],
       pageIndices: [page.pageIndex],
       sceneIds: [page.sceneId],
       importance: "story_critical",
@@ -338,6 +425,7 @@ export function buildVisualStoryBible(input: {
         label,
         description: supportingCharacterDescription(label, input.story.concept.caregiverLabel),
         anchors: [label.toLowerCase()],
+        identityAnchors: buildSupportingCharacterIdentityAnchors(label, input.story.concept.caregiverLabel),
         pageIndices: [page.pageIndex],
         sceneIds: [page.sceneId],
         importance: label === input.story.concept.caregiverLabel ? "story_critical" : "supporting",
@@ -442,7 +530,12 @@ export function buildPageArtVisualGuidance(
   const mustShow = pageContract.requiredCharacterIds
     .map((entityId) => entityById.get(entityId))
     .filter((entity): entity is VisualEntity => Boolean(entity))
-    .map((entity) => `${entity.label}: ${entity.description}`)
+    .map((entity) => {
+      const identityAnchorSummary = renderIdentityAnchors(entity.identityAnchors);
+      return identityAnchorSummary
+        ? `${entity.label}: ${entity.description} Locked identity anchors: ${identityAnchorSummary}.`
+        : `${entity.label}: ${entity.description}`;
+    })
     .concat(
       pageContract.requiredPropIds
         .map((entityId) => entityById.get(entityId))
@@ -450,9 +543,16 @@ export function buildPageArtVisualGuidance(
         .map((entity) => `${entity.label}: ${entity.description}`)
     );
 
-  const mustMatch = pageContract.stateConstraints.map(
-    (constraint) => `${constraint.label} is ${constraint.state}`
-  );
+  const mustMatch = pageContract.stateConstraints
+    .map((constraint) => `${constraint.label} is ${constraint.state}`)
+    .concat(
+      pageContract.requiredCharacterIds
+        .map((entityId) => entityById.get(entityId))
+        .filter((entity): entity is VisualEntity => Boolean(entity))
+        .flatMap((entity) =>
+          (entity.identityAnchors ?? []).map((anchor) => `${entity.label} ${anchor.trait}: ${anchor.value}`)
+        )
+    );
   const showExactly = pageContract.exactCountConstraints.map(
     (constraint) => `${constraint.quantity} ${constraint.label}${constraint.quantity === 1 ? "" : "s"}`
   );
@@ -468,6 +568,8 @@ export function buildPageArtVisualGuidance(
 }
 
 export function buildSupportingCharacterReferencePrompt(entity: VisualEntity): string {
+  const identityAnchors = entity.identityAnchors ?? [];
+
   return [
     "Character:",
     `${entity.label}. ${entity.description}`,
@@ -475,6 +577,13 @@ export function buildSupportingCharacterReferencePrompt(entity: VisualEntity): s
     "Anchors:",
     entity.anchors.join(", ") || entity.label,
     "",
+    ...(identityAnchors.length > 0
+      ? [
+          "Locked identity anchors:",
+          ...identityAnchors.map((anchor) => `- ${anchor.trait}: ${anchor.value}`),
+          ""
+        ]
+      : []),
     "Style:",
     watercolorStyleGuide,
     "",

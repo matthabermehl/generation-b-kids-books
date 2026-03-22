@@ -168,12 +168,18 @@ export type VisualReferenceStrategy =
   | "prompt_only"
   | "scene_anchor";
 
+export interface VisualIdentityAnchor {
+  trait: string;
+  value: string;
+}
+
 export interface VisualEntity {
   entityId: string;
   kind: VisualEntityKind;
   label: string;
   description: string;
   anchors: string[];
+  identityAnchors?: VisualIdentityAnchor[];
   pageIndices: number[];
   sceneIds: string[];
   importance: VisualEntityImportance;
@@ -233,6 +239,7 @@ export type VisualQaIssueCode =
   | "prop_state_mismatch"
   | "setting_anchor_mismatch"
   | "forbidden_extra_entity"
+  | "style_outlier_extra"
   | "low_confidence";
 
 export interface VisualQaIssue {

@@ -330,3 +330,38 @@ Feature toggle: `visual-continuity-style-prompts-01` passes=false -> true
 Next: `visual-identity-anchors-01`
 Notes: prompt hardening is landed without changing the visual-QA schema yet; the later `visual-style-outlier-qa-01` slice still needs to teach QA about style-outlier extras explicitly.
 Commit: pending
+
+2026-03-22T18:41:33-0400
+Task: visual-identity-anchors-01 / visual-style-outlier-qa-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: added first-class recurring-human identity anchors in the continuity domain model, threaded them into supporting-reference prompts plus page-job provenance, generated recurring supporting-character references eagerly when the visual bible is created or loaded, extended visual QA with `style_outlier_extra`, and added direct workers coverage for the new QA request/response contract.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `pnpm --filter @book/api test` => PASS
+- `pnpm --filter @book/renderer test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle:
+- `visual-identity-anchors-01` passes=false -> true
+- `visual-style-outlier-qa-01` passes=false -> true
+Next: `visual-continuity-deploy-smoke-01`
+Notes: live validation and the final PDF artifact are still pending; the remaining risk is whether the shared dev stack still hits the known character-generation timeout during end-to-end smoke.
+Commit: pending
+
+2026-03-22T19:35:09-0400
+Task: visual-continuity-deploy-smoke-01 / visual-sample-book-download-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: deployed the continuity hardening to dev, validated provider connectivity plus both live picture-book smoke profiles against the deployed API, confirmed both books reached `ready` with 12/12 previews and no recorded QA issues, downloaded the successful sample PDF, copied both smoke JSON artifacts under `.agent/artifacts/visual-continuity-hardening/`, and refreshed the stale live character-timeout risk with same-session evidence.
+Evidence:
+- `pnpm cdk:deploy:dev` => UPDATE_COMPLETE
+- `pnpm ops:provider-smoke` => PASS
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 pnpm ops:picture-book-smoke` => PASS (`.agent/artifacts/picture-book-smoke-2026-03-22T22-48-33.417Z.json`, order `fa69c0f1-7b4c-4ff3-b4d6-2ff1963e82d9`, book `13be7515-7b4a-4965-9929-8c391179fa33`, previews `12/12`, `qaIssuePages=[]`)
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 pnpm ops:picture-book-smoke` => PASS (`.agent/artifacts/picture-book-smoke-2026-03-22T23-11-03.047Z.json`, order `760d362a-2174-43d0-b328-1a9de1b1ddf7`, book `325e3f16-f510-4f39-9a78-24349a9b300d`, previews `12/12`, `qaIssuePages=[]`)
+- downloaded PDF => `.agent/artifacts/visual-continuity-hardening/sample-book-13be7515-7b4a-4965-9929-8c391179fa33-early_decoder_5_7.pdf`
+Feature toggle:
+- `visual-continuity-deploy-smoke-01` passes=false -> true
+- `visual-sample-book-download-01` passes=false -> true
+- `live-character-generation-timeout-01` passes=false -> true
+Next: no remaining failing continuity tasks; choose the next non-continuity task if needed
+Notes: the full visual continuity hardening initiative now has local verification, live deploy proof, and a persisted sample-book artifact.
+Commit: pending
