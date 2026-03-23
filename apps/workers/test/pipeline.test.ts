@@ -131,18 +131,27 @@ describe("pipeline beat-planning failure persistence", () => {
     process.env.BOOK_DEFAULT_SPREAD_COUNT = "12";
     process.env.BOOK_DEFAULT_PAGE_COUNT = "12";
     delete process.env.STORY_MAX_REWRITES;
-    queryMock.mockResolvedValue([
-      {
-        book_id: "book-1",
-        order_id: "order-1",
-        child_first_name: "Ava",
-        age_years: 6,
-        pronouns: "she/her",
-        reading_profile_id: "early_decoder_5_7",
-        money_lesson_key: "saving_later",
-        interest_tags: "space,soccer"
+    queryMock.mockImplementation(async (sql: string) => {
+      const normalized = normalizeSql(sql);
+      if (normalized.includes("FROM books b")) {
+        return [
+          {
+            book_id: "book-1",
+            order_id: "order-1",
+            child_first_name: "Ava",
+            age_years: 6,
+            pronouns: "she/her",
+            reading_profile_id: "early_decoder_5_7",
+            money_lesson_key: "saving_later",
+            interest_tags: "space,soccer"
+          }
+        ];
       }
-    ]);
+      if (normalized.includes("role = 'supporting_character_reference'")) {
+        return [];
+      }
+      return [];
+    });
     executeMock.mockResolvedValue(undefined);
     putJsonMock.mockResolvedValue("s3://artifact-bucket/key.json");
     moderateTextsMock.mockResolvedValue({ ok: true, reasons: [], mode: "allow" });
@@ -154,7 +163,19 @@ describe("pipeline beat-planning failure persistence", () => {
     presignGetObjectMock.mockResolvedValue("https://example.com/presigned");
     sqsSendMock.mockResolvedValue({ MessageId: "msg-1" });
     resolveImageProviderMock.mockResolvedValue({
-      generate: vi.fn()
+      generate: vi.fn().mockResolvedValue({
+        bytes: Buffer.from("supporting-reference"),
+        contentType: "image/png",
+        seed: 11,
+        endpoint: "openai:gpt-image-1.5",
+        requestId: "supporting-ref-1",
+        width: 1024,
+        height: 1024,
+        qa: {
+          passed: true,
+          issues: []
+        }
+      })
     });
     getRuntimeConfigMock.mockResolvedValue({
       secrets: {
@@ -625,6 +646,22 @@ describe("pipeline beat-planning failure persistence", () => {
   });
 
   it("rebuilds pages from stored story data when resuming after manual story review", async () => {
+    const supportingReferenceGenerate = vi.fn().mockResolvedValue({
+      bytes: Buffer.from("supporting-reference"),
+      contentType: "image/png",
+      seed: 5,
+      endpoint: "openai:gpt-image-1.5",
+      requestId: "supporting-ref-5",
+      width: 1024,
+      height: 1024,
+      qa: {
+        passed: true,
+        issues: []
+      }
+    });
+    resolveImageProviderMock.mockResolvedValue({
+      generate: supportingReferenceGenerate
+    });
     getJsonMock.mockResolvedValue({
       title: "Ava Saves",
       concept,
@@ -648,8 +685,8 @@ describe("pipeline beat-planning failure persistence", () => {
       pages: [
         {
           pageIndex: 0,
-          pageText: "Ava can save.",
-          illustrationBrief: "A calm kitchen table with a coin jar.",
+          pageText: "Ava and Mom can save.",
+          illustrationBrief: "Mom smiles at a calm kitchen table with a coin jar.",
           sceneId: "kitchen_table",
           sceneVisualDescription: "Sunny kitchen table with a blue coin jar and open notebook.",
           newWordsIntroduced: ["save"],
@@ -680,6 +717,19 @@ describe("pipeline beat-planning failure persistence", () => {
         bookId: "book-1",
         childFirstName: "Ava"
       })
+    );
+    expect(supportingReferenceGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookId: "book-1",
+        role: "supporting_character_reference",
+        prompt: expect.stringContaining("Locked identity anchors:")
+      }),
+      1
+    );
+    expect(putBufferMock).toHaveBeenCalledWith(
+      "books/book-1/images/supporting-character-supporting_character_mom.png",
+      expect.any(Buffer),
+      "image/png"
     );
   });
 

@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-22T22:07:19Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-22T23:37:04Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -92,8 +92,8 @@
       "Eliminate the 29-second timeout path on POST /v1/books/{bookId}/character/candidates by reducing latency or moving candidate generation to an async/polling flow",
       "Redeploy dev and rerun the full picture-book smoke through character approval until the live flow completes"
     ],
-    "passes": false,
-    "evidence": "2026-03-16 live validation: pnpm cdk:deploy:dev (PASS after migration/route fixes); AWS_PROFILE=personal AWS_REGION=us-east-1 pnpm ops:provider-smoke (PASS); AWS_PROFILE=personal AWS_REGION=us-east-1 API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com pnpm ops:picture-book-smoke (FAIL: POST /v1/books/{bookId}/character/candidates returned 500, and ApiFunction CloudWatch logs show a 29s timeout during character candidate generation)"
+    "passes": true,
+    "evidence": "2026-03-22 dev validation: character candidate generation completed inside the live parent approval flow on both real picture-book smokes after continuity deploy; orders fa69c0f1-7b4c-4ff3-b4d6-2ff1963e82d9 (early_decoder_5_7) and 760d362a-2174-43d0-b328-1a9de1b1ddf7 (read_aloud_3_4) both reached ready with 12/12 previews."
   },
   {
     "id": "openai-image-provider-01",
@@ -212,8 +212,8 @@
       "Extend visual continuity entities/artifacts with locked identity anchors for recurring humans and thread the anchors into page job provenance",
       "Move recurring supporting-human reference generation to an eager pre-page-art phase and cover the new lifecycle with worker and domain tests"
     ],
-    "passes": false,
-    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; implementation not started."
+    "passes": true,
+    "evidence": "Added locked recurring-human identity anchors, threaded them through visual-bible/page-job provenance, and prepared supporting-character references eagerly when the visual bible is persisted or loaded. Verification 2026-03-22: pnpm --filter @book/domain test (PASS); pnpm --filter @book/workers test (PASS); pnpm --filter @book/api test (PASS); bash scripts/agent/quality.sh (PASS)."
   },
   {
     "id": "visual-style-outlier-qa-01",
@@ -224,8 +224,8 @@
       "Add `style_outlier_extra` to the QA schema, normalization, and review prompt contract",
       "Feed recurring-human reference and identity-anchor context into QA and add regression tests for style-outlier detections versus harmless background extras"
     ],
-    "passes": false,
-    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; implementation not started."
+    "passes": true,
+    "evidence": "Extended visual QA to emit style_outlier_extra, carried identity anchors into QA context, and added direct workers coverage for the new verdict contract. Verification 2026-03-22: pnpm --filter @book/domain test (PASS); pnpm --filter @book/workers test (PASS); pnpm --filter @book/api test (PASS); bash scripts/agent/quality.sh (PASS)."
   },
   {
     "id": "visual-continuity-deploy-smoke-01",
@@ -236,8 +236,8 @@
       "Run local smoke/quality plus targeted package tests, then deploy dev with `pnpm cdk:deploy:dev`",
       "Rerun provider and picture-book smoke for both 3-7 profiles, capturing `.agent/artifacts/picture-book-smoke-*.json` and any blocking live issues"
     ],
-    "passes": false,
-    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; live validation pending."
+    "passes": true,
+    "evidence": "2026-03-22: pnpm cdk:deploy:dev UPDATE_COMPLETE; pnpm ops:provider-smoke PASS; API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 pnpm ops:picture-book-smoke PASS (artifact: .agent/artifacts/picture-book-smoke-2026-03-22T22-48-33.417Z.json, order=fa69c0f1-7b4c-4ff3-b4d6-2ff1963e82d9, book=13be7515-7b4a-4965-9929-8c391179fa33, previews=12/12, qaIssuePages=[]); API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 pnpm ops:picture-book-smoke PASS (artifact: .agent/artifacts/picture-book-smoke-2026-03-22T23-11-03.047Z.json, order=760d362a-2174-43d0-b328-1a9de1b1ddf7, book=325e3f16-f510-4f39-9a78-24349a9b300d, previews=12/12, qaIssuePages=[])."
   },
   {
     "id": "visual-sample-book-download-01",
@@ -248,7 +248,7 @@
       "Produce a successful sample book build after the continuity changes are deployed and validated",
       "Download the rendered PDF and store it with smoke metadata under `.agent/artifacts/visual-continuity-hardening/`"
     ],
-    "passes": false,
-    "evidence": "Planned in docs/exec-plans/active/002-visual-continuity-hardening.md on 2026-03-22; sample-book artifact not yet produced."
+    "passes": true,
+    "evidence": "2026-03-22: downloaded sample PDF to .agent/artifacts/visual-continuity-hardening/sample-book-13be7515-7b4a-4965-9929-8c391179fa33-early_decoder_5_7.pdf and copied matching smoke artifact to .agent/artifacts/visual-continuity-hardening/picture-book-smoke-2026-03-22T22-48-33.417Z.json."
   }
 ]

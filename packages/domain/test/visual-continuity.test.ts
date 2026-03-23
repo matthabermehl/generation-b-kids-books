@@ -89,6 +89,13 @@ describe("visual continuity builders", () => {
       importance: "story_critical",
       referenceStrategy: "generated_supporting_reference"
     });
+    expect(mom?.identityAnchors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ trait: "role" }),
+        expect.objectContaining({ trait: "features" }),
+        expect.objectContaining({ trait: "wardrobe" })
+      ])
+    );
 
     const page0 = visualBible.pages.find((page) => page.pageIndex === 0);
     expect(page0).toBeDefined();
@@ -114,11 +121,13 @@ describe("visual continuity builders", () => {
 
     const guidance = buildPageArtVisualGuidance(visualBible, page0!);
     expect(guidance.mustShow.some((item) => item.includes("Mom"))).toBe(true);
+    expect(guidance.mustShow.some((item) => item.includes("Locked identity anchors"))).toBe(true);
     expect(guidance.showExactly).toContain("4 coins");
     expect(guidance.mustNotShow).toContain("more than 4 coins");
     expect(guidance.settingAnchors).toEqual(
       expect.arrayContaining(["sunny kitchen table", "a blue coin jar", "yellow note by the window"])
     );
+    expect(guidance.mustMatch.some((item) => item.includes("Mom role:"))).toBe(true);
   });
 
   it("adds style-guide and locked-identity language to supporting reference prompts", () => {
@@ -134,6 +143,8 @@ describe("visual continuity builders", () => {
     expect(mom).toBeDefined();
 
     const prompt = buildSupportingCharacterReferencePrompt(mom!);
+    expect(prompt).toContain("Locked identity anchors:");
+    expect(prompt).toContain("- role:");
     expect(prompt).toContain("Style:");
     expect(prompt).toContain("Detailed children's book watercolor illustration on bright white paper.");
     expect(prompt).toContain("Keep the same visible identity anchors, face, hair, outfit palette, and proportions");

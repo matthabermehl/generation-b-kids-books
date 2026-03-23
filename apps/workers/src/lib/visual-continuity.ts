@@ -3,6 +3,7 @@ import {
   buildVisualStoryBible,
   type StoryPackage,
   type VisualEntity,
+  type VisualIdentityAnchor,
   type VisualStoryBible
 } from "@book/domain";
 import { resolveImageProvider } from "../providers/image.js";
@@ -23,6 +24,7 @@ export interface SupportingCharacterReferenceAsset {
   imageId: string;
   entityId: string;
   label: string;
+  identityAnchors: VisualIdentityAnchor[];
   s3Url: string;
   url: string;
 }
@@ -151,6 +153,7 @@ async function generateSupportingReference(input: {
       entityLabel: input.entity.label,
       entityKind: input.entity.kind,
       anchors: input.entity.anchors,
+      identityAnchors: input.entity.identityAnchors ?? [],
       pageIndices: input.entity.pageIndices,
       sceneIds: input.entity.sceneIds,
       referenceStrategy: input.entity.referenceStrategy
@@ -209,10 +212,32 @@ export async function ensureSupportingCharacterReferences(input: {
       imageId: current.imageId,
       entityId: entity.entityId,
       label: entity.label,
+      identityAnchors: entity.identityAnchors ?? [],
       s3Url: current.s3Url,
       url
     });
   }
 
   return results;
+}
+
+export async function prepareRecurringSupportingCharacterReferences(input: {
+  bookId: string;
+  visualBible: VisualStoryBible;
+  mockRunTag?: string | null;
+}): Promise<SupportingCharacterReferenceAsset[]> {
+  const recurringSupportingEntityIds = input.visualBible.entities
+    .filter((entity) => isSupportingReferenceEntity(entity))
+    .map((entity) => entity.entityId);
+
+  if (recurringSupportingEntityIds.length === 0) {
+    return [];
+  }
+
+  return ensureSupportingCharacterReferences({
+    bookId: input.bookId,
+    visualBible: input.visualBible,
+    entityIds: recurringSupportingEntityIds,
+    mockRunTag: input.mockRunTag
+  });
 }

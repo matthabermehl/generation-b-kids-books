@@ -1,26 +1,31 @@
 # Current Task
-Task ID: visual-identity-anchors-01
+Task ID: visual-continuity-hardening-complete
 
 ## Goal
-Lock visible identity anchors for recurring humans and move supporting-character reference generation to an eager pre-page-art phase so later prompts and QA consume stable continuity inputs.
+Record that the visual continuity hardening initiative is complete on this branch with live deploy proof, two successful picture-book smoke artifacts, and a downloaded sample PDF artifact.
 
 ## Constraints
-- Preserve the just-landed prompt hardening from `visual-continuity-style-prompts-01`.
-- Keep `visual-bible.json` as the continuity source of truth and avoid breaking the approved `character_reference` flow.
-- Generate eager references only for recurring supporting humans that are stable enough to review deterministically.
+- Keep the final harness state aligned with the evidence collected in this session.
+- Preserve the downloaded artifacts under `.agent/artifacts/visual-continuity-hardening/`.
+- Do not overwrite unrelated branch work while wrapping up the initiative.
 
 ## Plan (short)
-1. Extend the visual-continuity domain types and visual-bible builder with explicit locked identity-anchor fields for recurring supporting humans.
-2. Update the worker continuity/pipeline flow so recurring supporting-character references are generated eagerly once the visual bible is available and persisted for downstream page jobs.
-3. Cover the new lifecycle with targeted domain/worker tests, then rerun `pnpm --filter @book/domain test`, `pnpm --filter @book/workers test`, and `bash scripts/agent/quality.sh`.
+1. Keep `.agent/feature_list.json` accurate for the completed continuity and live-risk tasks.
+2. Append the final evidence block to `.agent/progress.log`.
+3. Leave the branch ready for commit/push and next-task selection.
 
-## Evidence required
-- `pnpm --filter @book/domain test`
-- `pnpm --filter @book/workers test`
-- `pnpm --filter @book/api test`
-- `bash scripts/agent/quality.sh`
+## Evidence collected
+- `pnpm cdk:deploy:dev` => UPDATE_COMPLETE
+- `pnpm ops:provider-smoke` => PASS
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 pnpm ops:picture-book-smoke` => PASS
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 pnpm ops:picture-book-smoke` => PASS
+- sample PDF saved under `.agent/artifacts/visual-continuity-hardening/`
 
 ## Status
-- baseline: `bash scripts/agent/smoke.sh` PASS (2026-03-22)
-- previous: `visual-continuity-style-prompts-01` PASS with prompt and pipeline verification (2026-03-22)
-- work: implementation not started
+- `visual-continuity-style-prompts-01` PASS (2026-03-22)
+- `visual-identity-anchors-01` PASS (2026-03-22)
+- `visual-style-outlier-qa-01` PASS (2026-03-22)
+- `visual-continuity-deploy-smoke-01` PASS (2026-03-22)
+- `visual-sample-book-download-01` PASS (2026-03-22)
+- `live-character-generation-timeout-01` PASS in dev validation (2026-03-22)
+- next: select the next non-continuity task if more work is desired

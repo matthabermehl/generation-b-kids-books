@@ -32,6 +32,7 @@ import { renderStoryProofPdf } from "./lib/story-proof.js";
 import {
   ensureSupportingCharacterReferences,
   loadVisualStoryBible,
+  prepareRecurringSupportingCharacterReferences,
   persistVisualStoryBibleArtifact
 } from "./lib/visual-continuity.js";
 import { BeatPlanningError, resolveLlmProvider } from "./providers/llm.js";
@@ -806,11 +807,16 @@ async function prepareStory(
     artifactType: "image_plan",
     s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${imagePlanKey}`
   });
-  await persistVisualStoryBibleArtifact({
+  const persistedVisualBible = await persistVisualStoryBibleArtifact({
     bookId,
     childFirstName: context.child_first_name,
     story,
     generatedAt
+  });
+  await prepareRecurringSupportingCharacterReferences({
+    bookId,
+    visualBible: persistedVisualBible.visualBible,
+    mockRunTag
   });
 
   return { bookId, pageCount: story.pages.length };
@@ -967,11 +973,15 @@ async function resumeAfterStoryReview(bookId: string): Promise<{ bookId: string;
     artifactType: "image_plan",
     s3Url: `s3://${process.env.ARTIFACT_BUCKET}/${imagePlanKey}`
   });
-  await persistVisualStoryBibleArtifact({
+  const persistedVisualBible = await persistVisualStoryBibleArtifact({
     bookId,
     childFirstName: context.child_first_name,
     story,
     generatedAt
+  });
+  await prepareRecurringSupportingCharacterReferences({
+    bookId,
+    visualBible: persistedVisualBible.visualBible
   });
 
   return { bookId, pageCount: story.pages.length };
@@ -1025,10 +1035,16 @@ function emptyVisualGuidance(): PageArtVisualGuidance {
 
 async function loadOrCreateVisualStoryBible(
   bookId: string,
-  childFirstName: string
+  childFirstName: string,
+  mockRunTag?: string | null
 ): Promise<VisualStoryBible | null> {
   const existing = await loadVisualStoryBible(bookId);
   if (existing) {
+    await prepareRecurringSupportingCharacterReferences({
+      bookId,
+      visualBible: existing,
+      mockRunTag
+    });
     return existing;
   }
 
@@ -1038,6 +1054,11 @@ async function loadOrCreateVisualStoryBible(
       bookId,
       childFirstName,
       story
+    });
+    await prepareRecurringSupportingCharacterReferences({
+      bookId,
+      visualBible: persisted.visualBible,
+      mockRunTag
     });
     return persisted.visualBible;
   } catch (error) {
@@ -1080,7 +1101,7 @@ async function enqueuePageImage(
     context.product_family === "picture_book_fixed_layout" &&
     isPictureBookReadingProfile(context.reading_profile_id);
   const visualBible = usePictureBookPipeline
-    ? await loadOrCreateVisualStoryBible(bookId, context.child_first_name)
+    ? await loadOrCreateVisualStoryBible(bookId, context.child_first_name, mockRunTag)
     : null;
 
   const imageRole = usePictureBookPipeline ? "page_art" : "page";
@@ -1288,6 +1309,7 @@ async function enqueuePageImage(
           imageId: reference.imageId,
           entityId: reference.entityId,
           label: reference.label,
+          identityAnchors: reference.identityAnchors,
           s3Url: reference.s3Url
         })),
         priorSameScenePageIds,

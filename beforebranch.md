@@ -1,53 +1,42 @@
 ## Current State
 
-- Branch before split: `master` at `94beef3`, tracking `Github/master`
-- The working tree is already dirty with local WIP in:
-  - `.agent/current_task.md`
-  - `.agent/feature_list.json`
-  - `apps/renderer/src/templates/picture-book-page.ts`
-  - `apps/renderer/test/picture-book-page.test.ts`
-  - `apps/workers/src/lib/page-canvas.ts`
-  - `apps/workers/src/lib/page-qa.ts`
-  - `apps/workers/test/page-canvas.test.ts`
-  - `apps/workers/test/page-qa.test.ts`
-  - `packages/domain/src/layouts.ts`
-  - `scripts/ops/picture-book-smoke.mjs`
-- Existing harness state is focused on a different in-progress task: `live-character-generation-timeout-01`
-- The continuity system already includes:
-  - parent-approved `character_reference` before checkout
-  - `visual-bible.json` with entities and page contracts
-  - lazy `supporting_character_reference` generation
-  - page-art prompts with visual guidance
-  - visual QA against the page contract and references
+- Branch before split: `master` at `5bfa129`, after merging the prompt-hardening continuity slice.
+- Working tree status before the new branch:
+  - `.agent/feature_list.json` modified only because `bash scripts/agent/smoke.sh` refreshed the baseline evidence timestamp.
+- Baseline smoke rerun on `master` passed on 2026-03-22 after the merge.
+- The visual continuity initiative now has:
+  - prompt hardening landed and merged
+  - remaining open tasks for identity anchors, style-outlier QA, dev deploy/smoke, and final sample PDF capture
+- Current harness desk view points at `visual-identity-anchors-01`.
 
 ## Objectives
 
-- Plan and stage a long-running visual continuity hardening initiative that covers:
-  - style guide text in supporting-character reference prompts
-  - page-prompt rules for no new prominent humans and no style-outlier extras
-  - visual QA support for `style_outlier_extra`
-  - locked identity anchors plus eager recurring-human reference generation
-- Include repo-native harness artifacts for:
-  - development sequencing
-  - deployment to dev
-  - validation and regression testing
-  - a full sample-book run that ends with a downloaded book artifact
+- Run the remaining visual continuity initiative as one uninterrupted harness pass:
+  - `visual-identity-anchors-01`
+  - `visual-style-outlier-qa-01`
+  - `visual-continuity-deploy-smoke-01`
+  - `visual-sample-book-download-01`
+- Keep harness artifacts current while progressing through multiple tasks in sequence rather than stopping after each one.
+- Finish with a real downloaded sample-book PDF under `.agent/artifacts/visual-continuity-hardening/`.
 
 ## Risks
 
-- Branching from a dirty `master` worktree will preserve unrelated local edits in the new branch.
-- The current dev deployment path still has an open live issue around character-generation reliability.
-- Visual QA false positives are possible if style-outlier detection is introduced without careful thresholds and test fixtures.
-- Identity anchoring may require decisions about how explicit we want to be when encoding visible human traits.
+- The known live dependency `live-character-generation-timeout-01` may still block or slow the deploy/sample portion even if local code is correct.
+- Identity anchors need to be explicit enough to prevent visible drift without overconstraining the prompts or encoding brittle phrasing.
+- Style-outlier QA could introduce false positives if harmless background people are treated too aggressively.
+- A long-running pass increases the chance that deploy/smoke issues will need on-the-fly debugging in the same branch.
 
 ## Assumptions
 
-- We will preserve all existing local edits rather than stash or discard them.
-- The new work will be tracked as a fresh continuity-hardening initiative in the harness, separate from the currently stale desk view.
-- A successful end state includes both local verification and a deployed dev validation that produces a downloadable sample book artifact.
+- We will branch from `master` and keep this entire pass isolated on a fresh `codex/*` branch.
+- The baseline evidence timestamp update in `.agent/feature_list.json` is harmless and can travel with the new branch.
+- If deploy/sample validation is blocked by live infra behavior, we will still complete as much of the pass as possible and record the exact blocker in harness artifacts.
 
 ## Open Decisions
 
-- Whether to model identity anchors as fully explicit fields or as a smaller normalized list of locked visible traits.
-- Whether eager recurring-character reference generation should happen immediately after `visual-bible.json` creation or as a dedicated pre-image stage in the worker pipeline.
-- Whether `style_outlier_extra` should be a hard fail on every page or only when incidental humans are visually prominent enough to distract from the story.
+- Exact identity-anchor shape:
+  - explicit named fields vs normalized locked trait strings
+- Eager supporting-reference timing:
+  - immediately after `visual-bible.json` persistence vs first page-enqueue stage
+- Style-outlier QA threshold:
+  - always fail any outlier extra vs fail only when the extra is visually prominent enough to distract

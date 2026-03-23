@@ -78,6 +78,7 @@ interface PictureBookJobPayload {
       imageId: string;
       entityId: string;
       label: string;
+      identityAnchors: Array<{ trait: string; value: string }>;
       s3Url: string;
       url: string;
     }>;
@@ -314,6 +315,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         imageId: reference.imageId,
         entityId: reference.entityId,
         label: reference.label,
+        identityAnchors: reference.identityAnchors,
         s3Url: reference.s3Url
       })),
       sameSceneReferenceImageIds: job.brief.sameSceneReferenceImageIds,
@@ -366,6 +368,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
         mainCharacterReferenceUrl: job.brief.characterReferenceUrl,
         supportingCharacterReferences: job.brief.supportingCharacterReferences.map((reference) => ({
           label: reference.label,
+          identityAnchors: reference.identityAnchors,
           url: reference.url
         })),
         continuityReferenceImages: job.brief.sameSceneReferenceUrls.map((url, index) => ({
@@ -528,6 +531,7 @@ async function runPictureBookPipeline(job: PictureBookJobPayload): Promise<void>
           imageId: reference.imageId,
           entityId: reference.entityId,
           label: reference.label,
+          identityAnchors: reference.identityAnchors,
           s3Url: reference.s3Url
         })),
         sameSceneReferenceImageIds: job.brief.sameSceneReferenceImageIds,

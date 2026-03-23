@@ -1,5 +1,11 @@
 import { z } from "zod";
-import type { PageArtVisualGuidance, VisualPageContract, VisualQaIssue, VisualQaVerdict } from "@book/domain";
+import type {
+  PageArtVisualGuidance,
+  VisualIdentityAnchor,
+  VisualPageContract,
+  VisualQaIssue,
+  VisualQaVerdict
+} from "@book/domain";
 import { getRuntimeConfig } from "./ssm-config.js";
 
 const openAiChatUrl = "https://api.openai.com/v1/chat/completions";
@@ -12,6 +18,7 @@ const visualQaIssueSchema = z.object({
     "prop_state_mismatch",
     "setting_anchor_mismatch",
     "forbidden_extra_entity",
+    "style_outlier_extra",
     "low_confidence"
   ]),
   message: z.string().min(1),
@@ -30,6 +37,7 @@ const visualQaResponseSchema = z.object({
 
 interface VisualQaReference {
   label: string;
+  identityAnchors?: VisualIdentityAnchor[];
   url: string;
 }
 
@@ -122,6 +130,7 @@ function visualQaJsonSchema(): Record<string, unknown> {
                 "prop_state_mismatch",
                 "setting_anchor_mismatch",
                 "forbidden_extra_entity",
+                "style_outlier_extra",
                 "low_confidence"
               ]
             },
@@ -160,6 +169,11 @@ export async function evaluateVisualContinuity(input: EvaluateVisualContinuityIn
   const timeout = setTimeout(() => controller.abort(), openAiRequestTimeoutMs);
 
   try {
+    const describeIdentityAnchors = (identityAnchors?: VisualIdentityAnchor[]): string =>
+      identityAnchors && identityAnchors.length > 0
+        ? ` Locked identity anchors: ${identityAnchors.map((anchor) => `${anchor.trait}: ${anchor.value}`).join("; ")}.`
+        : "";
+
     const referenceSections = [
       input.mainCharacterReferenceUrl
         ? [
@@ -168,7 +182,10 @@ export async function evaluateVisualContinuity(input: EvaluateVisualContinuityIn
           ]
         : [],
       ...(input.supportingCharacterReferences ?? []).map((reference) => [
-        { type: "text", text: `Supporting character reference: ${reference.label}.` },
+        {
+          type: "text",
+          text: `Supporting character reference: ${reference.label}.${describeIdentityAnchors(reference.identityAnchors)}`
+        },
         { type: "image_url", image_url: { url: reference.url } }
       ]),
       ...(input.continuityReferenceImages ?? []).map((reference) => [
@@ -199,7 +216,7 @@ export async function evaluateVisualContinuity(input: EvaluateVisualContinuityIn
           {
             role: "system",
             content:
-              "You are a strict visual continuity reviewer for children's picture books. Check only story-critical continuity. Ignore harmless background extras unless they conflict with the contract. If you are uncertain, fail with low_confidence instead of guessing."
+              "You are a strict visual continuity reviewer for children's picture books. Check story-critical continuity, locked recurring-human identity, and whether incidental humans stay inside the established watercolor language. Ignore harmless background extras unless they conflict with the contract. If a noticeable incidental person breaks the book's watercolor realism or draws focus as a style outlier, return style_outlier_extra. If you are uncertain, fail with low_confidence instead of guessing."
           },
           {
             role: "user",
@@ -215,6 +232,8 @@ export async function evaluateVisualContinuity(input: EvaluateVisualContinuityIn
                   "",
                   `Page contract JSON: ${JSON.stringify(input.pageContract)}`,
                   `Visual guidance JSON: ${JSON.stringify(input.visualGuidance ?? null)}`,
+                  "",
+                  "Flag style_outlier_extra when a visually noticeable incidental or background human breaks the established watercolor realism, palette, brushwork, or lighting even if that person is unnamed.",
                   "",
                   "Return only the structured verdict."
                 ].join("\n")
