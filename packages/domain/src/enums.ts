@@ -1,7 +1,9 @@
 export const moneyLessonKeys = [
-  "inflation_candy",
-  "saving_later",
-  "delayed_gratification"
+  "prices_change",
+  "jar_saving_limits",
+  "new_money_unfair",
+  "keep_what_you_earn",
+  "better_rules"
 ] as const;
 
 export type MoneyLessonKey = (typeof moneyLessonKeys)[number];

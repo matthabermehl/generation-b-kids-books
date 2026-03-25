@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-22T23:37:04Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-24T04:01:56Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -250,5 +250,67 @@
     ],
     "passes": true,
     "evidence": "2026-03-22: downloaded sample PDF to .agent/artifacts/visual-continuity-hardening/sample-book-13be7515-7b4a-4965-9929-8c391179fa33-early_decoder_5_7.pdf and copied matching smoke artifact to .agent/artifacts/visual-continuity-hardening/picture-book-smoke-2026-03-22T22-48-33.417Z.json."
+  },
+  {
+    "id": "lesson-taxonomy-refresh-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Replace the public 3-key lesson taxonomy with the new 5-card Bitcoin emotional-vision lesson set",
+    "steps": [
+      "Hard-replace the old MoneyLessonKey enum and shared UI/API types with prices_change, jar_saving_limits, new_money_unfair, keep_what_you_earn, and better_rules",
+      "Create a centralized lesson-definition registry that provides labels, helper copy, emotional arc targets, Bitcoin value threads, and concrete scenario guidance for prompts and UI",
+      "Add a one-off stored-data remap for historical lesson keys in existing books"
+    ],
+    "passes": true,
+    "evidence": "2026-03-25: replaced the old lesson enum across domain/API/web/smoke surfaces with prices_change, jar_saving_limits, new_money_unfair, keep_what_you_earn, and better_rules; centralized labels/helper copy/emotional arcs/Bitcoin value threads/scenario guidance in packages/domain/src/lessons.ts; and remapped historical lesson keys during worker migrations. Verified with bash scripts/agent/quality.sh => PASS and the deployed create-flow capture at .agent/artifacts/bitcoin-story-emotional-vision/create-lesson-selector.png."
+  },
+  {
+    "id": "story-emotional-vision-prompting-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Refactor story concept and prompting toward a warmer bedtime-story emotional arc with lesson-specific scenarios",
+    "steps": [
+      "Replace the savings-only StoryConcept shape with base emotional fields plus a lessonScenario union keyed by moneyLessonKey",
+      "Update planner, rewrite, writer, and critic prompts to emphasize bedtime warmth, caregiver reassurance, story-first Bitcoin framing, and lesson-specific values instead of a hero's-journey savings chassis",
+      "Add soft emotional-quality checks so calm resolution, non-preachy tone, and earned Bitcoin fit are enforced alongside existing safety guardrails"
+    ],
+    "passes": true,
+    "evidence": "2026-03-25: story concepts now carry emotionalPromise/caregiverWarmthMoment/bitcoinValueThread plus lessonScenario unions, the planner/writer/critic stack now targets warm bedtime cadence with lesson-specific Bitcoin value framing, and rewrite guidance now clamps page length so read_aloud_3_4 and early_decoder_5_7 books can land without finalize-gate reading-level drift. Verified with bash scripts/agent/smoke.sh, pnpm --filter @book/domain test, pnpm --filter @book/prompts test, pnpm --filter @book/workers test, and bash scripts/agent/quality.sh."
+  },
+  {
+    "id": "story-emotional-vision-docs-01",
+    "priority": 2,
+    "category": "documentation",
+    "description": "Refresh product, architecture, and execution docs for the new lesson taxonomy and emotional-story prompting model",
+    "steps": [
+      "Update the active execution plan, product docs, and architecture docs to reflect the 5-card lesson taxonomy and bedtime-story framing",
+      "Document the new StoryConcept emotional fields, lessonScenario union, and live validation artifact expectations"
+    ],
+    "passes": true,
+    "evidence": "2026-03-25: refreshed beforebranch.md, docs/exec-plans/active/003-bitcoin-story-emotional-vision.md, docs/PRODUCT.md, docs/ARCHITECTURE.md, docs/prompting-alignment.md, and docs/index.md for the 5-card taxonomy, the emotional StoryConcept/lessonScenario model, and the required live-validation artifacts. Verified with bash scripts/agent/quality.sh => PASS."
+  },
+  {
+    "id": "story-emotional-vision-deploy-smoke-01",
+    "priority": 2,
+    "category": "integration",
+    "description": "Deploy the emotional-vision story changes to dev and prove the updated lesson taxonomy and prompt stack work in the live picture-book flow",
+    "steps": [
+      "Run local smoke, targeted package tests, UI validation, and repo quality before deploying dev with pnpm cdk:deploy:dev",
+      "Run provider smoke plus two live picture-book smokes using better_rules for read_aloud_3_4 and new_money_unfair for early_decoder_5_7, capturing .agent/artifacts/picture-book-smoke-*.json"
+    ],
+    "passes": true,
+    "evidence": "2026-03-25: deployed dev, passed provider smoke, and passed both live picture-book smokes with the new lesson taxonomy and prompt stack: better_rules/read_aloud_3_4 => .agent/artifacts/picture-book-smoke-2026-03-25T15-05-35.041Z.json (order ee924f0d-72a7-474b-bed7-6e7e51aa9d36, book 6ae5f3f3-e0df-4ac1-8c28-e726202fbde9, ready, previews 12/12); new_money_unfair/early_decoder_5_7 => .agent/artifacts/picture-book-smoke-2026-03-25T15-29-29.092Z.json (order 492217b2-b8a2-4613-83eb-7df2196df198, book 35fc0126-c929-4e0d-beca-42c501f1db13, ready, previews 12/12). Verified with pnpm cdk:deploy:dev, pnpm ops:provider-smoke, and bash scripts/agent/quality.sh."
+  },
+  {
+    "id": "story-emotional-vision-sample-download-01",
+    "priority": 2,
+    "category": "integration",
+    "description": "Finish the emotional-vision initiative with downloadable sample artifacts that show the new lesson taxonomy and story arc in the deployed dev flow",
+    "steps": [
+      "Download at least the final illustrated PDFs from the successful smoke runs and store them under .agent/artifacts/bitcoin-story-emotional-vision/",
+      "Capture one deployed create-flow screenshot showing the 5-card lesson selector and one ready-book screenshot alongside the matching smoke JSON artifacts"
+    ],
+    "passes": true,
+    "evidence": "2026-03-25: stored both final illustrated PDFs plus deployed UI proof under .agent/artifacts/bitcoin-story-emotional-vision/: better_rules-read_aloud-book.pdf, new_money_unfair-early_decoder-book.pdf, create-lesson-selector.png, current-book-workspace.png, and the matching smoke JSON artifacts. Verified by direct downloads from the ready smoke runs and deployed Playwright captures."
   }
 ]

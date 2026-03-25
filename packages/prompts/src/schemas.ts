@@ -1,3 +1,9 @@
+import type {
+  StoryConcept as DomainStoryConcept,
+  StoryCriticIssue as DomainStoryCriticIssue,
+  StoryCriticVerdict as DomainStoryCriticVerdict
+} from "@book/domain";
+
 export interface CriticIssue {
   beatIndex: number;
   problem: string;
@@ -12,78 +18,69 @@ export interface CriticVerdict {
   rewriteInstructions: string;
 }
 
-export interface StoryConcept {
-  premise: string;
-  caregiverLabel: "Mom" | "Dad";
-  targetItem: string;
-  targetPrice: number;
-  startingAmount: number;
-  gapAmount: number;
-  earningOptions: [
-    {
-      label: string;
-      action: string;
-      sceneLocation: string;
-    },
-    {
-      label: string;
-      action: string;
-      sceneLocation: string;
-    }
-  ];
-  temptation: string;
-  deadlineEvent: string | null;
-  bitcoinBridge: string;
-  requiredSetups: string[];
-  requiredPayoffs: string[];
-  forbiddenLateIntroductions: string[];
-}
+export type StoryConcept = DomainStoryConcept;
+export type StoryCriticIssue = DomainStoryCriticIssue;
+export type StoryCriticVerdict = DomainStoryCriticVerdict;
 
-export interface StoryCriticIssue {
-  pageStart: number;
-  pageEnd: number;
-  issueType:
-    | "count_sequence"
-    | "caregiver_consistency"
-    | "setup_payoff"
-    | "action_continuity"
-    | "age_plausibility"
-    | "theme_integration"
-    | "bitcoin_fit"
-    | "reading_level";
-  severity: "hard" | "soft";
-  rewriteTarget: "concept" | "beat" | "page";
-  evidence: string;
-  suggestedFix: string;
-}
+const earningOptionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["label", "action", "sceneLocation"],
+  properties: {
+    label: { type: "string", minLength: 1 },
+    action: { type: "string", minLength: 1 },
+    sceneLocation: { type: "string", minLength: 1 }
+  }
+} as const;
 
-export interface StoryCriticVerdict {
-  ok: boolean;
-  issues: StoryCriticIssue[];
-  rewriteInstructions: string;
-}
-
-const storyConceptSchema = {
+const lessonScenarioSchema = {
   type: "object",
   additionalProperties: false,
   required: [
-    "premise",
-    "caregiverLabel",
+    "moneyLessonKey",
+    "anchorItem",
+    "beforePrice",
+    "afterPrice",
+    "purchaseUnit",
+    "countableComparison",
+    "noticingMoment",
     "targetItem",
     "targetPrice",
     "startingAmount",
     "gapAmount",
     "earningOptions",
     "temptation",
-    "deadlineEvent",
-    "bitcoinBridge",
-    "requiredSetups",
-    "requiredPayoffs",
-    "forbiddenLateIntroductions"
+    "gameName",
+    "tokenName",
+    "childGoal",
+    "ruleDisruption",
+    "fairnessRepair",
+    "workAction",
+    "earnedReward",
+    "rewardUse",
+    "unfairLossRisk",
+    "brokenRule",
+    "fairRule",
+    "sharedGoal",
+    "deadlineEvent"
   ],
   properties: {
-    premise: { type: "string", minLength: 1 },
-    caregiverLabel: { type: "string", enum: ["Mom", "Dad"] },
+    moneyLessonKey: {
+      type: "string",
+      enum: [
+        "prices_change",
+        "jar_saving_limits",
+        "new_money_unfair",
+        "keep_what_you_earn",
+        "better_rules"
+      ]
+    },
+    anchorItem: { type: "string", minLength: 1 },
+    beforePrice: { type: "integer", minimum: 1, maximum: 500 },
+    afterPrice: { type: "integer", minimum: 1, maximum: 500 },
+    purchaseUnit: { type: "string", minLength: 1 },
+    countableComparison: { type: "string", minLength: 1 },
+    noticingMoment: { type: "string", minLength: 1 },
     targetItem: { type: "string", minLength: 1 },
     targetPrice: { type: "integer", minimum: 1, maximum: 500 },
     startingAmount: { type: "integer", minimum: 0, maximum: 500 },
@@ -92,20 +89,47 @@ const storyConceptSchema = {
       type: "array",
       minItems: 2,
       maxItems: 2,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["label", "action", "sceneLocation"],
-        properties: {
-          label: { type: "string", minLength: 1 },
-          action: { type: "string", minLength: 1 },
-          sceneLocation: { type: "string", minLength: 1 }
-        }
-      }
+      items: earningOptionSchema
     },
     temptation: { type: "string", minLength: 1 },
-    deadlineEvent: { type: ["string", "null"], minLength: 1 },
+    gameName: { type: "string", minLength: 1 },
+    tokenName: { type: "string", minLength: 1 },
+    childGoal: { type: "string", minLength: 1 },
+    ruleDisruption: { type: "string", minLength: 1 },
+    fairnessRepair: { type: "string", minLength: 1 },
+    workAction: { type: "string", minLength: 1 },
+    earnedReward: { type: "string", minLength: 1 },
+    rewardUse: { type: "string", minLength: 1 },
+    unfairLossRisk: { type: "string", minLength: 1 },
+    brokenRule: { type: "string", minLength: 1 },
+    fairRule: { type: "string", minLength: 1 },
+    sharedGoal: { type: "string", minLength: 1 },
+    deadlineEvent: { type: ["string", "null"], minLength: 1 }
+  }
+} as const;
+
+const storyConceptSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "premise",
+    "caregiverLabel",
+    "bitcoinBridge",
+    "emotionalPromise",
+    "caregiverWarmthMoment",
+    "bitcoinValueThread",
+    "requiredSetups",
+    "requiredPayoffs",
+    "forbiddenLateIntroductions",
+    "lessonScenario"
+  ],
+  properties: {
+    premise: { type: "string", minLength: 1 },
+    caregiverLabel: { type: "string", enum: ["Mom", "Dad"] },
     bitcoinBridge: { type: "string", minLength: 1 },
+    emotionalPromise: { type: "string", minLength: 1 },
+    caregiverWarmthMoment: { type: "string", minLength: 1 },
+    bitcoinValueThread: { type: "string", minLength: 1 },
     requiredSetups: {
       type: "array",
       minItems: 2,
@@ -123,7 +147,8 @@ const storyConceptSchema = {
       minItems: 1,
       maxItems: 12,
       items: { type: "string", minLength: 1 }
-    }
+    },
+    lessonScenario: lessonScenarioSchema
   }
 } as const;
 
@@ -322,7 +347,10 @@ export const storyCriticVerdictJsonSchema = {
               "age_plausibility",
               "theme_integration",
               "bitcoin_fit",
-              "reading_level"
+              "reading_level",
+              "emotional_tone",
+              "caregiver_warmth",
+              "ending_emotion"
             ]
           },
           severity: { type: "string", enum: ["hard", "soft"] },

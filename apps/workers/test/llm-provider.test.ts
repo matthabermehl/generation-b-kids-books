@@ -13,7 +13,7 @@ const context = {
   childFirstName: "Ava",
   pronouns: "she/her",
   ageYears: 7,
-  lesson: "saving_later" as const,
+  lesson: "jar_saving_limits" as const,
   interests: ["space"],
   profile: "early_decoder_5_7" as const,
   pageCount: 4
@@ -22,20 +22,26 @@ const context = {
 const compliantConcept = {
   premise: "Ava wants a space soccer ball and must decide how to save for it.",
   caregiverLabel: "Mom" as const,
-  targetItem: "space soccer ball",
-  targetPrice: 12,
-  startingAmount: 7,
-  gapAmount: 5,
-  earningOptions: [
-    { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
-    { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
-  ] as const,
-  temptation: "sticker pack",
-  deadlineEvent: "Saturday game",
   bitcoinBridge: "Mom says Bitcoin is one adult saving idea tied to Ava's jar choice.",
+  emotionalPromise: "Ava moves from wanting the ball to calm pride.",
+  caregiverWarmthMoment: "Mom sits close and helps Ava feel steady before the final choice.",
+  bitcoinValueThread: "patience, stewardship, and protecting long-term effort",
   requiredSetups: ["price tag", "coin jar", "Saturday game"],
   requiredPayoffs: ["reach 12 coins", "buy the ball"],
-  forbiddenLateIntroductions: ["tournament", "sale", "third chore"]
+  forbiddenLateIntroductions: ["tournament", "sale", "third chore"],
+  lessonScenario: {
+    moneyLessonKey: "jar_saving_limits",
+    targetItem: "space soccer ball",
+    targetPrice: 12,
+    startingAmount: 7,
+    gapAmount: 5,
+    earningOptions: [
+      { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
+      { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
+    ] as const,
+    temptation: "sticker pack",
+    deadlineEvent: "Saturday game"
+  }
 };
 
 const compliantBeatSheet = {
@@ -469,6 +475,61 @@ describe("llm provider routing", () => {
     expect(result.meta.provider).toBe("anthropic");
   });
 
+  it("normalizes Anthropic story concepts when lessonScenario comes back as a string key", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const storyContext = {
+      ...context,
+      ageYears: 4,
+      lesson: "better_rules" as const,
+      profile: "read_aloud_3_4" as const,
+      interests: ["soccer", "yard"]
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        anthropicToolResponse({
+          premise: "Ava wants a game that feels fair for everyone.",
+          caregiverLabel: "Mama",
+          bitcoinBridge: "Dad says Bitcoin follows shared rules people can trust.",
+          emotionalPromise: "Ava moves from frustration to calm relief.",
+          caregiverWarmthMoment: "Dad kneels beside Ava and helps her breathe before trying again.",
+          bitcoinValueThread: "fair rules and patient trust",
+          requiredSetups: ["soccer game starts", "rule keeps changing"],
+          requiredPayoffs: ["shared rule agreed", "game feels fair"],
+          forbiddenLateIntroductions: ["new coach"],
+          lessonScenario: "better_rules",
+          gameName: "Backyard Soccer",
+          brokenRule: "one player keeps changing when goals count",
+          fairRule: "the same goal rule stays true for every turn",
+          sharedGoal: "finish the game smiling together",
+          deadlineEvent: "sunset"
+        }, "StoryConcept")
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateStoryConcept(storyContext);
+
+    expect(result.meta.provider).toBe("anthropic");
+    expect(result.meta.fallbackFrom).toBe("openai");
+    expect(result.concept.caregiverLabel).toBe("Mom");
+    expect(result.concept.lessonScenario.moneyLessonKey).toBe("better_rules");
+    if (result.concept.lessonScenario.moneyLessonKey !== "better_rules") {
+      throw new Error("Expected better_rules scenario");
+    }
+    expect(result.concept.lessonScenario.gameName).toBe("Backyard Soccer");
+    expect(result.concept.lessonScenario.fairRule).toContain("same goal rule");
+  });
+
   it("allows soft beat-critic issues without triggering rewrites", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
@@ -643,6 +704,215 @@ describe("llm provider routing", () => {
     expect(messages[3]?.content).toContain("The critic rejected the previous draft");
     expect(messages[3]?.content).toContain("Rewrite the story so it satisfies the critic");
     expect(messages[3]?.content).toContain("\"issueType\":\"theme_integration\"");
+  });
+
+  it("adds explicit reading-budget rewrite guidance when critic instructions are blank", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const betterRulesContext = {
+      ...context,
+      profile: "read_aloud_3_4" as const,
+      ageYears: 4,
+      lesson: "better_rules" as const,
+      interests: ["soccer"],
+      pageCount: 12
+    };
+    const betterRulesConcept = {
+      premise: "Ava wants fair rules for a backyard game.",
+      caregiverLabel: "Mom" as const,
+      bitcoinBridge: "Bitcoin can reinforce shared rules that stay fair.",
+      emotionalPromise: "Ava moves from frustration to calm relief.",
+      caregiverWarmthMoment: "Mom kneels beside Ava and helps her breathe.",
+      bitcoinValueThread: "fair rules and shared trust",
+      requiredSetups: ["ball", "friends", "rule talk"],
+      requiredPayoffs: ["fair rule agreed", "game feels calm again"],
+      forbiddenLateIntroductions: ["new coach"],
+      lessonScenario: {
+        moneyLessonKey: "better_rules" as const,
+        gameName: "Backyard Ball",
+        brokenRule: "one child keeps changing the score",
+        fairRule: "every goal counts once for everyone",
+        sharedGoal: "play together under one fair rule",
+        deadlineEvent: null
+      }
+    };
+    const betterRulesBeatSheet = {
+      beats: Array.from({ length: 12 }, (_, index) => ({
+        ...compliantBeatSheet.beats[Math.min(index, compliantBeatSheet.beats.length - 1)],
+        pageIndexEstimate: index,
+        sceneId: `fair-scene-${Math.floor(index / 2) + 1}`,
+        purpose: `Fair beat ${index + 1}`,
+        conflict: "Ava wants the game rules to stay fair for everyone.",
+        sceneLocation: "Backyard field",
+        sceneVisualDescription: "Backyard field with a ball, soft grass, and evening light.",
+        emotionalTarget: index < 9 ? "frustrated" : index === 10 ? "understanding" : "relieved",
+        bitcoinRelevanceScore: index === 10 ? 0.9 : index === 11 ? 0.3 : 0.1,
+        introduces: index === 0 ? ["ball", "friends", "rule talk"] : [],
+        paysOff: index === 11 ? ["fair rule agreed", "game feels calm again"] : [],
+        continuityFacts: ["caregiver_label:Mom", "deadline_event:null"]
+      }))
+    };
+    const rewrittenPages = betterRulesBeatSheet.beats.map((beat, index) => ({
+      pageIndex: index,
+      pageText: `Rewritten fair page ${index + 1}`,
+      illustrationBrief: beat.sceneLocation,
+      sceneId: beat.sceneId,
+      sceneVisualDescription: beat.sceneVisualDescription,
+      newWordsIntroduced: [],
+      repetitionTargets: ["fair"]
+    }));
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiStructuredResponse({
+        title: "Ava Plays Fair",
+        concept: betterRulesConcept,
+        beats: betterRulesBeatSheet.beats,
+        pages: rewrittenPages
+      })
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    await provider.draftPages(
+      betterRulesContext,
+      betterRulesConcept,
+      betterRulesBeatSheet,
+      {
+        rewriteHistory: [
+          {
+            story: {
+              title: "Ava Plays Fair",
+              concept: betterRulesConcept,
+              beats: betterRulesBeatSheet.beats,
+              pages: betterRulesBeatSheet.beats.map((beat, index) => ({
+                pageIndex: index,
+                pageText: `Draft fair page ${index + 1}`,
+                illustrationBrief: beat.sceneLocation,
+                sceneId: beat.sceneId,
+                sceneVisualDescription: beat.sceneVisualDescription,
+                newWordsIntroduced: [],
+                repetitionTargets: ["fair"]
+              })),
+              readingProfileId: "read_aloud_3_4",
+              moneyLessonKey: "better_rules"
+            },
+            criticVerdict: {
+              ok: false,
+              issues: [
+                {
+                  pageStart: 11,
+                  pageEnd: 11,
+                  issueType: "reading_level",
+                  severity: "hard",
+                  rewriteTarget: "page",
+                  evidence: "Page 11 exceeds read-aloud sentence budget.",
+                  suggestedFix: "Page 11 exceeds read-aloud sentence budget."
+                }
+              ],
+              rewriteInstructions: ""
+            }
+          }
+        ]
+      }
+    );
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const messages = requestBody.messages ?? [];
+    expect(messages[3]?.content).toContain("4 sentences or fewer");
+    expect(messages[3]?.content).toContain("page 11");
+    expect(messages[3]?.content).toContain("page 10");
+    expect(messages[3]?.content).toContain("combine clipped observations");
+    expect(messages[3]?.content).toContain("one short quoted sentence plus narration");
+    expect(messages[3]?.content).toContain("calm emotional closure only");
+  });
+
+  it("mock critic preserves deterministic page ranges for read-aloud sentence-budget issues", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(true));
+
+    const provider = await resolveLlmProvider({ mockRunTag: "test-run", source: "unit-test" });
+    const result = await provider.critic(
+      {
+        ...context,
+        profile: "read_aloud_3_4",
+        ageYears: 4,
+        lesson: "better_rules",
+        interests: ["soccer"],
+        pageCount: 12,
+        mockRunTag: "test-run"
+      },
+      {
+        premise: "Ava wants fair rules for a backyard game.",
+        caregiverLabel: "Mom",
+        bitcoinBridge: "Bitcoin can reinforce shared rules that stay fair.",
+        emotionalPromise: "Ava moves from frustration to calm relief.",
+        caregiverWarmthMoment: "Mom kneels beside Ava and helps her breathe.",
+        bitcoinValueThread: "fair rules and shared trust",
+        requiredSetups: ["ball", "friends", "rule talk"],
+        requiredPayoffs: ["fair rule agreed", "game feels calm again"],
+        forbiddenLateIntroductions: ["new coach"],
+        lessonScenario: {
+          moneyLessonKey: "better_rules",
+          gameName: "Backyard Ball",
+          brokenRule: "one child keeps changing the score",
+          fairRule: "every goal counts once for everyone",
+          sharedGoal: "play together under one fair rule",
+          deadlineEvent: null
+        }
+      },
+      {
+        title: "Ava Plays Fair",
+        concept: {
+          premise: "Ava wants fair rules for a backyard game.",
+          caregiverLabel: "Mom",
+          bitcoinBridge: "Bitcoin can reinforce shared rules that stay fair.",
+          emotionalPromise: "Ava moves from frustration to calm relief.",
+          caregiverWarmthMoment: "Mom kneels beside Ava and helps her breathe.",
+          bitcoinValueThread: "fair rules and shared trust",
+          requiredSetups: ["ball", "friends", "rule talk"],
+          requiredPayoffs: ["fair rule agreed", "game feels calm again"],
+          forbiddenLateIntroductions: ["new coach"],
+          lessonScenario: {
+            moneyLessonKey: "better_rules",
+            gameName: "Backyard Ball",
+            brokenRule: "one child keeps changing the score",
+            fairRule: "every goal counts once for everyone",
+            sharedGoal: "play together under one fair rule",
+            deadlineEvent: null
+          }
+        },
+        beats: Array.from({ length: 12 }, (_, index) => ({
+          ...compliantBeatSheet.beats[Math.min(index, compliantBeatSheet.beats.length - 1)],
+          pageIndexEstimate: index
+        })),
+        pages: Array.from({ length: 12 }, (_, index) => ({
+          pageIndex: index,
+          pageText:
+            index === 11
+              ? 'After the game, Ava and Mom sit in the grass. The rocket is full of stars. A soft breeze moves the grass. Mom says, "Fair rules help us trust and play together. Bitcoin is special because its rules stay the same for everyone, too." Ava feels safe and proud inside.'
+              : `Fair page ${index + 1}.`,
+          illustrationBrief: "Backyard field",
+          sceneId: `fair-scene-${Math.floor(index / 2) + 1}`,
+          sceneVisualDescription: "Backyard field with a ball, soft grass, and evening light.",
+          newWordsIntroduced: [],
+          repetitionTargets: []
+        })),
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "better_rules"
+      }
+    );
+
+    expect(result.meta.provider).toBe("mock");
+    expect(result.verdict.issues).toContainEqual(
+      expect.objectContaining({
+        issueType: "reading_level",
+        pageStart: 11,
+        pageEnd: 11,
+        evidence: "Page 11 exceeds read-aloud sentence budget."
+      })
+    );
   });
 
   it("uses legacy max_tokens for non-gpt-5 OpenAI models", async () => {

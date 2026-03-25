@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getMoneyLessonLabel } from "@/lib/money-lessons";
 import { apiClient, type ReviewCaseDetailResponse } from "../lib/api/client";
 import { sanitizeReviewCaseDetail } from "../lib/safe-url";
 import { useSession } from "../lib/session";
@@ -122,7 +123,7 @@ export function ReviewCasePage() {
               </CardHeader>
               <CardContent className="space-y-2 text-sm text-slate-600">
                 <p>Reading profile: {payload.book.readingProfileId}</p>
-                <p>Lesson: {payload.book.moneyLessonKey}</p>
+                <p>Lesson: {getMoneyLessonLabel(payload.book.moneyLessonKey)}</p>
                 <p>Spreads: {payload.book.spreadCount}</p>
                 <p>Physical pages: {payload.book.physicalPageCount}</p>
                 <p>Order: {payload.order.orderId}</p>

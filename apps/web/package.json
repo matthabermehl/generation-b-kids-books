@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "generate:api-types": "pnpm --filter @book/api openapi:generate && openapi-typescript ../api/openapi.json -o src/lib/api/generated.ts",
-    "dev": "pnpm run generate:api-types && vite",
-    "build": "pnpm run generate:api-types && vite build",
+    "dev": "pnpm --filter @book/domain build && pnpm run generate:api-types && vite",
+    "build": "pnpm --filter @book/domain build && pnpm run generate:api-types && vite build",
     "preview": "vite preview",
-    "lint": "pnpm run generate:api-types && tsc -p tsconfig.json --noEmit",
-    "test": "pnpm run generate:api-types && vitest run",
+    "lint": "pnpm --filter @book/domain build && pnpm run generate:api-types && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @book/domain build && pnpm run generate:api-types && vitest run",
     "format": "echo 'format: @book/web no-op'"
   },
   "dependencies": {
+    "@book/domain": "workspace:*",
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource/merriweather": "^5.2.11",
     "class-variance-authority": "^0.7.1",

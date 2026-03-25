@@ -190,6 +190,14 @@ END $$;
 
 UPDATE images SET is_current = TRUE WHERE is_current IS NULL;
 UPDATE book_artifacts SET is_current = TRUE WHERE is_current IS NULL;
+UPDATE books
+SET money_lesson_key = CASE money_lesson_key
+  WHEN 'inflation_candy' THEN 'prices_change'
+  WHEN 'saving_later' THEN 'jar_saving_limits'
+  WHEN 'delayed_gratification' THEN 'keep_what_you_earn'
+  ELSE money_lesson_key
+END
+WHERE money_lesson_key IN ('inflation_candy', 'saving_later', 'delayed_gratification');
 
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_order ON payment_sessions(order_id);

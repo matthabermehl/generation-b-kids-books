@@ -7,6 +7,7 @@ import {
   type CreateOrderResponse,
   type OrderResponse
 } from "@/lib/api/client";
+import type { LessonKey } from "@/lib/money-lessons";
 import { sanitizeBookPayload, toSafeAssetUrl, toSafeCheckoutUrl } from "@/lib/safe-url";
 import { useSession } from "@/lib/session";
 import { storageKeys, usePersistentState, usePersistentString } from "@/lib/storage";
@@ -17,7 +18,6 @@ export const readingProfileOptions = [
 ] as const;
 
 export type ReadingProfile = (typeof readingProfileOptions)[number]["value"];
-export type LessonKey = "inflation_candy" | "saving_later" | "delayed_gratification";
 
 export interface ParentDraft {
   childFirstName: string;
@@ -72,7 +72,7 @@ const defaultDraft: ParentDraft = {
   childFirstName: "Mia",
   pronouns: "she/her",
   ageYears: 6,
-  moneyLessonKey: "saving_later",
+  moneyLessonKey: "jar_saving_limits",
   interestTags: "baking,forest,bikes",
   readingProfileId: "early_decoder_5_7",
   characterDescription:

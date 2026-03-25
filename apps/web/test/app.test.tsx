@@ -58,7 +58,7 @@ function buildFetchStub({
             status: "needs_review",
             childFirstName: "Ava",
             readingProfileId: "early_decoder_5_7",
-            moneyLessonKey: "saving_later",
+            moneyLessonKey: "jar_saving_limits",
             spreadCount: 12,
             physicalPageCount: 24
           },
@@ -412,7 +412,7 @@ describe("web app", () => {
             bookStatus: "needs_review",
             childFirstName: "Ava",
             readingProfileId: "early_decoder_5_7",
-            moneyLessonKey: "saving_later",
+            moneyLessonKey: "jar_saving_limits",
             pageCount: 8,
             latestAction: null,
             latestReviewerEmail: null

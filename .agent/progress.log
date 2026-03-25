@@ -95,6 +95,40 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-25T12:07:24-0400
+Task: lesson-taxonomy-refresh-01 / story-emotional-vision-prompting-01 / story-emotional-vision-docs-01 / story-emotional-vision-deploy-smoke-01 / story-emotional-vision-sample-download-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: replaced the public 3-key lesson taxonomy with the new 5-card Bitcoin emotional-vision set and centralized lesson metadata, refactored story concepts/prompts toward a warm bedtime arc with lesson-specific scenarios plus reading-level rewrite guardrails, refreshed the product/architecture/exec-plan docs, deployed dev, passed provider smoke plus two live picture-book smokes, and captured downloadable sample artifacts under `.agent/artifacts/bitcoin-story-emotional-vision/`.
+Evidence:
+- `bash scripts/agent/quality.sh` => PASS
+- `pnpm cdk:deploy:dev` => PASS
+- `pnpm ops:provider-smoke` => PASS
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules pnpm ops:picture-book-smoke` => PASS (`.agent/artifacts/picture-book-smoke-2026-03-25T15-05-35.041Z.json`, order `ee924f0d-72a7-474b-bed7-6e7e51aa9d36`, book `6ae5f3f3-e0df-4ac1-8c28-e726202fbde9`, `ready`, previews `12/12`)
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 MONEY_LESSON_KEY=new_money_unfair pnpm ops:picture-book-smoke` => PASS (`.agent/artifacts/picture-book-smoke-2026-03-25T15-29-29.092Z.json`, order `492217b2-b8a2-4613-83eb-7df2196df198`, book `35fc0126-c929-4e0d-beca-42c501f1db13`, `ready`, previews `12/12`)
+- downloaded PDFs => `.agent/artifacts/bitcoin-story-emotional-vision/better_rules-read_aloud-book.pdf`, `.agent/artifacts/bitcoin-story-emotional-vision/new_money_unfair-early_decoder-book.pdf`
+- deployed screenshots => `.agent/artifacts/bitcoin-story-emotional-vision/create-lesson-selector.png`, `.agent/artifacts/bitcoin-story-emotional-vision/current-book-workspace.png`
+Notes: the first live finalize failure narrowed to `reading_level`; fixing prompt page-length guardrails plus rewrite guidance cleared it. Dev redeploy also required local Docker cleanup after `ENOSPC` (`docker volume prune -f`, `docker builder prune -f`).
+Commit: pending
+
+2026-03-24T00:16:56-0400
+Task: story-emotional-vision-prompting-01
+Baseline: `bash scripts/agent/smoke.sh` FAIL initially on existing `pnpm-lock.yaml` drift vs `apps/web/package.json`, then PASS after `pnpm install --no-frozen-lockfile`
+Change: made deterministic story QA first-class with real page ranges, preserved those ranges through the mock/live critic path and fallback rewrite feedback, and tightened the read-aloud prompt stack so quoted dialogue stays shorter and `better_rules` explicitly bridges Bitcoin on page 10 while page 11 stays as the calm emotional landing. Added regression coverage for sentence-budget page indices, rewrite-feedback page labeling, and the new better_rules/read-aloud ending-shape prompt rules.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/smoke.sh` => PASS
+- `pnpm cdk:deploy:dev` => UPDATE_COMPLETE + web deploy complete
+- `pnpm ops:provider-smoke` => PASS
+- live better_rules/read_aloud_3_4 story QA artifact => PASS (`book abc1e55b-0742-42f6-b2e2-010619732108`, `.agent/artifacts/bitcoin-story-emotional-vision/better_rules-story-qa-report.json`, `finalStatus=passed`)
+- live control new_money_unfair/early_decoder_5_7 story QA artifact => PASS (`book 9a7c6676-c379-4857-ae64-d1b3719fd4c5`, `.agent/artifacts/bitcoin-story-emotional-vision/new_money_unfair-story-qa-report.json`, `finalStatus=passed`)
+Feature toggle:
+- `story-emotional-vision-prompting-01` passes=false -> true
+Next: `story-emotional-vision-deploy-smoke-01` / `story-emotional-vision-sample-download-01`
+Notes: both live books progressed past story finalization into image/render work; terminal smoke JSON and final illustrated PDF artifacts still need to be captured once a run reaches `ready`.
+Commit: pending
+
 2026-03-08T21:52:32-0400
 Task: clean-product-ui-system-01
 Baseline: PR review follow-up on top of green branch

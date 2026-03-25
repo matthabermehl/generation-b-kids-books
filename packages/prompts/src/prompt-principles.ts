@@ -8,9 +8,9 @@ export interface PromptPrinciple {
 export const promptPrinciples: PromptPrinciple[] = [
   {
     id: "bitcoin_theme_positive",
-    summary: "Bitcoin supports the saving theme in a positive, child-safe way without needing to wait for the ending.",
+    summary: "Bitcoin supports the story's value thread in a positive, child-safe, story-first way without needing to wait for the ending.",
     appliesTo: "planner",
-    requiredSignals: ["bitcoin", "positive", "theme", "saving"]
+    requiredSignals: ["bitcoin", "positive", "value thread", "story-first"]
   },
   {
     id: "child_agency",
@@ -32,9 +32,9 @@ export const promptPrinciples: PromptPrinciple[] = [
   },
   {
     id: "anti_mad_libs",
-    summary: "Avoid slot-filled generic beats; conflicts must be specific and emotionally believable.",
+    summary: "Avoid slot-filled generic beats; conflicts must be specific, emotionally believable, and move toward reassurance.",
     appliesTo: "critic",
-    requiredSignals: ["mad-libs", "specific", "emotion", "believable"]
+    requiredSignals: ["mad-libs", "specific", "emotion", "reassurance"]
   },
   {
     id: "surgical_rewrite",
@@ -43,10 +43,10 @@ export const promptPrinciples: PromptPrinciple[] = [
     requiredSignals: ["preserve", "flagged", "global constraints", "schema"]
   },
   {
-    id: "writer_grounding",
-    summary: "Final pages stay age-appropriate, concrete, and consequence-driven.",
+    id: "writer_bedtime_warmth",
+    summary: "Final pages stay age-appropriate, concrete, warm, and bedtime-calm.",
     appliesTo: "writer",
-    requiredSignals: ["age-appropriate", "concrete", "consequence", "child should not say"]
+    requiredSignals: ["age-appropriate", "concrete", "bedtime", "child should not say"]
   }
 ];
 

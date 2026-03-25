@@ -142,7 +142,7 @@ describe("pipeline beat-planning failure persistence", () => {
             age_years: 6,
             pronouns: "she/her",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later",
+            money_lesson_key: "jar_saving_limits",
             interest_tags: "space,soccer"
           }
         ];
@@ -190,20 +190,26 @@ describe("pipeline beat-planning failure persistence", () => {
   const concept = {
     premise: "Ava saves for a soccer ball.",
     caregiverLabel: "Mom" as const,
-    targetItem: "soccer ball",
-    targetPrice: 12,
-    startingAmount: 7,
-    gapAmount: 5,
-    earningOptions: [
-      { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
-      { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
-    ] as const,
-    temptation: "sticker pack",
-    deadlineEvent: "Saturday game",
     bitcoinBridge: "Mom says Bitcoin is one adult saving idea tied to Ava's jar choice.",
+    emotionalPromise: "Ava moves from wanting the ball to calm pride.",
+    caregiverWarmthMoment: "Mom sits beside Ava and helps her choose the steady path.",
+    bitcoinValueThread: "patience, stewardship, and protecting long-term effort",
     requiredSetups: ["price tag", "coin jar"],
     requiredPayoffs: ["reach 12 coins", "buy the ball"],
-    forbiddenLateIntroductions: ["tournament", "sale"]
+    forbiddenLateIntroductions: ["tournament", "sale"],
+    lessonScenario: {
+      moneyLessonKey: "jar_saving_limits",
+      targetItem: "soccer ball",
+      targetPrice: 12,
+      startingAmount: 7,
+      gapAmount: 5,
+      earningOptions: [
+        { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
+        { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
+      ] as const,
+      temptation: "sticker pack",
+      deadlineEvent: "Saturday game"
+    }
   };
 
   it("persists beat-plan-failed artifact and evaluation then rethrows", async () => {
@@ -333,7 +339,7 @@ describe("pipeline beat-planning failure persistence", () => {
             repetitionTargets: ["save"]
           })),
           readingProfileId: "early_decoder_5_7",
-          moneyLessonKey: "saving_later"
+          moneyLessonKey: "jar_saving_limits"
         },
         meta: {
           provider: "anthropic",
@@ -361,6 +367,10 @@ describe("pipeline beat-planning failure persistence", () => {
       bookId: "book-1",
       pageCount: 12
     });
+    expect(moderateTextsMock).toHaveBeenCalledWith(
+      "oa",
+      Array.from({ length: 12 }, (_, index) => `Page ${index} text.`)
+    );
 
     expect(putJsonMock).toHaveBeenCalledWith(
       "books/book-1/beat-plan-report.json",
@@ -515,7 +525,7 @@ describe("pipeline beat-planning failure persistence", () => {
           repetitionTargets: ["save"]
         })),
         readingProfileId: "early_decoder_5_7",
-        moneyLessonKey: "saving_later"
+        moneyLessonKey: "jar_saving_limits"
       },
       meta: {
         provider: "openai",
@@ -692,7 +702,9 @@ describe("pipeline beat-planning failure persistence", () => {
           newWordsIntroduced: ["save"],
           repetitionTargets: ["save"]
         }
-      ]
+      ],
+      readingProfileId: "early_decoder_5_7",
+      moneyLessonKey: "jar_saving_limits"
     });
 
     await expect(handler({ action: "resume_after_story_review", bookId: "book-1" })).resolves.toEqual({
@@ -701,6 +713,7 @@ describe("pipeline beat-planning failure persistence", () => {
     });
 
     expect(getJsonMock).toHaveBeenCalledWith("books/book-1/story.json");
+    expect(moderateTextsMock).toHaveBeenCalledWith("oa", ["Ava and Mom can save."]);
     const pageInsert = txExecuteMock.mock.calls.find((call) =>
       String(call[1]).includes("INSERT INTO pages")
     );
@@ -826,7 +839,7 @@ describe("pipeline beat-planning failure persistence", () => {
             age_years: 6,
             pronouns: "she/her",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later",
+            money_lesson_key: "jar_saving_limits",
             interest_tags: "space,soccer",
             product_family: "picture_book_fixed_layout",
             layout_profile_id: "pb_square_spread_8_5_v1"
@@ -915,7 +928,7 @@ describe("pipeline beat-planning failure persistence", () => {
             age_years: 6,
             pronouns: "she/her",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later",
+            money_lesson_key: "jar_saving_limits",
             interest_tags: "space,soccer",
             product_family: "picture_book_fixed_layout",
             layout_profile_id: "pb_square_spread_8_5_v1"

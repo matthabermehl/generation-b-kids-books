@@ -11,7 +11,7 @@ const apiBaseUrl = process.env.API_BASE_URL;
 const smokeEmail = process.env.SMOKE_EMAIL ?? "picture-book-smoke@example.com";
 const readingProfileId = process.env.READING_PROFILE_ID ?? "early_decoder_5_7";
 const childFirstName = process.env.CHILD_FIRST_NAME ?? "Ava";
-const moneyLessonKey = process.env.MONEY_LESSON_KEY ?? "saving_later";
+const moneyLessonKey = process.env.MONEY_LESSON_KEY ?? "jar_saving_limits";
 const characterDescription =
   process.env.CHARACTER_DESCRIPTION
   ?? "A curious child with warm brown skin, a bright red raincoat, striped leggings, and a round yellow backpack.";

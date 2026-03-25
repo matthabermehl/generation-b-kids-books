@@ -104,7 +104,7 @@ async function main() {
       childFirstName: "Noah",
       pronouns: "he/him",
       ageYears: 6,
-      moneyLessonKey: "inflation_candy",
+      moneyLessonKey: "prices_change",
       interestTags: ["dinosaurs", "lego"],
       readingProfileId: "early_decoder_5_7"
     },

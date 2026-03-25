@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getMoneyLessonLabel } from "@/lib/money-lessons";
 import { useParentFlow } from "@/lib/parent-flow";
 import { toSafeCheckoutUrl } from "@/lib/safe-url";
 
@@ -88,7 +89,7 @@ export function CheckoutPage() {
                 </div>
                 <div>
                   <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Lesson</p>
-                  <p className="mt-1 text-slate-700">{draft.moneyLessonKey.replace(/_/g, " ")}</p>
+                  <p className="mt-1 text-slate-700">{getMoneyLessonLabel(draft.moneyLessonKey)}</p>
                 </div>
                 <div>
                   <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Interests</p>

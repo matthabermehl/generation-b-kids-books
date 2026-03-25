@@ -14,20 +14,26 @@ const story: StoryPackage = {
   concept: {
     premise: "Ava saves for a soccer ball.",
     caregiverLabel: "Mom",
-    targetItem: "soccer ball",
-    targetPrice: 12,
-    startingAmount: 8,
-    gapAmount: 4,
-    earningOptions: [
-      { label: "help bake", action: "help bake in the kitchen", sceneLocation: "kitchen" },
-      { label: "walk dog", action: "walk the dog outside", sceneLocation: "yard" }
-    ],
-    temptation: "stickers",
-    deadlineEvent: "Saturday game",
     bitcoinBridge: "Mom mentions Bitcoin as an adult saving idea.",
+    emotionalPromise: "Ava moves from wanting the ball to feeling calm and proud.",
+    caregiverWarmthMoment: "Mom sits beside Ava and helps her take the next steady step.",
+    bitcoinValueThread: "patience, stewardship, and protecting long-term effort",
     requiredSetups: ["coin jar", "price tag"],
     requiredPayoffs: ["4 coins", "soccer ball"],
-    forbiddenLateIntroductions: []
+    forbiddenLateIntroductions: [],
+    lessonScenario: {
+      moneyLessonKey: "jar_saving_limits",
+      targetItem: "soccer ball",
+      targetPrice: 12,
+      startingAmount: 8,
+      gapAmount: 4,
+      earningOptions: [
+        { label: "help bake", action: "help bake in the kitchen", sceneLocation: "kitchen" },
+        { label: "walk dog", action: "walk the dog outside", sceneLocation: "yard" }
+      ],
+      temptation: "stickers",
+      deadlineEvent: "Saturday game"
+    }
   },
   beats: [],
   pages: [
@@ -51,7 +57,7 @@ const story: StoryPackage = {
     }
   ],
   readingProfileId: "early_decoder_5_7",
-  moneyLessonKey: "saving_later"
+  moneyLessonKey: "jar_saving_limits"
 };
 
 describe("visual continuity builders", () => {
@@ -148,6 +154,71 @@ describe("visual continuity builders", () => {
     expect(prompt).toContain("Style:");
     expect(prompt).toContain("Detailed children's book watercolor illustration on bright white paper.");
     expect(prompt).toContain("Keep the same visible identity anchors, face, hair, outfit palette, and proportions");
+  });
+
+  it("filters generic sentence-start labels and keeps generic roles prompt-only", () => {
+    const visualBible = buildVisualStoryBible({
+      bookId: "book-2",
+      title: "Ava Plays Fair",
+      childFirstName: "Ava",
+      story: {
+        ...story,
+        concept: {
+          ...story.concept,
+          lessonScenario: {
+            moneyLessonKey: "better_rules",
+            gameName: "Space Soccer",
+            brokenRule: "the goal keeps moving",
+            fairRule: "the goal stays put",
+            sharedGoal: "everyone gets a fair turn",
+            deadlineEvent: null
+          }
+        },
+        moneyLessonKey: "better_rules",
+        pages: [
+          {
+            pageIndex: 0,
+            pageText: "Everyone cheers. It is game time. Mom and Sam stand by a friend.",
+            illustrationBrief: "Mom and Sam smile while a friend holds the ball.",
+            sceneId: "yard_start",
+            sceneVisualDescription: "Backyard grass with a soccer ball and a small goal.",
+            newWordsIntroduced: ["goal"],
+            repetitionTargets: ["goal"]
+          },
+          {
+            pageIndex: 1,
+            pageText: "Sam runs. Mom waves. The friend points to the goal.",
+            illustrationBrief: "Sam and Mom stand near the same friend by the ball.",
+            sceneId: "yard_start",
+            sceneVisualDescription: "Backyard grass with a soccer ball and a small goal.",
+            newWordsIntroduced: ["run"],
+            repetitionTargets: ["run"]
+          }
+        ]
+      },
+      generatedAt: "2026-03-24T00:00:00.000Z"
+    });
+
+    expect(visualBible.entities.find((entity) => entity.entityId === "supporting_character_everyone")).toBeUndefined();
+    expect(visualBible.entities.find((entity) => entity.entityId === "supporting_character_it")).toBeUndefined();
+    expect(visualBible.entities.find((entity) => entity.entityId === "supporting_character_children")).toBeUndefined();
+    expect(visualBible.entities.find((entity) => entity.entityId === "supporting_character_each")).toBeUndefined();
+    expect(visualBible.entities.find((entity) => entity.entityId === "supporting_character_let")).toBeUndefined();
+    expect(visualBible.entities.find((entity) => entity.entityId === "supporting_character_now")).toBeUndefined();
+
+    const sam = visualBible.entities.find((entity) => entity.entityId === "supporting_character_sam");
+    expect(sam).toMatchObject({
+      recurring: true,
+      importance: "story_critical",
+      referenceStrategy: "generated_supporting_reference"
+    });
+
+    const friend = visualBible.entities.find((entity) => entity.entityId === "supporting_character_friend");
+    expect(friend).toMatchObject({
+      recurring: true,
+      importance: "story_critical",
+      referenceStrategy: "prompt_only"
+    });
   });
 
   it("renders structured visual guidance into the page art prompt", () => {

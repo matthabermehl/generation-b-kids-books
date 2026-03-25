@@ -5,7 +5,8 @@
     "jsx": "react-jsx",
     "outDir": "dist",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@book/domain": ["../../packages/domain/src/index.ts"]
     },
     "types": ["vite/client", "node"]
   },

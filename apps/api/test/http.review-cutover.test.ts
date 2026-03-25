@@ -175,7 +175,7 @@ describe("review and render cutover http routes", () => {
             id: "book-1",
             status: "building",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later",
+            money_lesson_key: "jar_saving_limits",
             child_first_name: "Ava",
             product_family: "picture_book_fixed_layout"
           }
@@ -239,7 +239,7 @@ describe("review and render cutover http routes", () => {
             order_status: "needs_review",
             child_first_name: "Ava",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later"
+            money_lesson_key: "jar_saving_limits"
           }
         ];
       }
@@ -333,7 +333,7 @@ describe("review and render cutover http routes", () => {
             order_status: "needs_review",
             child_first_name: "Ava",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later"
+            money_lesson_key: "jar_saving_limits"
           }
         ];
       }
@@ -402,7 +402,7 @@ describe("review and render cutover http routes", () => {
             order_status: "needs_review",
             child_first_name: "Ava",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later"
+            money_lesson_key: "jar_saving_limits"
           }
         ];
       }
@@ -476,7 +476,7 @@ describe("review and render cutover http routes", () => {
             order_status: "needs_review",
             child_first_name: "Ava",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later"
+            money_lesson_key: "jar_saving_limits"
           }
         ];
       }
@@ -544,7 +544,7 @@ describe("review and render cutover http routes", () => {
             order_status: "needs_review",
             child_first_name: "Ava",
             reading_profile_id: "early_decoder_5_7",
-            money_lesson_key: "saving_later"
+            money_lesson_key: "jar_saving_limits"
           }
         ];
       }

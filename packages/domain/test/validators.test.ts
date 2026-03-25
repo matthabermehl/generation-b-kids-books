@@ -13,20 +13,26 @@ import {
 const concept = {
   premise: "Mia saves for a scooter.",
   caregiverLabel: "Mom" as const,
-  targetItem: "scooter",
-  targetPrice: 12,
-  startingAmount: 7,
-  gapAmount: 5,
-  earningOptions: [
-    { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
-    { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
-  ] as const,
-  temptation: "candy bar",
-  deadlineEvent: "Saturday ride",
   bitcoinBridge: "Bitcoin can be one grown-up saving idea that matches Mia's patient plan.",
+  emotionalPromise: "Mia moves from wanting the scooter to feeling calm and proud.",
+  caregiverWarmthMoment: "Mom kneels beside Mia and names the feeling before helping her choose.",
+  bitcoinValueThread: "patience, stewardship, and protecting long-term effort",
   requiredSetups: ["price tag", "coin jar", "Saturday ride"],
   requiredPayoffs: ["reach 12 coins", "buy the scooter"],
-  forbiddenLateIntroductions: ["sale", "third chore"]
+  forbiddenLateIntroductions: ["sale", "third chore"],
+  lessonScenario: {
+    moneyLessonKey: "jar_saving_limits",
+    targetItem: "scooter",
+    targetPrice: 12,
+    startingAmount: 7,
+    gapAmount: 5,
+    earningOptions: [
+      { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
+      { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
+    ] as const,
+    temptation: "candy bar",
+    deadlineEvent: "Saturday ride"
+  }
 };
 
 describe("seed", () => {
@@ -94,6 +100,75 @@ describe("reading profile", () => {
     ]);
 
     expect(result.ok).toBe(true);
+  });
+
+  it("does not count trailing quote marks as extra read-aloud sentences", () => {
+    const result = validateReadingProfile("read_aloud_3_4", [
+      {
+        pageIndex: 6,
+        pageText:
+          'Mom sees Ava is upset and comes over. She kneels beside Ava and hugs her gently. Mom says, "It is okay to feel upset. Let us find a way to make the game fair for everyone."',
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Backyard grass",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("treats quoted dialogue with attribution as one read-aloud sentence", () => {
+    const result = validateReadingProfile("read_aloud_3_4", [
+      {
+        pageIndex: 1,
+        pageText:
+          '“Let us play soccer!” says Ava. Mom reminds everyone, “We take turns.” Each friend gets a turn. The children feel ready to play.',
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Backyard grass",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      },
+      {
+        pageIndex: 8,
+        pageText:
+          'The friends nod and smile. “We agree!” they say. Everyone puts their hands in together. The soccer ball is ready again.',
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Backyard grass",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("records the real page index for read-aloud sentence-budget failures", () => {
+    const result = validateReadingProfile("read_aloud_3_4", [
+      {
+        pageIndex: 11,
+        pageText:
+          'After the game, Ava and Mom sit in the grass. The rocket is full of stars. A soft breeze moves the grass. Mom says, "Fair rules help us trust and play together. Bitcoin is special because its rules stay the same for everyone, too." Ava feels safe and proud inside.',
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Backyard grass",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        code: "SENTENCE_COUNT",
+        message: "Page 11 exceeds read-aloud sentence budget.",
+        pageStart: 11,
+        pageEnd: 11
+      })
+    );
   });
 });
 

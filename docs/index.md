@@ -12,8 +12,10 @@
 
 ## Execution Planning
 - [exec-plans/tech-debt-tracker.md](exec-plans/tech-debt-tracker.md)
+- [exec-plans/active/000-harness-bootstrap.md](exec-plans/active/000-harness-bootstrap.md)
 - [exec-plans/active/001-openai-image-pipeline.md](exec-plans/active/001-openai-image-pipeline.md)
-- `exec-plans/active/`
+- [exec-plans/active/002-visual-continuity-hardening.md](exec-plans/active/002-visual-continuity-hardening.md)
+- [exec-plans/active/003-bitcoin-story-emotional-vision.md](exec-plans/active/003-bitcoin-story-emotional-vision.md)
 - `exec-plans/completed/`
 
 ## Design

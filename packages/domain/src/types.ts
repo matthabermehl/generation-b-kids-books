@@ -28,9 +28,19 @@ export interface StoryConceptEarningOption {
   sceneLocation: string;
 }
 
-export interface StoryConcept {
-  premise: string;
-  caregiverLabel: StoryCaregiverLabel;
+export interface StoryLessonScenarioPricesChange {
+  moneyLessonKey: "prices_change";
+  anchorItem: string;
+  beforePrice: number;
+  afterPrice: number;
+  purchaseUnit: string;
+  countableComparison: string;
+  noticingMoment: string;
+  deadlineEvent: string | null;
+}
+
+export interface StoryLessonScenarioJarSavingLimits {
+  moneyLessonKey: "jar_saving_limits";
   targetItem: string;
   targetPrice: number;
   startingAmount: number;
@@ -38,10 +48,54 @@ export interface StoryConcept {
   earningOptions: [StoryConceptEarningOption, StoryConceptEarningOption];
   temptation: string;
   deadlineEvent: string | null;
+}
+
+export interface StoryLessonScenarioNewMoneyUnfair {
+  moneyLessonKey: "new_money_unfair";
+  gameName: string;
+  tokenName: string;
+  childGoal: string;
+  ruleDisruption: string;
+  fairnessRepair: string;
+  deadlineEvent: string | null;
+}
+
+export interface StoryLessonScenarioKeepWhatYouEarn {
+  moneyLessonKey: "keep_what_you_earn";
+  workAction: string;
+  earnedReward: string;
+  rewardUse: string;
+  unfairLossRisk: string;
+  deadlineEvent: string | null;
+}
+
+export interface StoryLessonScenarioBetterRules {
+  moneyLessonKey: "better_rules";
+  gameName: string;
+  brokenRule: string;
+  fairRule: string;
+  sharedGoal: string;
+  deadlineEvent: string | null;
+}
+
+export type StoryLessonScenario =
+  | StoryLessonScenarioPricesChange
+  | StoryLessonScenarioJarSavingLimits
+  | StoryLessonScenarioNewMoneyUnfair
+  | StoryLessonScenarioKeepWhatYouEarn
+  | StoryLessonScenarioBetterRules;
+
+export interface StoryConcept {
+  premise: string;
+  caregiverLabel: StoryCaregiverLabel;
   bitcoinBridge: string;
+  emotionalPromise: string;
+  caregiverWarmthMoment: string;
+  bitcoinValueThread: string;
   requiredSetups: string[];
   requiredPayoffs: string[];
   forbiddenLateIntroductions: string[];
+  lessonScenario: StoryLessonScenario;
 }
 
 export interface PlannedBeat {
@@ -93,7 +147,10 @@ export type StoryCriticIssueType =
   | "age_plausibility"
   | "theme_integration"
   | "bitcoin_fit"
-  | "reading_level";
+  | "reading_level"
+  | "emotional_tone"
+  | "caregiver_warmth"
+  | "ending_emotion";
 
 export type StoryCriticRewriteTarget = "concept" | "beat" | "page";
 export type StoryCriticIssueSeverity = "hard" | "soft";

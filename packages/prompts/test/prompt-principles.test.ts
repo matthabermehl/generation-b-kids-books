@@ -3,6 +3,7 @@ import {
   buildBeatPlannerPrompt,
   buildBeatPlannerSystemPrompt,
   buildBeatRewritePrompt,
+  buildCriticPrompt,
   buildNarrativeFreshnessCriticPrompt,
   buildScienceOfReadingCriticPrompt,
   buildPageWriterPrompt,
@@ -14,7 +15,7 @@ const context: StoryTemplateContext = {
   childFirstName: "Maya",
   pronouns: "she/her",
   ageYears: 6,
-  lesson: "saving_later",
+  lesson: "jar_saving_limits",
   interests: ["puzzles"],
   profile: "early_decoder_5_7"
 };
@@ -42,20 +43,26 @@ const beatSheet = {
 const concept = {
   premise: "Maya wants a puzzle and must decide how to save for it.",
   caregiverLabel: "Mom" as const,
-  targetItem: "puzzle set",
-  targetPrice: 12,
-  startingAmount: 7,
-  gapAmount: 5,
-  earningOptions: [
-    { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
-    { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
-  ] as const,
-  temptation: "sticker pack",
-  deadlineEvent: "Saturday game",
   bitcoinBridge: "Bitcoin can positively support Maya's long-term saving theme.",
+  emotionalPromise: "Maya moves from temptation to calm pride.",
+  caregiverWarmthMoment: "Mom sits close and helps Maya feel steadier.",
+  bitcoinValueThread: "patience, stewardship, and protecting long-term effort",
   requiredSetups: ["price tag", "coin jar"],
   requiredPayoffs: ["reach 12 coins", "buy the puzzle"],
-  forbiddenLateIntroductions: ["tournament", "sale", "third chore"]
+  forbiddenLateIntroductions: ["tournament", "sale", "third chore"],
+  lessonScenario: {
+    moneyLessonKey: "jar_saving_limits",
+    targetItem: "puzzle set",
+    targetPrice: 12,
+    startingAmount: 7,
+    gapAmount: 5,
+    earningOptions: [
+      { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
+      { label: "help bake cookies", action: "help bake cookies in the kitchen", sceneLocation: "kitchen" }
+    ] as const,
+    temptation: "sticker pack",
+    deadlineEvent: "Saturday game"
+  }
 };
 
 function expectSignals(prompt: string, signals: string[]): void {
@@ -102,7 +109,7 @@ describe("prompt principles", () => {
       "repetition",
       "taught_words",
       "thematic salience",
-      "positive bitcoin-saving connection"
+      "positive bitcoin connection"
     ]);
   });
 
@@ -110,7 +117,7 @@ describe("prompt principles", () => {
     const prompt = buildBeatPlannerPrompt(context, concept, 12);
 
     expectSignals(prompt, [
-      "bitcoin must positively support the story theme",
+      "bitcoin must positively support the story's money values",
       "caregiver or narrator language",
       "device-first",
       "chosen_earning_option",
@@ -146,6 +153,88 @@ describe("prompt principles", () => {
       "bitcoin may recur briefly",
       "investment promises",
       "child should not say, decode, or explain bitcoin"
+    ]);
+  });
+
+  it("writer prompt includes explicit reading-profile page-length guardrails", () => {
+    const readAloudPrompt = buildPageWriterPrompt(
+      { ...context, ageYears: 4, profile: "read_aloud_3_4", lesson: "better_rules", interests: ["soccer"] },
+      {
+        premise: "Maya wants fair rules for a backyard game.",
+        caregiverLabel: "Mom" as const,
+        bitcoinBridge: "Bitcoin can reinforce trusted shared rules.",
+        emotionalPromise: "Maya moves from frustration to calm relief.",
+        caregiverWarmthMoment: "Mom kneels beside Maya and helps her feel steady.",
+        bitcoinValueThread: "fair rules and shared trust",
+        requiredSetups: ["ball", "friends", "rule talk"],
+        requiredPayoffs: ["fair rule agreed", "game feels calm again"],
+        forbiddenLateIntroductions: ["new coach"],
+        lessonScenario: {
+          moneyLessonKey: "better_rules",
+          gameName: "Backyard Ball",
+          brokenRule: "one child keeps changing the score",
+          fairRule: "every goal counts once for everyone",
+          sharedGoal: "play together under one fair rule",
+          deadlineEvent: null
+        }
+      },
+      beatSheet,
+      12
+    );
+    const earlyDecoderPrompt = buildPageWriterPrompt(context, concept, beatSheet, 1);
+
+    expectSignals(readAloudPrompt, [
+      "every page must stay at 4 sentences or fewer",
+      "prefer 2-3 short sentences",
+      "one short quoted sentence plus narration",
+      "reserve page 10 for the clearest explicit bitcoin bridge",
+      "keep page 11 for emotional resolution only"
+    ]);
+    expectSignals(earlyDecoderPrompt, [
+      "every page must stay at 45 words or fewer",
+      "2-4 short decodable sentences"
+    ]);
+  });
+
+  it("better_rules read-aloud planner and critic prompts protect the final emotional page", () => {
+    const betterRulesContext: StoryTemplateContext = {
+      ...context,
+      ageYears: 4,
+      profile: "read_aloud_3_4",
+      lesson: "better_rules",
+      interests: ["soccer"]
+    };
+    const betterRulesConcept = {
+      premise: "Maya wants fair rules for a backyard game.",
+      caregiverLabel: "Mom" as const,
+      bitcoinBridge: "Bitcoin can reinforce trusted shared rules.",
+      emotionalPromise: "Maya moves from frustration to calm relief.",
+      caregiverWarmthMoment: "Mom kneels beside Maya and helps her feel steady.",
+      bitcoinValueThread: "fair rules and shared trust",
+      requiredSetups: ["ball", "friends", "rule talk"],
+      requiredPayoffs: ["fair rule agreed", "game feels calm again"],
+      forbiddenLateIntroductions: ["new coach"],
+      lessonScenario: {
+        moneyLessonKey: "better_rules" as const,
+        gameName: "Backyard Ball",
+        brokenRule: "one child keeps changing the score",
+        fairRule: "every goal counts once for everyone",
+        sharedGoal: "play together under one fair rule",
+        deadlineEvent: null
+      }
+    };
+
+    const plannerPrompt = buildBeatPlannerPrompt(betterRulesContext, betterRulesConcept, 12);
+    const criticPrompt = buildCriticPrompt(betterRulesContext, betterRulesConcept, "{\"pages\":[]}");
+
+    expectSignals(plannerPrompt, [
+      "reserve page 10 for the clearest explicit bitcoin bridge",
+      "keep page 11 for emotional resolution only"
+    ]);
+    expectSignals(criticPrompt, [
+      "penultimate page",
+      "final page should close emotionally",
+      "late, verbose bitcoin explanation overloads the ending"
     ]);
   });
 });

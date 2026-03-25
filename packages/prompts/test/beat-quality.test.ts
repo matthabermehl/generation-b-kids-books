@@ -17,7 +17,8 @@ function makeBeat(index: number, bitcoinScore = 0.1) {
     sceneLocation: "Grocery store",
     sceneId: `scene_${Math.floor(index / 2) + 1}`,
     sceneVisualDescription: "Watercolor grocery aisle with a small price sign and plenty of white paper.",
-    emotionalTarget: "Curious",
+    emotionalTarget:
+      index === 4 ? "Reassured and steady" : index >= 8 ? "Calm, relieved, and proud" : "Curious and determined",
     pageIndexEstimate: index,
     decodabilityTags: ["controlled_vocab", "repetition"],
     newWordsIntroduced: ["save"],

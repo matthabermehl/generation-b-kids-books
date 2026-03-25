@@ -5,16 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
-import { type LessonKey, readingProfileOptions, type ReadingProfile, useParentFlow, validateAgeYears } from "@/lib/parent-flow";
+import { orderedMoneyLessons, type LessonKey } from "@/lib/money-lessons";
+import { readingProfileOptions, type ReadingProfile, useParentFlow, validateAgeYears } from "@/lib/parent-flow";
+import { cn } from "@/lib/utils";
 
 function formatAttemptTime(value: string) {
   return new Date(value).toLocaleString([], {
@@ -195,22 +191,44 @@ export function CreateOrderPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label htmlFor="money-lesson">Money lesson</Label>
-              <Select
-                value={draft.moneyLessonKey}
-                disabled={hasActiveOrder}
-                onValueChange={(value) => updateDraft("moneyLessonKey", value as LessonKey)}
-              >
-                <SelectTrigger id="money-lesson" className="w-full">
-                  <SelectValue placeholder="Choose the lesson" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inflation_candy">Why coins buy less candy</SelectItem>
-                  <SelectItem value="saving_later">Why saving helps later</SelectItem>
-                  <SelectItem value="delayed_gratification">Why waiting makes things better</SelectItem>
-                </SelectContent>
-              </Select>
+              <div id="money-lesson" className="grid gap-3" role="radiogroup" aria-label="Money lesson">
+                {orderedMoneyLessons.map((lesson, index) => {
+                  const selected = draft.moneyLessonKey === lesson.key;
+                  return (
+                    <button
+                      key={lesson.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      disabled={hasActiveOrder}
+                      onClick={() => updateDraft("moneyLessonKey", lesson.key as LessonKey)}
+                      className={cn(
+                        "w-full rounded-3xl border bg-white px-5 py-4 text-left transition",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400",
+                        hasActiveOrder && "cursor-not-allowed opacity-70",
+                        selected
+                          ? "border-slate-900 shadow-sm ring-1 ring-slate-900/10"
+                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/70"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-medium text-slate-700">
+                          {index + 1}
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-medium text-slate-900">{lesson.label}</p>
+                          <p className="text-sm text-slate-500">{lesson.helperText}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="sw-field-note text-sm text-slate-500">
+                Choose the question you want the bedtime story to help your child gently understand.
+              </p>
             </div>
 
             <div className="space-y-2">

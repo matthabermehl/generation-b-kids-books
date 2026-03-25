@@ -1,31 +1,26 @@
 # Current Task
-Task ID: visual-continuity-hardening-complete
+Task ID: story-emotional-vision-sample-download-01
 
 ## Goal
-Record that the visual continuity hardening initiative is complete on this branch with live deploy proof, two successful picture-book smoke artifacts, and a downloaded sample PDF artifact.
+Close the emotional-vision initiative with live smoke evidence, downloadable sample books, and deployed UI captures.
 
 ## Constraints
-- Keep the final harness state aligned with the evidence collected in this session.
-- Preserve the downloaded artifacts under `.agent/artifacts/visual-continuity-hardening/`.
-- Do not overwrite unrelated branch work while wrapping up the initiative.
+- Keep the repo on the new `codex/bitcoin-story-emotional-vision` branch.
+- Preserve the already-landed prompting fix; do not backslide on the page-range or ending-shape behavior.
+- Treat current live evidence as story-stage proof, but keep deploy/download task status honest until terminal smoke artifacts exist.
+- Keep harness task status accurate as each slice lands.
 
 ## Plan (short)
-1. Keep `.agent/feature_list.json` accurate for the completed continuity and live-risk tasks.
-2. Append the final evidence block to `.agent/progress.log`.
-3. Leave the branch ready for commit/push and next-task selection.
+1. Let the deployed live books continue or rerun them to terminal state so `.agent/artifacts/picture-book-smoke-*.json` files are captured.
+2. Download final illustrated PDF artifacts once at least one emotional-vision smoke run reaches `ready`.
+3. Capture any remaining deployed screenshots/evidence needed for the sample-download task.
 
-## Evidence collected
-- `pnpm cdk:deploy:dev` => UPDATE_COMPLETE
-- `pnpm ops:provider-smoke` => PASS
-- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 pnpm ops:picture-book-smoke` => PASS
-- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 pnpm ops:picture-book-smoke` => PASS
-- sample PDF saved under `.agent/artifacts/visual-continuity-hardening/`
+## Evidence required
+- `pnpm cdk:deploy:dev`
+- `pnpm ops:provider-smoke`
+- terminal `pnpm ops:picture-book-smoke` artifacts for `better_rules` / `read_aloud_3_4` and `new_money_unfair` / `early_decoder_5_7`
+- downloaded final PDF artifacts under `.agent/artifacts/bitcoin-story-emotional-vision/`
 
 ## Status
-- `visual-continuity-style-prompts-01` PASS (2026-03-22)
-- `visual-identity-anchors-01` PASS (2026-03-22)
-- `visual-style-outlier-qa-01` PASS (2026-03-22)
-- `visual-continuity-deploy-smoke-01` PASS (2026-03-22)
-- `visual-sample-book-download-01` PASS (2026-03-22)
-- `live-character-generation-timeout-01` PASS in dev validation (2026-03-22)
-- next: select the next non-continuity task if more work is desired
+- baseline: `bash scripts/agent/smoke.sh` PASS
+- work: completed 2026-03-25 after `pnpm cdk:deploy:dev`, `pnpm ops:provider-smoke`, two terminal `pnpm ops:picture-book-smoke` runs, PDF downloads, deployed screenshots, and `bash scripts/agent/quality.sh` PASS

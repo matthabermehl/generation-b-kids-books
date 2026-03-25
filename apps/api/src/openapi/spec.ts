@@ -1,3 +1,5 @@
+import { moneyLessonKeys } from "@book/domain";
+
 const idempotencyHeader = {
   in: "header",
   name: "Idempotency-Key",
@@ -120,7 +122,7 @@ export const openApiSpec = {
           ageYears: { type: "integer", minimum: 2, maximum: 12 },
           moneyLessonKey: {
             type: "string",
-            enum: ["inflation_candy", "saving_later", "delayed_gratification"]
+            enum: [...moneyLessonKeys]
           },
           interestTags: {
             type: "array",
@@ -269,7 +271,7 @@ export const openApiSpec = {
           },
           moneyLessonKey: {
             type: "string",
-            enum: ["inflation_candy", "saving_later", "delayed_gratification"]
+            enum: [...moneyLessonKeys]
           },
           productFamily: {
             type: "string",
@@ -366,7 +368,7 @@ export const openApiSpec = {
                 },
                 moneyLessonKey: {
                   type: "string",
-                  enum: ["inflation_candy", "saving_later", "delayed_gratification"]
+                  enum: [...moneyLessonKeys]
                 },
                 pageCount: {
                   type: "integer",
@@ -435,7 +437,7 @@ export const openApiSpec = {
               },
               moneyLessonKey: {
                 type: "string",
-                enum: ["inflation_candy", "saving_later", "delayed_gratification"]
+                enum: [...moneyLessonKeys]
               },
               spreadCount: {
                 type: "integer",

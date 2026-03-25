@@ -13,6 +13,8 @@ const fantasyTerms = [
 
 const taughtWords = ["bitcoin"];
 const defaultThemeThreshold = 0.35;
+const warmthSignals = ["calm", "reassur", "comfort", "close", "warm", "safe", "steady", "relief", "relieved", "proud", "secure"];
+const calmEndingSignals = ["calm", "relief", "relieved", "reassur", "proud", "safe", "secure", "close", "gentle"];
 
 export interface BeatDeterministicIssue {
   code: string;
@@ -34,6 +36,10 @@ export interface BeatValidationContext {
 
 function includesSignal(value: string, signal: string): boolean {
   return value.toLowerCase().includes(signal.toLowerCase());
+}
+
+function includesAnySignal(value: string, signals: string[]): boolean {
+  return signals.some((signal) => includesSignal(value, signal));
 }
 
 function isEarlyReader(profile: ReadingProfile, ageYears: number): boolean {
@@ -91,6 +97,26 @@ export function runDeterministicBeatChecks(
         highBeatCount: bitcoinBeatIndexes.length,
         requiredThreshold: defaultThemeThreshold
       }
+    });
+  }
+
+  const warmBeatExists = beats.some((beat) =>
+    includesAnySignal(`${beat.purpose} ${beat.conflict} ${beat.emotionalTarget}`, warmthSignals)
+  );
+
+  if (!warmBeatExists) {
+    issues.push({
+      code: "EMOTIONAL_WARMTH",
+      message: "Beat sheet needs at least one explicit warmth or reassurance beat to support the bedtime emotional arc."
+    });
+  }
+
+  const finalBeat = beats[beats.length - 1];
+  if (finalBeat && !includesAnySignal(finalBeat.emotionalTarget, calmEndingSignals)) {
+    issues.push({
+      code: "ENDING_EMOTION",
+      beatIndex: beats.length - 1,
+      message: "Final beat emotionalTarget must land in reassurance, calm pride, safety, or relief."
     });
   }
 

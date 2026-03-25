@@ -145,7 +145,7 @@ async function main() {
       childFirstName: "Ava",
       pronouns: "she/her",
       ageYears: 7,
-      moneyLessonKey: "saving_later",
+      moneyLessonKey: "jar_saving_limits",
       interestTags: ["soccer", "baking", "space"],
       readingProfileId: "early_decoder_5_7"
     },

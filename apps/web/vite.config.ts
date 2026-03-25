@@ -10,7 +10,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src")
+      "@": path.resolve(__dirname, "./src"),
+      "@book/domain": path.resolve(__dirname, "../../packages/domain/src/index.ts")
     }
   },
   test: {

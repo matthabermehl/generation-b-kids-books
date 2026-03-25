@@ -36,7 +36,7 @@ For `picture_book_fixed_layout` books, the image/render chain is:
 - Tailwind v4 + shadcn/Radix component system with a shared clean-product shell
 - Parent shell:
   - `/` public landing page with magic-link request and checkout callback handling
-  - `/create` authenticated order creation plus character generate/select flow
+  - `/create` authenticated order creation plus five visible lesson cards, shared lesson helper copy, and character generate/select flow
   - `/checkout` authenticated order summary and Stripe checkout launch
   - `/books/current` authenticated build-status, reader, download, and privacy workspace
   - persisted parent flow state backed by the existing localStorage keys for active order, checkout URL, book payload, and download URL
@@ -87,6 +87,7 @@ Cross-cutting:
   - final story stage runs a recursive author/critic rewrite loop with history (`STORY_MAX_REWRITES`, default `2`) before manual review
   - persists `story.json`, `story-qa-report.json`, and `render/story-proof.pdf` before any `finalize_gate` review stop
   - `story-qa-report.json` now includes per-attempt story draft/critic audit and final pass vs review status
+  - story concepts now carry shared emotional fields (`emotionalPromise`, `caregiverWarmthMoment`, `bitcoinValueThread`) plus a discriminated `lessonScenario` union keyed by `moneyLessonKey`
   - mock-provider authorization gate based on `mockRunTag`
 - `image-worker.ts`: OpenAI-backed `page_art` generation for picture books plus legacy page generation fallback, prompt safety checks, and page QA
 - `check-images.ts`: completion + image safety / picture-book QA escalation to `needs_review`
@@ -109,8 +110,8 @@ Cross-cutting:
 - final illustrated `pdf` remains separate from the worker-generated `story_proof_pdf`
 
 ### Shared Packages
-- `packages/domain`: enums/types/validators (includes Montessori realism check plus lighter Bitcoin/caregiver validation)
-- `packages/prompts`: schema-first planner/critic/rewrite/writer templates + deterministic beat/story quality checks + prompt-principle invariants
+- `packages/domain`: enums/types/validators plus the centralized lesson-definition registry (`label`, helper copy, emotional arc target, Bitcoin value thread, scenario guidance) and `StoryConcept` helpers
+- `packages/prompts`: schema-first planner/critic/rewrite/writer templates + deterministic beat/story quality checks + prompt-principle invariants, now aligned around bedtime warmth, caregiver reassurance, lesson-specific scenarios, and story-first Bitcoin framing
 
 ## AWS Infrastructure (CDK JavaScript)
 - API Gateway HTTP API
@@ -186,12 +187,13 @@ Fixed-layout additions:
 - Deterministic spread template selection for fixed-layout books
 - Story checks:
   - strict beat sheet schema validation (planner, critics, rewrite, final writer)
-  - positive Bitcoin-theme integration without late-only placement rules
+  - positive Bitcoin-theme integration through lesson-specific value threads without turning Bitcoin into a pitch or a late-only reveal
   - banned financial claims
   - SoR decodability checks (beat planning + page-level checks)
   - low-variation/repetition guard for final story pages
   - Montessori realism checks for `read_aloud_3_4` and under-6 narratives
   - anti–Mad Libs narrative freshness critic
+  - bedtime-emotion checks for caregiver warmth, non-preachy tone, and calm/proud ending
   - final story writer hard-pinned to Anthropic Opus 4.6
 - Content moderation:
   - text moderation gate pre-image stage
@@ -222,3 +224,4 @@ Fixed-layout additions:
 - `pnpm ops:picture-book-smoke`
 - `pnpm ops:stripe-smoke`
 - `pnpm ops:phase2-e2e` (full paid flow smoke)
+- current live validation for the emotional-vision pass uses `MONEY_LESSON_KEY=better_rules` for `read_aloud_3_4` and `MONEY_LESSON_KEY=new_money_unfair` for `early_decoder_5_7`

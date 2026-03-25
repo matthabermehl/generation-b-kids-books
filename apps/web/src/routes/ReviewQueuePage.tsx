@@ -20,6 +20,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getMoneyLessonLabel } from "@/lib/money-lessons";
 import { apiClient, type ReviewQueueResponse } from "../lib/api/client";
 import { useSession } from "../lib/session";
 
@@ -123,7 +124,7 @@ export function ReviewQueuePage() {
                     <TableCell>{new Date(reviewCase.createdAt).toLocaleString()}</TableCell>
                     <TableCell>{reviewCase.childFirstName}</TableCell>
                     <TableCell className="text-slate-600">{reviewCase.readingProfileId}</TableCell>
-                    <TableCell className="text-slate-600">{reviewCase.moneyLessonKey}</TableCell>
+                    <TableCell className="text-slate-600">{getMoneyLessonLabel(reviewCase.moneyLessonKey)}</TableCell>
                     <TableCell>
                       <StatusBadge value={reviewCase.stage} />
                     </TableCell>

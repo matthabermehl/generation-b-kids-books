@@ -1,9 +1,12 @@
 import { type ReadingProfile } from "./enums.js";
+import { storyConceptDeadlineEvent, storyConceptEarningOptionLabels } from "./story-concepts.js";
 import type { StoryConcept, StoryPackage, StoryPage } from "./types.js";
 
 export interface ValidationIssue {
   code: string;
   message: string;
+  pageStart?: number;
+  pageEnd?: number;
 }
 
 export interface ValidationResult {
@@ -59,6 +62,22 @@ const numberWords = [
   "nineteen",
   "twenty"
 ] as const;
+const dialogueAttributionVerbs = new Set([
+  "say",
+  "said",
+  "says",
+  "asked",
+  "asks",
+  "whispered",
+  "replied",
+  "cried",
+  "called",
+  "shouted",
+  "yelled",
+  "murmured",
+  "answered",
+  "added"
+]);
 
 function normalizePageTemplate(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -84,6 +103,36 @@ function tokenizePageWords(text: string): string[] {
 
 function sentenceFragments(text: string): string[] {
   return text.match(/[^.!?]+[.!?]?/g) ?? [text];
+}
+
+function sentenceCount(text: string): number {
+  let total = 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (!/[.!?]/.test(text[index] ?? "")) {
+      continue;
+    }
+
+    let cursor = index + 1;
+    while (cursor < text.length && /["“”'`\s]/.test(text[cursor] ?? "")) {
+      cursor += 1;
+    }
+
+    const trailingWords = (text.slice(cursor).match(/[A-Za-z]+(?:['-][A-Za-z]+)*/g) ?? [])
+      .slice(0, 2)
+      .map((word) => word.toLowerCase());
+    const continuesIntoDialogueTag =
+      dialogueAttributionVerbs.has(trailingWords[0] ?? "") ||
+      dialogueAttributionVerbs.has(trailingWords[1] ?? "");
+
+    if (continuesIntoDialogueTag) {
+      continue;
+    }
+
+    total += 1;
+  }
+
+  return total === 0 && text.trim().length > 0 ? 1 : total;
 }
 
 function numberWordIndexes(text: string): number[] {
@@ -134,7 +183,9 @@ export function validateBannedPhrases(pages: StoryPage[]): ValidationResult {
       if (text.includes(phrase)) {
         issues.push({
           code: "BANNED_PHRASE",
-          message: `Page ${page.pageIndex} contains banned phrase: ${phrase}`
+          message: `Page ${page.pageIndex} contains banned phrase: ${phrase}`,
+          pageStart: page.pageIndex,
+          pageEnd: page.pageIndex
         });
       }
     });
@@ -196,20 +247,24 @@ export function validateReadingProfile(
   const issues: ValidationIssue[] = [];
 
   pages.forEach((page) => {
-    const sentenceCount = page.pageText.split(/[.!?]/).filter(Boolean).length;
+    const totalSentences = sentenceCount(page.pageText);
     const words = tokenizePageWords(page.pageText);
 
-    if (profile === "read_aloud_3_4" && sentenceCount > 4) {
+    if (profile === "read_aloud_3_4" && totalSentences > 4) {
       issues.push({
         code: "SENTENCE_COUNT",
-        message: `Page ${page.pageIndex} exceeds read-aloud sentence budget.`
+        message: `Page ${page.pageIndex} exceeds read-aloud sentence budget.`,
+        pageStart: page.pageIndex,
+        pageEnd: page.pageIndex
       });
     }
 
     if (profile === "early_decoder_5_7" && words.length > 45) {
       issues.push({
         code: "WORD_COUNT",
-        message: `Page ${page.pageIndex} exceeds early decoder word budget.`
+        message: `Page ${page.pageIndex} exceeds early decoder word budget.`,
+        pageStart: page.pageIndex,
+        pageEnd: page.pageIndex
       });
     }
 
@@ -218,7 +273,9 @@ export function validateReadingProfile(
       if (hardWords.length > 5) {
         issues.push({
           code: "DECODABILITY",
-          message: `Page ${page.pageIndex} likely exceeds decodability limits.`
+          message: `Page ${page.pageIndex} likely exceeds decodability limits.`,
+          pageStart: page.pageIndex,
+          pageEnd: page.pageIndex
         });
       }
     }
@@ -239,7 +296,9 @@ export function validateMontessoriRealism(profile: ReadingProfile, pages: StoryP
     if (flagged) {
       issues.push({
         code: "MONTESSORI_REALISM",
-        message: `Page ${page.pageIndex} includes fantasy term not aligned to Montessori realism: ${flagged}`
+        message: `Page ${page.pageIndex} includes fantasy term not aligned to Montessori realism: ${flagged}`,
+        pageStart: page.pageIndex,
+        pageEnd: page.pageIndex
       });
     }
   });
@@ -285,7 +344,9 @@ export function validateCountSequences(pages: StoryPage[]): ValidationResult {
         if (!sequential) {
           issues.push({
             code: "COUNT_SEQUENCE",
-            message: `Page ${page.pageIndex} has a non-sequential spoken count.`
+            message: `Page ${page.pageIndex} has a non-sequential spoken count.`,
+            pageStart: page.pageIndex,
+            pageEnd: page.pageIndex
           });
           return;
         }
@@ -310,7 +371,9 @@ export function validateCaregiverConsistency(
       if (lowered.includes(term)) {
         issues.push({
           code: "CAREGIVER_CONSISTENCY",
-          message: `Page ${page.pageIndex} uses caregiver wording '${term}' instead of ${concept.caregiverLabel}.`
+          message: `Page ${page.pageIndex} uses caregiver wording '${term}' instead of ${concept.caregiverLabel}.`,
+          pageStart: page.pageIndex,
+          pageEnd: page.pageIndex
         });
       }
     });
@@ -343,7 +406,9 @@ export function validateBitcoinUsage(
     if (page.newWordsIntroduced.some((word) => normalizedLower(word).includes("bitcoin"))) {
       issues.push({
         code: "BITCOIN_CHILD_LANGUAGE",
-        message: `Page ${page.pageIndex} makes Bitcoin a child-facing new word.`
+        message: `Page ${page.pageIndex} makes Bitcoin a child-facing new word.`,
+        pageStart: page.pageIndex,
+        pageEnd: page.pageIndex
       });
     }
 
@@ -351,7 +416,9 @@ export function validateBitcoinUsage(
     if (technicalTerm) {
       issues.push({
         code: "BITCOIN_POLICY",
-        message: `Page ${page.pageIndex} ties Bitcoin to technical/device-first framing (${technicalTerm}).`
+        message: `Page ${page.pageIndex} ties Bitcoin to technical/device-first framing (${technicalTerm}).`,
+        pageStart: page.pageIndex,
+        pageEnd: page.pageIndex
       });
     }
 
@@ -359,7 +426,9 @@ export function validateBitcoinUsage(
     if (childAction) {
       issues.push({
         code: "BITCOIN_POLICY",
-        message: `Page ${page.pageIndex} asks the child to say, decode, or explain Bitcoin.`
+        message: `Page ${page.pageIndex} asks the child to say, decode, or explain Bitcoin.`,
+        pageStart: page.pageIndex,
+        pageEnd: page.pageIndex
       });
     }
   });
@@ -379,17 +448,22 @@ export function validateLateIntroductions(
     if (firstIndex >= lateStart) {
       issues.push({
         code: "LATE_INTRODUCTION",
-        message: `'${entry}' is introduced too late on page ${firstIndex}.`
+        message: `'${entry}' is introduced too late on page ${firstIndex}.`,
+        pageStart: firstIndex,
+        pageEnd: firstIndex
       });
     }
   });
 
-  if (concept.deadlineEvent) {
-    const firstDeadlineIndex = pages.findIndex((page) => pageMentions(page, concept.deadlineEvent as string));
+  const deadlineEvent = storyConceptDeadlineEvent(concept);
+  if (deadlineEvent) {
+    const firstDeadlineIndex = pages.findIndex((page) => pageMentions(page, deadlineEvent));
     if (firstDeadlineIndex >= lateStart) {
       issues.push({
         code: "LATE_DEADLINE",
-        message: `Deadline '${concept.deadlineEvent}' is introduced too late on page ${firstDeadlineIndex}.`
+        message: `Deadline '${deadlineEvent}' is introduced too late on page ${firstDeadlineIndex}.`,
+        pageStart: firstDeadlineIndex,
+        pageEnd: firstDeadlineIndex
       });
     }
   }
@@ -399,7 +473,7 @@ export function validateLateIntroductions(
 
 export function validateContinuityFacts(story: StoryPackage): ValidationResult {
   const issues: ValidationIssue[] = [];
-  const earningLabels = story.concept.earningOptions.map((option) => normalizedLower(option.label));
+  const earningLabels = storyConceptEarningOptionLabels(story.concept).map((label) => normalizedLower(label));
 
   story.beats.forEach((beat, index) => {
     const page = story.pages[index];
@@ -419,7 +493,9 @@ export function validateContinuityFacts(story: StoryPackage): ValidationResult {
         }
         issues.push({
           code: "CONTINUITY_FORBIDDEN_TERM",
-          message: `Page ${page.pageIndex} uses forbidden term '${value}'.`
+          message: `Page ${page.pageIndex} uses forbidden term '${value}'.`,
+          pageStart: page.pageIndex,
+          pageEnd: page.pageIndex
         });
       }
 
@@ -431,7 +507,9 @@ export function validateContinuityFacts(story: StoryPackage): ValidationResult {
             if (lowered.includes(term)) {
               issues.push({
                 code: "CONTINUITY_CAREGIVER",
-                message: `Page ${page.pageIndex} contradicts caregiver label '${value}'.`
+                message: `Page ${page.pageIndex} contradicts caregiver label '${value}'.`,
+                pageStart: page.pageIndex,
+                pageEnd: page.pageIndex
               });
             }
           });
@@ -445,7 +523,9 @@ export function validateContinuityFacts(story: StoryPackage): ValidationResult {
             if (lowered.includes(label)) {
               issues.push({
                 code: "CONTINUITY_EARNING_OPTION",
-                message: `Page ${page.pageIndex} references '${label}' while beat continuity expects '${value}'.`
+                message: `Page ${page.pageIndex} references '${label}' while beat continuity expects '${value}'.`,
+                pageStart: page.pageIndex,
+                pageEnd: page.pageIndex
               });
             }
           });

@@ -9,6 +9,7 @@ import type {
   VisualStoryBible
 } from "./types.js";
 import { watercolorStyleGuide } from "./image-prompts.js";
+import { storyConceptHighlightLabels } from "./story-concepts.js";
 
 const numberWords = new Map<string, number>([
   ["zero", 0],
@@ -36,6 +37,57 @@ const numberWords = new Map<string, number>([
 
 const ignoredCapitalizedWords = new Set([
   "Bitcoin",
+  "All",
+  "Any",
+  "After",
+  "Before",
+  "Because",
+  "Everyone",
+  "Everybody",
+  "Someone",
+  "Somebody",
+  "Anyone",
+  "Anybody",
+  "Children",
+  "Child",
+  "Kids",
+  "Kid",
+  "Friends",
+  "Friend",
+  "Each",
+  "Every",
+  "It",
+  "They",
+  "Them",
+  "We",
+  "You",
+  "He",
+  "She",
+  "The",
+  "A",
+  "An",
+  "His",
+  "Her",
+  "Our",
+  "Their",
+  "This",
+  "That",
+  "These",
+  "Those",
+  "Here",
+  "There",
+  "Now",
+  "Then",
+  "Today",
+  "Tonight",
+  "Tomorrow",
+  "Yesterday",
+  "When",
+  "While",
+  "Look",
+  "See",
+  "Listen",
+  "Let",
   "Monday",
   "Tuesday",
   "Wednesday",
@@ -58,6 +110,56 @@ const supportingRolePatterns = [
   /brother/gi,
   /sister/gi
 ];
+
+const ignoredSupportingCharacterLabels = new Set([
+  "everyone",
+  "everybody",
+  "someone",
+  "somebody",
+  "anyone",
+  "anybody",
+  "children",
+  "child",
+  "kids",
+  "kid",
+  "friends",
+  "it",
+  "they",
+  "them",
+  "people",
+  "person",
+  "each",
+  "every",
+  "now",
+  "then",
+  "today",
+  "tonight",
+  "tomorrow",
+  "yesterday",
+  "here",
+  "there",
+  "look",
+  "see",
+  "listen",
+  "let",
+  "the",
+  "a",
+  "an"
+]);
+
+const genericSupportingRoleLabels = new Set([
+  "grandma",
+  "grandpa",
+  "teacher",
+  "coach",
+  "friend",
+  "neighbor",
+  "cashier",
+  "shopkeeper",
+  "clerk",
+  "brother",
+  "sister"
+]);
 
 function slugify(value: string): string {
   return value
@@ -219,7 +321,20 @@ function supportingCharacterCandidates(text: string, childFirstName: string, car
   }
 
   findCapitalizedNames(text, childFirstName, caregiverLabel).forEach((name) => candidates.push(name));
-  return unique(candidates);
+  return unique(candidates).filter((label) => !ignoredSupportingCharacterLabels.has(label.toLowerCase()));
+}
+
+function isNamedSupportingCharacterLabel(label: string, caregiverLabel: string): boolean {
+  if (label === caregiverLabel) {
+    return false;
+  }
+
+  const lowered = label.toLowerCase();
+  if (ignoredSupportingCharacterLabels.has(lowered) || genericSupportingRoleLabels.has(lowered)) {
+    return false;
+  }
+
+  return /[A-Z]/.test(label.charAt(0));
 }
 
 function supportingCharacterDescription(label: string, caregiverLabel: string): string {
@@ -380,8 +495,7 @@ export function buildVisualStoryBible(input: {
   });
 
   const storyCriticalPropLabels = unique([
-    input.story.concept.targetItem,
-    input.story.concept.temptation,
+    ...storyConceptHighlightLabels(input.story.concept),
     ...input.story.concept.requiredSetups,
     ...input.story.concept.requiredPayoffs
   ])
@@ -436,7 +550,11 @@ export function buildVisualStoryBible(input: {
       if (entity.label === input.story.concept.caregiverLabel || entity.pageIndices.length >= 2) {
         entity.recurring = true;
         entity.importance = "story_critical";
-        entity.referenceStrategy = "generated_supporting_reference";
+        entity.referenceStrategy =
+          entity.label === input.story.concept.caregiverLabel ||
+          isNamedSupportingCharacterLabel(entity.label, input.story.concept.caregiverLabel)
+            ? "generated_supporting_reference"
+            : "prompt_only";
       }
 
       if (entity.importance === "story_critical") {
@@ -503,7 +621,11 @@ export function buildVisualStoryBible(input: {
     ) {
       entity.recurring = true;
       entity.importance = "story_critical";
-      entity.referenceStrategy = "generated_supporting_reference";
+      entity.referenceStrategy =
+        entity.label === input.story.concept.caregiverLabel ||
+        isNamedSupportingCharacterLabel(entity.label, input.story.concept.caregiverLabel)
+          ? "generated_supporting_reference"
+          : "prompt_only";
     }
   }
 

@@ -1237,7 +1237,7 @@ export interface components {
             pronouns: string;
             ageYears: number;
             /** @enum {string} */
-            moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
+            moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
             interestTags: string[];
             /** @enum {string} */
             readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
@@ -1330,7 +1330,7 @@ export interface components {
             /** @enum {string} */
             readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
             /** @enum {string} */
-            moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
+            moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
             /** @enum {string} */
             productFamily?: "picture_book_fixed_layout" | "chapter_book_reflowable";
             /** @description Narrative spread count for picture books. One spread renders as two physical PDF pages. */
@@ -1379,7 +1379,7 @@ export interface components {
                 /** @enum {string} */
                 readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
                 /** @enum {string} */
-                moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
+                moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
                 /** @description Narrative spread count for the book under review. */
                 pageCount: number;
                 /** @enum {string|null} */
@@ -1415,7 +1415,7 @@ export interface components {
                 /** @enum {string} */
                 readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
                 /** @enum {string} */
-                moneyLessonKey: "inflation_candy" | "saving_later" | "delayed_gratification";
+                moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
                 /** @description Narrative spread count for picture books. */
                 spreadCount: number;
                 /** @description Physical PDF page count. Picture-book physical pages equal spreadCount * 2. */

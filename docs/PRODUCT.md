@@ -1,7 +1,7 @@
 # Product
 
 ## Mission
-Generate personalized, visually polished children's books that teach money concepts with age-appropriate language and safe family-friendly art.
+Generate personalized, visually polished children's books that teach money concepts through warm bedtime stories, age-appropriate language, and safe family-friendly art.
 
 ## Users
 - Primary users:
@@ -12,13 +12,21 @@ Generate personalized, visually polished children's books that teach money conce
 
 ## User Outcomes
 - Outcome 1:
-  - Receive a personalized story with stable character art and readable page layouts.
+  - Receive a personalized story with stable character art, readable page layouts, and a calm emotional arc that feels good to read aloud at bedtime.
 - Outcome 2:
+  - Feel relieved that difficult money ideas can be introduced in a loving, child-safe way without turning the book into a lecture or an investment pitch.
+- Outcome 3:
   - Preserve a book model that can later support print, fixed-layout ebook, and app delivery.
 
 ## Scope
 ### In scope
 - `picture_book_fixed_layout` pipeline for `read_aloud_3_4` and `early_decoder_5_7`
+- Parent lesson selection from the canonical 5-card Bitcoin money-story taxonomy:
+  - `prices_change`
+  - `jar_saving_limits`
+  - `new_money_unfair`
+  - `keep_what_you_earn`
+  - `better_rules`
 - Book-scoped character approval before checkout, with a selected character reference reused across page art generation
 - Layered spread model with deterministic `text-left / art-right` composition
 - Canonical picture-book length tracked as spreads, with print-friendly PDF output rendered as separate physical pages (`physicalPageCount = spreadCount * 2`)
@@ -27,6 +35,11 @@ Generate personalized, visually polished children's books that teach money conce
   - public landing plus parent create, checkout, and current-book routes
   - internal reviewer queue and case detail console
 - Tailwind + shadcn clean-product UI system for both parent and reviewer surfaces
+- Prompting and story-generation rules that keep Bitcoin present as a gentle value thread rather than a loud reveal:
+  - story-first, value-first framing
+  - warm caregiver reassurance
+  - calm ending that lands in relief or quiet pride
+  - no hype, price-prediction, or technical Bitcoin instruction
 - Manual review actions:
   - approve and continue build
   - reject book
@@ -40,6 +53,19 @@ Generate personalized, visually polished children's books that teach money conce
 
 ## Acceptance Sources
 Primary behavioral acceptance criteria must live in `.agent/feature_list.json`.
+
+## Money Lesson Taxonomy
+- `prices_change`: Why prices can change even when you do nothing
+- `jar_saving_limits`: Why saving in a jar does not always work
+- `new_money_unfair`: Why it feels unfair when new money appears
+- `keep_what_you_earn`: Why work should let you keep your rewards
+- `better_rules`: Why some games have better rules than others
+
+## Story Experience Rules
+- Every book should read like a warm bedtime story first and a money lesson second.
+- Bitcoin should be framed through values the child already experienced in the story, such as patience, fair rules, long-term thinking, stewardship, and earned rewards.
+- The story should include at least one clear caregiver reassurance or connection beat.
+- The ending should land in reassurance, calm understanding, or quiet pride rather than a transactional finish.
 
 ## Reviewer Product Rules
 - Reviewer UI is internal-only and gated by an allowlisted email.

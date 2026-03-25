@@ -16,6 +16,7 @@ import {
   type StoryCriticVerdict,
   type StoryPackage,
   type StoryRewriteTurn,
+  storyConceptDeadlineEvent,
   type VisualPageContract,
   type VisualStoryBible
 } from "@book/domain";
@@ -63,6 +64,10 @@ interface BookContextRow {
   interest_tags: string;
   product_family: BookProductFamily;
   layout_profile_id: string | null;
+}
+
+function storyTextsForModeration(story: Pick<StoryPackage, "pages">): string[] {
+  return story.pages.map((page) => page.pageText);
 }
 
 async function loadBookContext(bookId: string): Promise<BookContextRow> {
@@ -317,7 +322,7 @@ async function prepareStory(
     provider: conceptResult.meta.provider,
     model: conceptResult.meta.model,
     caregiverLabel: storyConcept.caregiverLabel,
-    deadlineEvent: storyConcept.deadlineEvent
+    deadlineEvent: storyConceptDeadlineEvent(storyConcept)
   });
 
   logStructured("BeatPlanningStart", {
@@ -573,7 +578,7 @@ async function prepareStory(
   const moderationStartedAt = Date.now();
   const moderation = await moderateTexts(
     (await getRuntimeConfig()).secrets.openaiApiKey,
-    story.pages.flatMap((page) => [page.pageText, page.illustrationBrief])
+    storyTextsForModeration(story)
   );
   logStructured("StoryModerationComplete", {
     bookId,
@@ -829,7 +834,7 @@ async function resumeAfterStoryReview(bookId: string): Promise<{ bookId: string;
   const moderationStartedAt = Date.now();
   const moderation = await moderateTexts(
     (await getRuntimeConfig()).secrets.openaiApiKey,
-    story.pages.flatMap((page) => [page.pageText, page.illustrationBrief])
+    storyTextsForModeration(story)
   );
   logStructured("StoryModerationResumeComplete", {
     bookId,

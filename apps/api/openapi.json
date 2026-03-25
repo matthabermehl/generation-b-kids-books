@@ -161,9 +161,11 @@
           "moneyLessonKey": {
             "type": "string",
             "enum": [
-              "inflation_candy",
-              "saving_later",
-              "delayed_gratification"
+              "prices_change",
+              "jar_saving_limits",
+              "new_money_unfair",
+              "keep_what_you_earn",
+              "better_rules"
             ]
           },
           "interestTags": {
@@ -530,9 +532,11 @@
           "moneyLessonKey": {
             "type": "string",
             "enum": [
-              "inflation_candy",
-              "saving_later",
-              "delayed_gratification"
+              "prices_change",
+              "jar_saving_limits",
+              "new_money_unfair",
+              "keep_what_you_earn",
+              "better_rules"
             ]
           },
           "productFamily": {
@@ -729,9 +733,11 @@
                 "moneyLessonKey": {
                   "type": "string",
                   "enum": [
-                    "inflation_candy",
-                    "saving_later",
-                    "delayed_gratification"
+                    "prices_change",
+                    "jar_saving_limits",
+                    "new_money_unfair",
+                    "keep_what_you_earn",
+                    "better_rules"
                   ]
                 },
                 "pageCount": {
@@ -887,9 +893,11 @@
               "moneyLessonKey": {
                 "type": "string",
                 "enum": [
-                  "inflation_candy",
-                  "saving_later",
-                  "delayed_gratification"
+                  "prices_change",
+                  "jar_saving_limits",
+                  "new_money_unfair",
+                  "keep_what_you_earn",
+                  "better_rules"
                 ]
               },
               "spreadCount": {

@@ -8,6 +8,13 @@ import type {
   StoryPackage
 } from "@book/domain";
 import {
+  getMoneyLessonDefinition,
+  storyConceptCountTarget,
+  storyConceptDeadlineEvent,
+  storyConceptEarningOptionLabels,
+  storyConceptHighlightLabels
+} from "@book/domain";
+import {
   beatSheetJsonSchema,
   buildBeatPlannerPrompt,
   buildBeatPlannerSystemPrompt,
@@ -27,7 +34,8 @@ import {
   storyCriticVerdictJsonSchema,
   storyPackageJsonSchema,
   type BeatDeterministicSummary,
-  type CriticVerdict
+  type CriticVerdict,
+  type DeterministicStoryIssue
 } from "@book/prompts";
 import { z } from "zod";
 import { boolFromEnv, redactText, sleep } from "../lib/helpers.js";
@@ -131,20 +139,65 @@ const earningOptionSchema = z.object({
   sceneLocation: z.string().min(1)
 });
 
+const storyLessonScenarioSchema = z.discriminatedUnion("moneyLessonKey", [
+  z.object({
+    moneyLessonKey: z.literal("prices_change"),
+    anchorItem: z.string().min(1),
+    beforePrice: z.number().int().min(1).max(500),
+    afterPrice: z.number().int().min(1).max(500),
+    purchaseUnit: z.string().min(1),
+    countableComparison: z.string().min(1),
+    noticingMoment: z.string().min(1),
+    deadlineEvent: z.string().min(1).nullable()
+  }),
+  z.object({
+    moneyLessonKey: z.literal("jar_saving_limits"),
+    targetItem: z.string().min(1),
+    targetPrice: z.number().int().min(1).max(500),
+    startingAmount: z.number().int().min(0).max(500),
+    gapAmount: z.number().int().min(1).max(500),
+    earningOptions: z.tuple([earningOptionSchema, earningOptionSchema]),
+    temptation: z.string().min(1),
+    deadlineEvent: z.string().min(1).nullable()
+  }),
+  z.object({
+    moneyLessonKey: z.literal("new_money_unfair"),
+    gameName: z.string().min(1),
+    tokenName: z.string().min(1),
+    childGoal: z.string().min(1),
+    ruleDisruption: z.string().min(1),
+    fairnessRepair: z.string().min(1),
+    deadlineEvent: z.string().min(1).nullable()
+  }),
+  z.object({
+    moneyLessonKey: z.literal("keep_what_you_earn"),
+    workAction: z.string().min(1),
+    earnedReward: z.string().min(1),
+    rewardUse: z.string().min(1),
+    unfairLossRisk: z.string().min(1),
+    deadlineEvent: z.string().min(1).nullable()
+  }),
+  z.object({
+    moneyLessonKey: z.literal("better_rules"),
+    gameName: z.string().min(1),
+    brokenRule: z.string().min(1),
+    fairRule: z.string().min(1),
+    sharedGoal: z.string().min(1),
+    deadlineEvent: z.string().min(1).nullable()
+  })
+]);
+
 const storyConceptSchema: z.ZodType<StoryConcept> = z.object({
   premise: z.string().min(1),
   caregiverLabel: z.enum(["Mom", "Dad"]),
-  targetItem: z.string().min(1),
-  targetPrice: z.number().int().min(1).max(500),
-  startingAmount: z.number().int().min(0).max(500),
-  gapAmount: z.number().int().min(1).max(500),
-  earningOptions: z.tuple([earningOptionSchema, earningOptionSchema]),
-  temptation: z.string().min(1),
-  deadlineEvent: z.string().min(1).nullable(),
   bitcoinBridge: z.string().min(1),
+  emotionalPromise: z.string().min(1),
+  caregiverWarmthMoment: z.string().min(1),
+  bitcoinValueThread: z.string().min(1),
   requiredSetups: z.array(z.string().min(1)).min(2).max(12),
   requiredPayoffs: z.array(z.string().min(1)).min(2).max(12),
-  forbiddenLateIntroductions: z.array(z.string().min(1)).min(1).max(12)
+  forbiddenLateIntroductions: z.array(z.string().min(1)).min(1).max(12),
+  lessonScenario: storyLessonScenarioSchema
 });
 
 const plannedBeatSchema = z.object({
@@ -242,7 +295,10 @@ const storyCriticIssueSchema = z.object({
     "age_plausibility",
     "theme_integration",
     "bitcoin_fit",
-    "reading_level"
+    "reading_level",
+    "emotional_tone",
+    "caregiver_warmth",
+    "ending_emotion"
   ]),
   severity: z.enum(["hard", "soft"]),
   rewriteTarget: z.enum(["concept", "beat", "page"]),
@@ -456,9 +512,92 @@ interface StructuredMessage {
   content: string;
 }
 
-function buildStoryRewriteFeedbackMessage(verdict: StoryCriticVerdict): string {
+function deterministicIssueToStoryCriticIssue(
+  issue: DeterministicStoryIssue
+): StoryCriticVerdict["issues"][number] {
+  return {
+    pageStart: issue.pageStart,
+    pageEnd: issue.pageEnd,
+    issueType: issue.issueType,
+    severity: issue.severity,
+    rewriteTarget: issue.rewriteTarget,
+    evidence: issue.message,
+    suggestedFix: issue.message
+  };
+}
+
+function pageRangeLabel(issue: StoryCriticVerdict["issues"][number], pageCount: number): string {
+  if (issue.pageStart === 0 && issue.pageEnd === Math.max(0, pageCount - 1)) {
+    return "whole story";
+  }
+
+  return issue.pageStart === issue.pageEnd
+    ? `page ${issue.pageStart}`
+    : `pages ${issue.pageStart}-${issue.pageEnd}`;
+}
+
+function fallbackStoryRewriteInstructions(
+  context: StoryContext,
+  verdict: StoryCriticVerdict
+): string {
+  const hardIssues = verdict.issues.filter((issue) => issue.severity === "hard");
+  if (hardIssues.length === 0) {
+    return "";
+  }
+
+  const profileLines =
+    context.profile === "read_aloud_3_4"
+      ? [
+          "- Rewrite flagged pages so each page has 4 sentences or fewer.",
+          "- Prefer 2-3 short bedtime-readable sentences and combine clipped observations instead of adding more sentence breaks.",
+          "- If a flagged page uses quoted dialogue, keep it to one short quoted sentence plus narration instead of a long explanatory speech.",
+          "- Move explanatory content off a flagged page when that preserves the bedtime rhythm better than squeezing it into the same spread."
+        ]
+      : context.profile === "early_decoder_5_7"
+        ? [
+            "- Rewrite flagged pages so each page has 45 words or fewer.",
+            "- Keep sentences short and decodable, with very long words used sparingly."
+          ]
+        : [];
+
+  if (context.profile === "read_aloud_3_4" && context.lesson === "better_rules" && context.pageCount >= 2) {
+    profileLines.push(
+      `- For better_rules read-aloud stories, place the clearest explicit Bitcoin bridge by page ${context.pageCount - 2}.`,
+      `- Keep page ${context.pageCount - 1} for calm emotional closure only: togetherness, safety, calm pride, or relief.`
+    );
+  }
+
+  const issueLines = hardIssues.map((issue) => {
+    const fix = issue.suggestedFix.trim().length > 0 ? issue.suggestedFix.trim() : issue.evidence.trim();
+    const rangeLabel = pageRangeLabel(issue, context.pageCount);
+
+    if (
+      context.profile === "read_aloud_3_4" &&
+      issue.issueType === "reading_level" &&
+      issue.pageStart === context.pageCount - 1 &&
+      issue.pageEnd === context.pageCount - 1
+    ) {
+      return `- ${rangeLabel} (${issue.issueType}): ${fix} Move conceptual explanation to page ${Math.max(
+        0,
+        context.pageCount - 2
+      )} and keep the final page to 2-3 short emotional-closing sentences.`;
+    }
+
+    return `- ${rangeLabel} (${issue.issueType}): ${fix}`;
+  });
+
+  return [...profileLines, ...issueLines].join("\n");
+}
+
+function buildStoryRewriteFeedbackMessage(
+  context: StoryContext,
+  verdict: StoryCriticVerdict
+): string {
   const hardIssues = verdict.issues.filter((issue) => issue.severity === "hard");
   const softIssues = verdict.issues.filter((issue) => issue.severity === "soft");
+  const fallbackInstructions = fallbackStoryRewriteInstructions(context, verdict);
+  const rewriteInstructions =
+    verdict.rewriteInstructions.trim().length > 0 ? verdict.rewriteInstructions.trim() : fallbackInstructions;
 
   return [
     "The critic rejected the previous draft. Rewrite the story so it satisfies the critic while preserving the parts that already work.",
@@ -468,6 +607,12 @@ function buildStoryRewriteFeedbackMessage(verdict: StoryCriticVerdict): string {
     "Rewrite priorities:",
     `- Hard issues to fix first: ${hardIssues.length}.`,
     `- Soft issues to improve when possible: ${softIssues.length}.`,
+    ...(rewriteInstructions
+      ? [
+          "- Apply these rewrite instructions exactly:",
+          rewriteInstructions
+        ]
+      : []),
     "- Preserve the story concept, reading level, and any valid continuity that was not criticized.",
     "- Do not answer with commentary. Return a full revised StoryPackage JSON only."
   ].join("\n");
@@ -493,7 +638,7 @@ function buildStoryDraftMessages(
     });
     messages.push({
       role: "user",
-      content: buildStoryRewriteFeedbackMessage(turn.criticVerdict)
+      content: buildStoryRewriteFeedbackMessage(context, turn.criticVerdict)
     });
   }
 
@@ -510,42 +655,314 @@ function buildStoryDraftMessages(
   return messages;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function pickStringField(
+  sources: Array<Record<string, unknown> | null>,
+  keys: string[],
+  fallback: string
+): string {
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function pickNullableStringField(
+  sources: Array<Record<string, unknown> | null>,
+  keys: string[]
+): string | null {
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+  }
+
+  return null;
+}
+
+function pickIntegerField(
+  sources: Array<Record<string, unknown> | null>,
+  keys: string[],
+  fallback: number,
+  minimum: number,
+  maximum: number
+): number {
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+    for (const key of keys) {
+      const value = source[key];
+      const numericValue =
+        typeof value === "number"
+          ? value
+          : typeof value === "string" && value.trim().length > 0
+            ? Number(value)
+            : Number.NaN;
+      if (Number.isFinite(numericValue)) {
+        return Math.max(minimum, Math.min(maximum, Math.round(numericValue)));
+      }
+    }
+  }
+
+  return Math.max(minimum, Math.min(maximum, Math.round(fallback)));
+}
+
+function capitalizeWord(value: string): string {
+  if (!value) {
+    return value;
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function defaultEarningOptions(context: StoryContext) {
+  const primaryInterest = context.interests[0] ?? "garden";
+  const secondaryInterest = context.interests[1] ?? "kitchen";
+
+  return [
+    {
+      label: `help with ${primaryInterest}`,
+      action: `help with a ${primaryInterest} job`,
+      sceneLocation: primaryInterest
+    },
+    {
+      label: `help at ${secondaryInterest}`,
+      action: `do a careful family job at ${secondaryInterest}`,
+      sceneLocation: secondaryInterest
+    }
+  ] as const;
+}
+
+function normalizeEarningOptions(
+  value: unknown,
+  context: StoryContext
+): readonly [{ label: string; action: string; sceneLocation: string }, { label: string; action: string; sceneLocation: string }] {
+  const defaults = defaultEarningOptions(context);
+
+  if (!Array.isArray(value)) {
+    return defaults;
+  }
+
+  const normalized = value
+    .map((entry) => {
+      const record = asRecord(entry);
+      if (!record) {
+        return null;
+      }
+
+      const label = typeof record.label === "string" ? record.label.trim() : "";
+      const action = typeof record.action === "string" ? record.action.trim() : "";
+      const sceneLocation = typeof record.sceneLocation === "string" ? record.sceneLocation.trim() : "";
+      if (!label || !action || !sceneLocation) {
+        return null;
+      }
+
+      return { label, action, sceneLocation };
+    })
+    .filter((entry): entry is { label: string; action: string; sceneLocation: string } => entry !== null)
+    .slice(0, 2);
+
+  if (normalized.length === 2) {
+    return [normalized[0], normalized[1]] as const;
+  }
+  if (normalized.length === 1) {
+    return [normalized[0], defaults[1]] as const;
+  }
+
+  return defaults;
+}
+
+function normalizeCaregiverLabel(value: unknown): "Mom" | "Dad" {
+  if (typeof value === "string") {
+    const lowered = value.trim().toLowerCase();
+    if (lowered === "dad" || lowered === "father" || lowered === "papa") {
+      return "Dad";
+    }
+  }
+
+  return "Mom";
+}
+
+function normalizeLessonScenarioInput(
+  lessonScenario: unknown,
+  rawConcept: Record<string, unknown>,
+  context: StoryContext
+): StoryConcept["lessonScenario"] | unknown {
+  const scenarioRecord = asRecord(lessonScenario);
+  const sources = [scenarioRecord, rawConcept];
+  const primaryInterest = context.interests[0] ?? "play";
+  const topicName = capitalizeWord(primaryInterest);
+
+  const lessonKey =
+    pickStringField(
+      [scenarioRecord],
+      ["moneyLessonKey"],
+      typeof lessonScenario === "string" ? lessonScenario : context.lesson
+    ) as MoneyLessonKey;
+
+  switch (lessonKey) {
+    case "prices_change": {
+      const beforePrice = pickIntegerField(sources, ["beforePrice"], 3, 1, 500);
+      const afterPrice = Math.max(
+        beforePrice + 1,
+        pickIntegerField(sources, ["afterPrice"], beforePrice + 2, 1, 500)
+      );
+      return {
+        moneyLessonKey: "prices_change",
+        anchorItem: pickStringField(sources, ["anchorItem", "targetItem"], `${primaryInterest} treat`),
+        beforePrice,
+        afterPrice,
+        purchaseUnit: pickStringField(sources, ["purchaseUnit"], "coins"),
+        countableComparison: pickStringField(sources, ["countableComparison"], "one instead of two"),
+        noticingMoment: pickStringField(
+          sources,
+          ["noticingMoment"],
+          `${context.childFirstName} notices the same coins do less than before.`
+        ),
+        deadlineEvent: pickNullableStringField(sources, ["deadlineEvent"])
+      };
+    }
+    case "new_money_unfair": {
+      const tokenName = pickStringField(sources, ["tokenName"], "gold tokens");
+      return {
+        moneyLessonKey: "new_money_unfair",
+        gameName: pickStringField(sources, ["gameName"], `${topicName} Game`),
+        tokenName,
+        childGoal: pickStringField(sources, ["childGoal"], `earn enough ${tokenName} to reach the goal`),
+        ruleDisruption: pickStringField(
+          sources,
+          ["ruleDisruption"],
+          "new tokens suddenly appear for someone who did not earn them"
+        ),
+        fairnessRepair: pickStringField(
+          sources,
+          ["fairnessRepair"],
+          "everyone goes back to the same shared earning rule"
+        ),
+        deadlineEvent: pickNullableStringField(sources, ["deadlineEvent"])
+      };
+    }
+    case "keep_what_you_earn":
+      return {
+        moneyLessonKey: "keep_what_you_earn",
+        workAction: pickStringField(sources, ["workAction"], `help with a ${primaryInterest} job`),
+        earnedReward: pickStringField(sources, ["earnedReward"], `${primaryInterest} tickets`),
+        rewardUse: pickStringField(sources, ["rewardUse"], `save for a ${primaryInterest} plan`),
+        unfairLossRisk: pickStringField(
+          sources,
+          ["unfairLossRisk"],
+          "the rules might take the reward away after the work is done"
+        ),
+        deadlineEvent: pickNullableStringField(sources, ["deadlineEvent"])
+      };
+    case "better_rules":
+      return {
+        moneyLessonKey: "better_rules",
+        gameName: pickStringField(sources, ["gameName"], `${topicName} Game`),
+        brokenRule: pickStringField(
+          sources,
+          ["brokenRule"],
+          "one player keeps changing the rule in the middle of the game"
+        ),
+        fairRule: pickStringField(
+          sources,
+          ["fairRule"],
+          "everyone follows the same rule from start to finish"
+        ),
+        sharedGoal: pickStringField(sources, ["sharedGoal"], "finish the game feeling it was fair"),
+        deadlineEvent: pickNullableStringField(sources, ["deadlineEvent"])
+      };
+    case "jar_saving_limits":
+    default: {
+      const targetPrice = pickIntegerField(sources, ["targetPrice"], 12, 1, 500);
+      const startingAmount = pickIntegerField(sources, ["startingAmount"], 5, 0, 500);
+      return {
+        moneyLessonKey: "jar_saving_limits",
+        targetItem: pickStringField(sources, ["targetItem", "anchorItem"], `${primaryInterest} kit`),
+        targetPrice,
+        startingAmount,
+        gapAmount: Math.max(
+          1,
+          pickIntegerField(sources, ["gapAmount"], targetPrice - startingAmount, 1, 500)
+        ),
+        earningOptions: normalizeEarningOptions(
+          scenarioRecord?.earningOptions ?? rawConcept.earningOptions,
+          context
+        ),
+        temptation: pickStringField(sources, ["temptation"], "small sticker"),
+        deadlineEvent: pickNullableStringField(sources, ["deadlineEvent"])
+      };
+    }
+  }
+}
+
+function storyConceptParser(context: StoryContext): z.ZodType<StoryConcept, z.ZodTypeDef, unknown> {
+  return z.preprocess((raw) => {
+    const record = asRecord(raw);
+    if (!record) {
+      return raw;
+    }
+
+    return {
+      ...record,
+      caregiverLabel: normalizeCaregiverLabel(record.caregiverLabel),
+      lessonScenario: normalizeLessonScenarioInput(record.lessonScenario, record, context)
+    };
+  }, storyConceptSchema);
+}
+
 function normalizeStoryConcept(concept: StoryConcept): StoryConcept {
-  const targetPrice = Math.max(1, Math.round(concept.targetPrice));
-  const startingAmount = Math.max(0, Math.round(concept.startingAmount));
+  if (concept.lessonScenario.moneyLessonKey !== "jar_saving_limits") {
+    if (concept.lessonScenario.moneyLessonKey === "prices_change") {
+      const beforePrice = Math.max(1, Math.round(concept.lessonScenario.beforePrice));
+      const afterPrice = Math.max(beforePrice + 1, Math.round(concept.lessonScenario.afterPrice));
+      return {
+        ...concept,
+        lessonScenario: {
+          ...concept.lessonScenario,
+          beforePrice,
+          afterPrice
+        }
+      };
+    }
+
+    return concept;
+  }
+
+  const targetPrice = Math.max(1, Math.round(concept.lessonScenario.targetPrice));
+  const startingAmount = Math.max(0, Math.round(concept.lessonScenario.startingAmount));
   const gapAmount = Math.max(1, targetPrice - startingAmount);
 
   return {
     ...concept,
-    targetPrice,
-    startingAmount,
-    gapAmount
+    lessonScenario: {
+      ...concept.lessonScenario,
+      targetPrice,
+      startingAmount,
+      gapAmount
+    }
   };
-}
-
-function inferStoryIssueType(
-  message: string
-): StoryCriticVerdict["issues"][number]["issueType"] {
-  const lowered = message.toLowerCase();
-  if (lowered.includes("count")) {
-    return "count_sequence";
-  }
-  if (lowered.includes("caregiver") || lowered.includes("mom") || lowered.includes("dad") || lowered.includes("grown-up")) {
-    return "caregiver_consistency";
-  }
-  if (lowered.includes("bitcoin")) {
-    return "bitcoin_fit";
-  }
-  if (lowered.includes("late") || lowered.includes("introduc") || lowered.includes("deadline")) {
-    return "setup_payoff";
-  }
-  if (lowered.includes("continuity") || lowered.includes("option") || lowered.includes("forbidden term")) {
-    return "action_continuity";
-  }
-  if (lowered.includes("read") || lowered.includes("decod")) {
-    return "reading_level";
-  }
-  return "theme_integration";
 }
 
 function hardCriticIssues(verdict: CriticVerdict): CriticVerdict["issues"] {
@@ -611,7 +1028,7 @@ function buildRewriteInstructions(
     ...deterministicLines,
     ...criticLines,
     "- Bitcoin policy constraints:",
-    "- Ensure at least one beat clearly gives Bitcoin positive thematic relevance to the story's saving arc.",
+    "- Ensure at least one beat clearly gives Bitcoin positive thematic relevance to the story's value arc.",
     "- Treat bitcoinRelevanceScore as thematic salience, not a late-stage quota.",
     "- Bitcoin may recur across the story where it fits naturally, but it must stay grounded and secondary to the child's concrete actions.",
     ...(earlyReader
@@ -638,39 +1055,157 @@ function buildRewriteInstructions(
   ].join("\n");
 }
 
+function buildMockStoryConcept(context: StoryContext): StoryConcept {
+  const lessonDefinition = getMoneyLessonDefinition(context.lesson);
+  const firstInterest = context.interests[0] ?? "special";
+  const baseConcept = {
+    premise: `${context.childFirstName} lives through a small money moment that reveals ${lessonDefinition.label.toLowerCase()}.`,
+    caregiverLabel: "Mom" as const,
+    bitcoinBridge: `Mom gently connects Bitcoin to ${lessonDefinition.bitcoinValueThread}.`,
+    emotionalPromise: `Move from uncertainty to understanding, then to ${lessonDefinition.emotionalArcTarget}.`,
+    caregiverWarmthMoment: `Mom kneels beside ${context.childFirstName}, names the feeling, and offers a calm next step.`,
+    bitcoinValueThread: lessonDefinition.bitcoinValueThread,
+    requiredSetups: ["kitchen table talk", "careful noticing", "Mom's calm explanation"],
+    requiredPayoffs: ["the child understands the money value", "the ending feels calm and proud"],
+    forbiddenLateIntroductions: ["mystery grown-up rescue", "surprise gadget", "last-second rule change"]
+  };
+
+  switch (context.lesson) {
+    case "prices_change":
+      return {
+        ...baseConcept,
+        premise: `${context.childFirstName} notices that the same ${firstInterest} treat costs more than before and wants to understand why.`,
+        requiredSetups: ["fruit stand sign", "three coins", "last week's memory"],
+        requiredPayoffs: ["the child notices the price change clearly", "Mom connects the moment to patient money values"],
+        forbiddenLateIntroductions: ["secret sale", "phone app", "grown-up market chart"],
+        lessonScenario: {
+          moneyLessonKey: "prices_change",
+          anchorItem: `${firstInterest} snack`,
+          beforePrice: 2,
+          afterPrice: 3,
+          purchaseUnit: "coins",
+          countableComparison: "Three coins used to buy two snacks, and now three coins buy only one.",
+          noticingMoment: "the neighborhood stand after playtime",
+          deadlineEvent: "after-school stop"
+        }
+      };
+    case "jar_saving_limits":
+      return {
+        ...baseConcept,
+        premise: `${context.childFirstName} wants a ${firstInterest} set and learns that saving patiently needs more than letting coins sit still.`,
+        requiredSetups: ["price tag", "coin jar", "Saturday plan"],
+        requiredPayoffs: ["reach the target price", "feel proud about protecting effort"],
+        forbiddenLateIntroductions: ["tournament", "sale", "third chore"],
+        lessonScenario: {
+          moneyLessonKey: "jar_saving_limits",
+          targetItem: `${firstInterest} set`,
+          targetPrice: 12,
+          startingAmount: 7,
+          gapAmount: 5,
+          earningOptions: [
+            {
+              label: "rake leaves",
+              action: "rake leaves in the yard with a small rake",
+              sceneLocation: "yard"
+            },
+            {
+              label: "help bake muffins",
+              action: "help bake muffins in the kitchen",
+              sceneLocation: "kitchen"
+            }
+          ],
+          temptation: "a small sweet from the store",
+          deadlineEvent: "Saturday outing"
+        }
+      };
+    case "new_money_unfair":
+      return {
+        ...baseConcept,
+        premise: `${context.childFirstName} joins a ticket game and feels confused when new tickets appear out of nowhere.`,
+        requiredSetups: ["ticket game", "bell prize", "same starting tickets"],
+        requiredPayoffs: ["the unfair feeling is named", "a calmer fair rule is understood"],
+        forbiddenLateIntroductions: ["hidden bonus bucket", "surprise app", "new scoring gadget"],
+        lessonScenario: {
+          moneyLessonKey: "new_money_unfair",
+          gameName: "ticket toss",
+          tokenName: "blue tickets",
+          childGoal: "ring the bell and choose the prize first",
+          ruleDisruption: "extra blue tickets suddenly appear for other players halfway through the game",
+          fairnessRepair: "Mom explains that fair games keep the ticket count steady for everyone",
+          deadlineEvent: "before cleanup time"
+        }
+      };
+    case "keep_what_you_earn":
+      return {
+        ...baseConcept,
+        premise: `${context.childFirstName} works hard for a reward and feels why effort should still count at the end.`,
+        requiredSetups: ["small job", "earned coins", "plan for the reward"],
+        requiredPayoffs: ["the reward still feels meaningful", "the child's effort is respected"],
+        forbiddenLateIntroductions: ["secret bonus", "surprise device", "new grown-up rule"],
+        lessonScenario: {
+          moneyLessonKey: "keep_what_you_earn",
+          workAction: "help wash the family bikes",
+          earnedReward: "four shiny coins",
+          rewardUse: "save toward a bright helmet bell",
+          unfairLossRisk: "new reward slips get handed out after the work is done and make the earned coins feel smaller",
+          deadlineEvent: "before the evening ride"
+        }
+      };
+    case "better_rules":
+      return {
+        ...baseConcept,
+        premise: `${context.childFirstName} plays a favorite game and feels the difference between shifting rules and fair ones.`,
+        requiredSetups: ["backyard game", "agreed starting rule", "shared goal"],
+        requiredPayoffs: ["the fair rule becomes clear", "the group feels calmer under stable rules"],
+        forbiddenLateIntroductions: ["secret referee app", "extra power-up", "last-second exception"],
+        lessonScenario: {
+          moneyLessonKey: "better_rules",
+          gameName: "backyard marble race",
+          brokenRule: "the finish line keeps moving after the race starts",
+          fairRule: "the finish line stays fixed once everyone begins",
+          sharedGoal: "everyone wants a fair chance to finish together",
+          deadlineEvent: "before supper"
+        }
+      };
+  }
+}
+
+function mockStoryConflict(context: StoryContext, concept: StoryConcept): string {
+  const scenario = concept.lessonScenario;
+
+  switch (scenario.moneyLessonKey) {
+    case "prices_change":
+      return `${context.childFirstName} notices the same ${scenario.anchorItem} costs more and feels unsure why.`;
+    case "jar_saving_limits":
+      return `${context.childFirstName} must choose between a now-treat and patient saving.`;
+    case "new_money_unfair":
+      return `${context.childFirstName} feels the game turn unfair when new ${scenario.tokenName} appear.`;
+    case "keep_what_you_earn":
+      return `${context.childFirstName} wants hard work to keep its meaning.`;
+    case "better_rules":
+      return `${context.childFirstName} feels frustrated when the rules change mid-game.`;
+  }
+}
+
+function mockPageTextForBeat(context: StoryContext, concept: StoryConcept, idx: number, total: number): string {
+  const highlight = storyConceptHighlightLabels(concept)[0] ?? "small family moment";
+  if (idx === total - 1) {
+    return `${concept.caregiverLabel} spoke in a calm voice about ${concept.bitcoinBridge.toLowerCase()}. ${context.childFirstName} felt relieved and proud.`;
+  }
+
+  if (idx === total - 2) {
+    return `${concept.caregiverLabel} held ${context.childFirstName}'s hand and helped make sense of ${highlight}.`;
+  }
+
+  return `${context.childFirstName} noticed ${highlight} and took one small, steady step forward.`;
+}
+
 class MockLlmProvider implements LlmProvider {
   async generateStoryConcept(
     context: StoryContext
   ): Promise<{ concept: StoryConcept; meta: LlmMetadata }> {
-    const targetPrice = 12;
-    const startingAmount = 7;
     return {
-      concept: {
-        premise: `${context.childFirstName} wants a special item and must decide how to save for it.`,
-        caregiverLabel: "Mom",
-        targetItem: `${context.interests[0] ?? "special"} ball`,
-        targetPrice,
-        startingAmount,
-        gapAmount: targetPrice - startingAmount,
-        earningOptions: [
-          {
-            label: "rake leaves",
-            action: "rake leaves in the yard with a small rake",
-            sceneLocation: "yard"
-          },
-          {
-            label: "help bake cookies",
-            action: "help bake cookies in the kitchen",
-            sceneLocation: "kitchen"
-          }
-        ],
-        temptation: "a small sweet from the store",
-        deadlineEvent: "Saturday game",
-        bitcoinBridge: "Mom says Bitcoin is one adult saving idea tied to Ava's jar choice.",
-        requiredSetups: ["price tag", "coin jar", "Saturday game"],
-        requiredPayoffs: ["reach the target price", "buy the item", "feel proud about saving"],
-        forbiddenLateIntroductions: ["tournament", "sale", "third chore"]
-      },
+      concept: buildMockStoryConcept(context),
       meta: {
         provider: "mock",
         model: "mock-llm",
@@ -684,6 +1219,9 @@ class MockLlmProvider implements LlmProvider {
     context: StoryContext,
     concept: StoryConcept
   ): Promise<{ beatSheet: BeatSheet; audit: BeatPlanningAudit; meta: LlmMetadata }> {
+    const deadlineEvent = storyConceptDeadlineEvent(concept);
+    const countTarget = storyConceptCountTarget(concept);
+    const earningOptions = storyConceptEarningOptionLabels(concept);
     const beatSheet: BeatSheet = {
       beats: Array.from({ length: context.pageCount }, (_, idx) => {
         const sceneNumber = Math.floor(idx / 2) + 1;
@@ -695,17 +1233,23 @@ class MockLlmProvider implements LlmProvider {
 
         return {
           purpose:
-            idx < context.pageCount - 2
-              ? `Setup/test beat ${idx + 1}`
-              : `Resolution beat ${idx + 1}`,
-          conflict:
-            idx < context.pageCount - 2
-              ? `${context.childFirstName} faces changing prices in daily life.`
-              : `${context.childFirstName} applies a long-term saving tool with confidence.`,
+            idx === context.pageCount - 2
+              ? "Caregiver reassurance beat"
+              : idx === context.pageCount - 1
+                ? "Warm resolution beat"
+                : `Story beat ${idx + 1}`,
+          conflict: idx < context.pageCount - 2 ? mockStoryConflict(context, concept) : "The lesson finally feels clear and safe.",
           sceneLocation: context.interests[0] ?? "home",
           sceneId,
           sceneVisualDescription,
-          emotionalTarget: idx < context.pageCount - 2 ? "curious then determined" : "relieved and proud",
+          emotionalTarget:
+            idx === 0
+              ? "curious and unsure"
+              : idx === context.pageCount - 2
+                ? "reassured and close"
+                : idx === context.pageCount - 1
+                  ? "calm, relieved, and proud"
+                  : "steady and determined",
           pageIndexEstimate: idx,
           decodabilityTags: ["controlled_vocab", "repetition", "taught_words_late"],
           newWordsIntroduced: ["save"],
@@ -714,9 +1258,9 @@ class MockLlmProvider implements LlmProvider {
           paysOff: idx === context.pageCount - 1 ? concept.requiredPayoffs.slice(0, 2) : [],
           continuityFacts: [
             `caregiver_label:${concept.caregiverLabel}`,
-            `deadline_event:${concept.deadlineEvent ?? "null"}`,
-            ...(idx === 1 ? [`count_target:${concept.targetPrice}`] : []),
-            ...(idx === 3 ? [`chosen_earning_option:${concept.earningOptions[0].label}`] : [])
+            `deadline_event:${deadlineEvent ?? "null"}`,
+            ...(idx === 1 && countTarget !== null ? [`count_target:${countTarget}`] : []),
+            ...(idx === 3 && earningOptions[0] ? [`chosen_earning_option:${earningOptions[0]}`] : [])
           ]
         };
       })
@@ -780,10 +1324,7 @@ class MockLlmProvider implements LlmProvider {
   ): Promise<{ story: StoryPackage; meta: LlmMetadata }> {
     const pages = beatSheet.beats.map((beat, idx) => ({
       pageIndex: idx,
-      pageText:
-        idx < beatSheet.beats.length - 2
-          ? `${context.childFirstName} saves for the ${concept.targetItem} and keeps going.`
-          : `${concept.caregiverLabel} says, "${concept.bitcoinBridge}"`,
+      pageText: mockPageTextForBeat(context, concept, idx, beatSheet.beats.length),
       illustrationBrief: `Calm watercolor scene for ${context.childFirstName}, page ${idx + 1}`,
       sceneId: beat.sceneId,
       sceneVisualDescription: beat.sceneVisualDescription,
@@ -824,16 +1365,8 @@ class MockLlmProvider implements LlmProvider {
     return {
       verdict: {
         ok: quality.ok,
-        issues: quality.issues.map((issue) => ({
-          pageStart: 0,
-          pageEnd: 0,
-          issueType: "theme_integration",
-          severity: "hard",
-          rewriteTarget: "page",
-          evidence: issue,
-          suggestedFix: issue
-        })),
-        rewriteInstructions: quality.issues.join(" | ")
+        issues: quality.issues.map(deterministicIssueToStoryCriticIssue),
+        rewriteInstructions: quality.issues.map((issue) => issue.message).join(" | ")
       },
       meta: {
         provider: "mock",
@@ -887,7 +1420,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
       systemPrompt: buildStoryConceptSystemPrompt(),
       schemaName: schemaNames.storyConcept,
       jsonSchema: storyConceptJsonSchema,
-      parser: storyConceptSchema,
+      parser: storyConceptParser(context),
       maxTokens: 1400
     });
 
@@ -1122,24 +1655,23 @@ class OpenAiAnthropicProvider implements LlmProvider {
       concept,
       boolFromEnv("ENABLE_STRICT_DECODABLE_CHECKS", true)
     );
-    const deterministicIssues = deterministic.issues.map((issue) => ({
-      pageStart: 0,
-      pageEnd: 0,
-      issueType: inferStoryIssueType(issue),
-      severity: "hard" as const,
-      rewriteTarget:
-        inferStoryIssueType(issue) === "setup_payoff" ? ("beat" as const) : ("page" as const),
-      evidence: issue,
-      suggestedFix: issue
-    }));
+    const deterministicIssues = deterministic.issues.map(deterministicIssueToStoryCriticIssue);
     const normalizedVerdict = normalizeStoryCriticVerdict({
       ok: result.data.ok,
       issues: [...result.data.issues, ...deterministicIssues],
       rewriteInstructions: result.data.rewriteInstructions
     });
+    const rewriteInstructions =
+      normalizedVerdict.rewriteInstructions.trim().length > 0
+        ? normalizedVerdict.rewriteInstructions.trim()
+        : fallbackStoryRewriteInstructions(context, normalizedVerdict);
+    const hydratedVerdict: StoryCriticVerdict = {
+      ...normalizedVerdict,
+      rewriteInstructions
+    };
 
     return {
-      verdict: normalizedVerdict,
+      verdict: hydratedVerdict,
       meta: result.meta
     };
   }

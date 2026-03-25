@@ -108,7 +108,7 @@ const input = {
   childFirstName: process.env.CHILD_NAME ?? 'Maya',
   pronouns: process.env.PRONOUNS ?? 'she/her',
   ageYears: Number(process.env.AGE ?? '7'),
-  moneyLessonKey: process.env.LESSON ?? 'saving_later',
+  moneyLessonKey: process.env.LESSON ?? 'jar_saving_limits',
   interestTags: (process.env.INTERESTS ?? 'soccer,puzzles,space').split(',').map((x) => x.trim()).filter(Boolean),
   readingProfileId: process.env.PROFILE ?? 'early_decoder_5_7'
 };
