@@ -27,4 +27,6 @@ Escalate for human confirmation when changing:
 ## Inferred Snapshot
 - Enforce no-secret logging in CI and script output.
 - Keep credentials in environment variables or secret stores.
+- Require pinned or locked dependencies for every detected ecosystem.
+- For Node.js, commit and validate package-lock.json, yarn.lock, or pnpm-lock.yaml in CI.
 <!-- HARNESS-INFERRED:END -->

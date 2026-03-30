@@ -225,3 +225,16 @@ Fixed-layout additions:
 - `pnpm ops:stripe-smoke`
 - `pnpm ops:phase2-e2e` (full paid flow smoke)
 - current live validation for the emotional-vision pass uses `MONEY_LESSON_KEY=better_rules` for `read_aloud_3_4` and `MONEY_LESSON_KEY=new_money_unfair` for `early_decoder_5_7`
+
+<!-- HARNESS-INFERRED:START -->
+## Inferred Snapshot
+### Top-level module candidates
+- `apps/`
+- `infra/`
+- `packages/`
+- `scripts/`
+- `sql/`
+
+### File extension distribution
+- .ts:112, .tsx:28, .md:23, .json:19, .sh:10, .mjs:6, .js:4, .yaml:2
+<!-- HARNESS-INFERRED:END -->
