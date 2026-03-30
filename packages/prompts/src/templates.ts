@@ -1,5 +1,7 @@
 import {
+  bitcoinForwardStoryPrincipleSummary,
   getMoneyLessonDefinition,
+  resolveBitcoinStoryPolicy,
   storyConceptCountTarget,
   storyConceptDeadlineEvent,
   storyConceptEarningOptionLabels,
@@ -33,23 +35,24 @@ function isYoungPictureBookContext(context: StoryTemplateContext): boolean {
   );
 }
 
-function youngProfileBitcoinGuardrails(context: StoryTemplateContext): string[] {
+function bitcoinStoryPolicy(context: StoryTemplateContext, pageCount?: number) {
+  return resolveBitcoinStoryPolicy({
+    lesson: context.lesson,
+    profile: context.profile,
+    ageYears: context.ageYears,
+    pageCount
+  });
+}
+
+function youngProfileBitcoinGuardrails(
+  context: StoryTemplateContext,
+  pageCount?: number
+): string[] {
   if (!isYoungPictureBookContext(context)) {
     return [];
   }
 
-  return [
-    "3-7 Bitcoin guardrails:",
-    "- Keep the child's visible actions physical and observable: count coins, save, wait, choose, earn, compare what the same coins buy, or choose a smaller item.",
-    "- Bitcoin must positively support the story's money values and lesson. It may recur briefly across the story when it feels natural.",
-    "- If Bitcoin is named directly, keep it in caregiver or narrator language, never as a child decoding target or child explanation task.",
-    "- Do not make Bitcoin the child's taught decoding word or a child-facing newWordsIntroduced item.",
-    "- Do NOT use device-first or fintech-first framing as the main plot mechanic: tablet, app, phone, digital jar, wallet, password, QR code, transfer, blockchain, chart, or market screen.",
-    "- Do NOT make the child independently move digital money or explain hidden technical mechanics.",
-    "- Price-change examples must be countable and concrete, such as 'last week 3 coins bought 2 candies; now 3 coins buy 1 candy' or 'the lamp costs 1 more coin now.'",
-    "- Avoid abstract cause language such as supplier shock, market volatility, scarcity curves, or purchasing power unless rewritten into an observable child-level event.",
-    "- A good pattern is: the child lives the value first through a concrete experience, then caregiver or narrator language connects Bitcoin to that same patience, fairness, stewardship, or earned-reward theme in a brief, positive, grounded way."
-  ];
+  return bitcoinStoryPolicy(context, pageCount).youngProfileGuardrails;
 }
 
 function jsonOnlyBlock(schemaName: string): string {
@@ -158,28 +161,11 @@ function betterRulesReadAloudEndingRules(
   context: StoryTemplateContext,
   pageCount: number
 ): string[] {
-  if (context.profile !== "read_aloud_3_4" || context.lesson !== "better_rules" || pageCount < 2) {
-    return [];
-  }
-
-  const penultimatePage = pageCount - 2;
-  const finalPage = pageCount - 1;
-
-  return [
-    `- For better_rules in read_aloud_3_4, reserve page ${penultimatePage} for the clearest explicit Bitcoin bridge after the child has already felt why fair rules matter.`,
-    `- Keep page ${finalPage} for emotional resolution only: togetherness, safety, calm pride, or relief. Do not introduce new Bitcoin explanation there.`
-  ];
+  return bitcoinStoryPolicy(context, pageCount).lessonPlacementRules;
 }
 
 function betterRulesReadAloudCriticRules(context: StoryTemplateContext): string[] {
-  if (context.profile !== "read_aloud_3_4" || context.lesson !== "better_rules") {
-    return [];
-  }
-
-  return [
-    "- For better_rules in read_aloud_3_4, the clearest explicit Bitcoin bridge should land by the penultimate page.",
-    "- For better_rules in read_aloud_3_4, the final page should close emotionally and must not introduce new Bitcoin explanation."
-  ];
+  return bitcoinStoryPolicy(context).criticEndingRules;
 }
 
 export function buildStoryConceptSystemPrompt(): string {
@@ -188,7 +174,7 @@ export function buildStoryConceptSystemPrompt(): string {
     "Create a lightweight story spine that prevents ad-hoc plot inventions, preserves setup/payoff continuity, and protects the emotional arc.",
     "Choose exactly one caregiver label: Mom or Dad.",
     "Build a StoryConcept whose lessonScenario exactly matches the supplied moneyLessonKey.",
-    "For ages 3-7, Bitcoin must positively reinforce patience, fair rules, long-term thinking, stewardship, or earned rewards in a child-safe, concrete way without becoming a separate lecture.",
+    bitcoinForwardStoryPrincipleSummary,
     jsonOnlyBlock("StoryConcept")
   ].join("\n");
 }
@@ -197,6 +183,7 @@ export function buildStoryConceptPrompt(
   context: StoryTemplateContext,
   pageCount: number
 ): string {
+  const policy = bitcoinStoryPolicy(context, pageCount);
   return [
     "Create a StoryConcept for this child profile.",
     profileBlock(context, pageCount),
@@ -215,8 +202,8 @@ export function buildStoryConceptPrompt(
     "- requiredPayoffs should list the exact things the ending must resolve.",
     "- forbiddenLateIntroductions should list nouns/events that would feel ad-hoc if they suddenly appeared near the end.",
     "- Default caregiverLabel to Mom or Dad only; never use generic caregiver labels here.",
-    "- Feature the child's lived value first, then connect Bitcoin second.",
-    ...youngProfileBitcoinGuardrails(context),
+    `- ${policy.storyConceptLine}`,
+    ...youngProfileBitcoinGuardrails(context, pageCount),
     jsonOnlyBlock("StoryConcept")
   ].join("\n");
 }
@@ -228,7 +215,7 @@ export function buildBeatPlannerSystemPrompt(): string {
     "You must produce a child-centered beat sheet with strict continuity to the supplied StoryConcept and a calm, emotionally relieving arc.",
     "",
     "Core constraints:",
-    "- Bitcoin theme: Bitcoin must positively support the story's value thread in a story-first way and may recur wherever it naturally reinforces the child's arc.",
+    `- Bitcoin theme: ${bitcoinForwardStoryPrincipleSummary}`,
     "- Child agency: the child is the hero and makes meaningful choices, including at least one choice that clearly changes the outcome.",
     "- Caregiver warmth: include at least one clear caregiver reassurance or connection beat.",
     "- Emotional arc: move from wanting or uncertainty toward patience, understanding, closeness, and calm pride or relief.",
@@ -264,6 +251,7 @@ export function buildBeatPlannerPrompt(
   pageCount: number,
   _constraints?: BeatPromptConstraints
 ): string {
+  const policy = bitcoinStoryPolicy(context, pageCount);
   return [
     "Create a beat sheet for this child profile from the supplied StoryConcept.",
     profileBlock(context, pageCount),
@@ -282,6 +270,7 @@ export function buildBeatPlannerPrompt(
     "For early readers, keep newWordsIntroduced <= 2 per beat and keep child-facing taught words concrete.",
     "For read_aloud_3_4 and early_decoder_5_7, keep child-facing newWordsIntroduced concrete and do not put Bitcoin itself in newWordsIntroduced.",
     "Include at least one meaningful child choice and at least one clear caregiver reassurance or connection beat.",
+    `- ${policy.beatPlannerLine}`,
     "Let the child experience the underlying money value before a beat names Bitcoin directly.",
     "If a deadlineEvent is used in the final two beats, it must be introduced earlier.",
     ...(storyConceptEarningOptionLabels(concept).length > 0
@@ -294,11 +283,11 @@ export function buildBeatPlannerPrompt(
     ...(storyConceptCountTarget(concept) !== null
       ? [`When a beat features counting toward the target, include count_target:${storyConceptCountTarget(concept)}.`]
       : []),
-    "At least one beat should make the positive Bitcoin connection explicit in bitcoinRelevanceScore and the beat's purpose/conflict after the child has already felt the underlying value.",
+    `At least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} should make the positive Bitcoin connection explicit in bitcoinRelevanceScore and the beat's purpose/conflict after the child has already felt the underlying value.`,
     "Final beat must show concrete payoff/resolution and land in reassurance, closeness, calm pride, or relief.",
     ...betterRulesReadAloudEndingRules(context, pageCount),
     "Use calm, concrete, bedtime-readable settings.",
-    ...youngProfileBitcoinGuardrails(context),
+    ...youngProfileBitcoinGuardrails(context, pageCount),
     jsonOnlyBlock("BeatSheet")
   ].join("\n");
 }
@@ -414,6 +403,7 @@ export function buildBeatRewritePrompt(
       return 0;
     }
   })();
+  const policy = bitcoinStoryPolicy(context, rewritePageCount);
 
   return [
     "You are rewriting a beat sheet to satisfy validator and critic issues.",
@@ -429,14 +419,14 @@ export function buildBeatRewritePrompt(
     "- Honor the StoryConcept exactly. Do not invent a new caregiver term, earning option, or deadline/event outside the concept.",
     "- Ensure every beat includes at least one canonical decodability tag: controlled_vocab, repetition, or taught_words.",
     "- For early-reader profiles, keep newWordsIntroduced <= 2 in every beat and do not make Bitcoin a decoding target.",
-    "- Bitcoin may recur where it naturally supports the theme, but it must stay child-safe, concrete, and secondary to the child's actions.",
+    `- ${policy.beatRewriteLine}`,
     "- Ensure at least one meaningful child choice with visible downstream consequences.",
     "- Ensure at least one clear caregiver reassurance or connection beat.",
     "- Ensure the final beat contains clear concrete payoff/resolution and lands in calm pride, reassurance, or relief.",
     `- If the ending depends on a deadlineEvent (${storyConceptDeadlineEvent(JSON.parse(conceptJson) as StoryConcept) ?? "null"}), seed it before the final two beats.`,
     ...betterRulesReadAloudEndingRules(context, rewritePageCount),
     "- Keep continuityFacts parseable and aligned to the StoryConcept.",
-    ...youngProfileBitcoinGuardrails(context),
+    ...youngProfileBitcoinGuardrails(context, rewritePageCount),
     "",
     "Original beat sheet JSON:",
     originalBeatSheetJson,
@@ -454,6 +444,7 @@ export function buildPageWriterPrompt(
   pageCount: number,
   rewriteInstructions = ""
 ): string {
+  const policy = bitcoinStoryPolicy(context, pageCount);
   return [
     "You are a children's story page writer.",
     "Write the final pages from this approved StoryConcept and beat sheet.",
@@ -480,13 +471,13 @@ export function buildPageWriterPrompt(
     "- Avoid hype and investment promises.",
     "- The story should feel emotionally relieving: move toward reassurance, closeness, and calm pride or relief.",
     "- Include the caregiverWarmthMoment somewhere clearly and naturally.",
-    "- Bitcoin must positively reinforce the story theme and lesson, but stay secondary to the child's concrete arc.",
-    "- Feature the value first, then name Bitcoin second.",
+    `- ${policy.writerLine}`,
+    `- ${policy.titleGuidanceLine}`,
     "- Use StoryConcept.bitcoinBridge as thematic guidance, not as an exact quote that must be copied.",
     "- If Bitcoin is named directly, keep it in caregiver or narrator language; the child should not say, decode, or explain Bitcoin.",
     "- Bitcoin may recur briefly across the story if it stays grounded and child-safe.",
     "- Keep adult-managed money tools secondary; the child's visible choices and consequences must stay primary.",
-    "- The final page should land in reassurance, closeness, calm pride, or relief rather than a lecture.",
+    `- ${policy.endingLine}`,
     ...betterRulesReadAloudEndingRules(context, pageCount),
     ...(rewriteInstructions.trim().length > 0
       ? [
@@ -504,6 +495,7 @@ export function buildCriticPrompt(
   concept: StoryConcept,
   storyJson: string
 ): string {
+  const policy = bitcoinStoryPolicy(context);
   return [
     "You are a strict final-story quality critic for a children's bedtime story app.",
     `Reading profile: ${context.profile}`,
@@ -519,13 +511,15 @@ export function buildCriticPrompt(
     "- Are age-implausible chores or responsibilities present?",
     "- Does the story feel warm, calm, and emotionally relieving rather than preachy?",
     "- Is there at least one clear caregiver reassurance or connection moment?",
+    `- ${policy.criticLine}`,
     "- Does Bitcoin positively reinforce the lesson's value thread rather than feeling pasted on?",
     "- If Bitcoin appears, is it kept child-safe, concrete, non-technical, and out of the child's decoding or explaining voice?",
+    `- ${policy.titleReviewLine}`,
     "- Do not require exact reuse of StoryConcept.bitcoinBridge wording; judge thematic fit instead.",
     "- Use theme_integration for weak or bolted-on Bitcoin theming. Reserve bitcoin_fit for actual policy violations such as hype, technical framing, child-speaking Bitcoin, or thematic contradiction.",
     "- Use emotional_tone for stories that are flat, stressful, or not bedtime-warm enough.",
     "- Use caregiver_warmth when the caregiver connection moment is missing or underwritten.",
-    "- Use ending_emotion when the final page fails to land in reassurance, calm pride, or relief.",
+    "- Use ending_emotion when the final page turns lecture-like or fails to land in reassurance, calm pride, or relief.",
     "- For read_aloud_3_4, quoted dialogue should stay brief and bedtime-readable; prefer one short quoted sentence over a long explanatory speech.",
     "- For read_aloud_3_4, the final page should close emotionally rather than carrying a long conceptual explanation.",
     ...betterRulesReadAloudCriticRules(context),

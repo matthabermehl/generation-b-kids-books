@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-24T04:01:56Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-30T23:22:49Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -312,5 +312,65 @@
     ],
     "passes": true,
     "evidence": "2026-03-25: stored both final illustrated PDFs plus deployed UI proof under .agent/artifacts/bitcoin-story-emotional-vision/: better_rules-read_aloud-book.pdf, new_money_unfair-early_decoder-book.pdf, create-lesson-selector.png, current-book-workspace.png, and the matching smoke JSON artifacts. Verified by direct downloads from the ready smoke runs and deployed Playwright captures."
+  },
+  {
+    "id": "bitcoin-forward-policy-seam-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Create one centralized Bitcoin-forward story policy seam for the current 5 lessons without adding parent/API/DB mode selection",
+    "steps": [
+      "Introduce a shared Bitcoin-story policy contract or resolver that captures the single shipped Bitcoin-forward posture plus lesson/profile-aware nuance",
+      "Route prompt builders, deterministic checks, and mock or fallback story outputs through that policy instead of scattered hard-coded wording"
+    ],
+    "passes": true,
+    "evidence": "pnpm --filter @book/domain test (PASS); pnpm --filter @book/prompts test (PASS); pnpm --filter @book/workers test (PASS); bash scripts/agent/quality.sh (PASS)"
+  },
+  {
+    "id": "bitcoin-forward-prompt-alignment-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Retune story concept, beat, rewrite, writer, and critic prompts so stories stay problem-led but become more explicitly Bitcoin-forward",
+    "steps": [
+      "Update concept, planner, rewrite, writer, and critic templates to make Bitcoin earlier, clearer, and more recurring in caregiver or narrator framing while keeping the child's concrete arc primary",
+      "Preserve bedtime warmth, lesson-specific nuance, and non-lecture endings across all 5 current money-problem lessons"
+    ],
+    "passes": false,
+    "evidence": ""
+  },
+  {
+    "id": "bitcoin-forward-validator-alignment-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Align deterministic beat and story checks with the stronger Bitcoin-forward target while preserving existing safety rules",
+    "steps": [
+      "Replace the current minimum-presence assumptions with policy-driven expectations for explicit Bitcoin salience and distribution",
+      "Keep bans on hype, technical/device-first framing, and child-facing Bitcoin decoding or explanation"
+    ],
+    "passes": false,
+    "evidence": ""
+  },
+  {
+    "id": "bitcoin-forward-fixtures-docs-01",
+    "priority": 2,
+    "category": "documentation",
+    "description": "Refresh fixtures, prompt principles, docs, and fallback titles so the repo reflects the new Bitcoin-forward single-mode architecture",
+    "steps": [
+      "Update mock outputs, title guidance, prompt-principle tests, and targeted fixtures to remove stale gentle-secondary assumptions",
+      "Refresh docs and execution notes to document the centralized Bitcoin-forward policy seam and the intentional lack of a parent-facing selector"
+    ],
+    "passes": false,
+    "evidence": ""
+  },
+  {
+    "id": "bitcoin-forward-deploy-smoke-01",
+    "priority": 2,
+    "category": "integration",
+    "description": "Prove the Bitcoin-forward alignment in dev with local quality gates, live smoke artifacts, and downloadable sample books",
+    "steps": [
+      "Run smoke, targeted package tests, and repo quality before deploying dev",
+      "Run provider smoke plus two live picture-book smokes and store smoke JSON plus final PDFs under `.agent/artifacts/bitcoin-forward-modes/`"
+    ],
+    "passes": false,
+    "evidence": ""
   }
 ]

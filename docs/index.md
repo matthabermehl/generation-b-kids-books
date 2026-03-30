@@ -16,6 +16,7 @@
 - [exec-plans/active/001-openai-image-pipeline.md](exec-plans/active/001-openai-image-pipeline.md)
 - [exec-plans/active/002-visual-continuity-hardening.md](exec-plans/active/002-visual-continuity-hardening.md)
 - [exec-plans/active/003-bitcoin-story-emotional-vision.md](exec-plans/active/003-bitcoin-story-emotional-vision.md)
+- [exec-plans/active/004-bitcoin-forward-modes.md](exec-plans/active/004-bitcoin-forward-modes.md)
 - `exec-plans/completed/`
 
 ## Design

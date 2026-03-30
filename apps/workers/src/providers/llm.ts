@@ -8,7 +8,10 @@ import type {
   StoryPackage
 } from "@book/domain";
 import {
+  buildBitcoinStoryBridgeText,
+  buildBitcoinStoryFallbackTitle,
   getMoneyLessonDefinition,
+  resolveBitcoinStoryPolicy,
   storyConceptCountTarget,
   storyConceptDeadlineEvent,
   storyConceptEarningOptionLabels,
@@ -1001,6 +1004,12 @@ function buildRewriteInstructions(
   attempt: BeatPlanningAttempt,
   context: StoryContext
 ): string {
+  const policy = resolveBitcoinStoryPolicy({
+    lesson: context.lesson,
+    profile: context.profile,
+    ageYears: context.ageYears,
+    pageCount: context.pageCount
+  });
   const earlyReader =
     context.profile === "early_decoder_5_7" || (context.ageYears >= 5 && context.ageYears <= 7);
   const youngPictureBookProfile =
@@ -1028,9 +1037,9 @@ function buildRewriteInstructions(
     ...deterministicLines,
     ...criticLines,
     "- Bitcoin policy constraints:",
-    "- Ensure at least one beat clearly gives Bitcoin positive thematic relevance to the story's value arc.",
+    `- Ensure at least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} clearly give Bitcoin positive thematic relevance to the story's value arc.`,
     "- Treat bitcoinRelevanceScore as thematic salience, not a late-stage quota.",
-    "- Bitcoin may recur across the story where it fits naturally, but it must stay grounded and secondary to the child's concrete actions.",
+    `- ${policy.beatRewriteLine}`,
     ...(earlyReader
       ? [
           "- Science-of-Reading constraints:",
@@ -1042,11 +1051,7 @@ function buildRewriteInstructions(
     ...(youngPictureBookProfile
       ? [
           "- 3-7 profile guardrails:",
-          "- Keep the child's decisive actions physical and observable: count coins, save, wait, choose, earn, compare prices, or buy a smaller item.",
-          "- Do not use device-first or fintech-first plot mechanics such as tablet, app, digital jar, wallet, password, transfer, QR code, blockchain, or chart.",
-          "- Do not make Bitcoin the child's decoding target or a newWordsIntroduced item.",
-          "- If Bitcoin appears, keep it in caregiver or narrator language while the child-facing language stays concrete.",
-          "- Use exact, countable price-change examples instead of supply-shock, market, scarcity, or volatility explanations."
+          ...policy.youngProfileGuardrails.slice(1)
         ]
       : []),
     "Global rewrite guidance:",
@@ -1061,7 +1066,7 @@ function buildMockStoryConcept(context: StoryContext): StoryConcept {
   const baseConcept = {
     premise: `${context.childFirstName} lives through a small money moment that reveals ${lessonDefinition.label.toLowerCase()}.`,
     caregiverLabel: "Mom" as const,
-    bitcoinBridge: `Mom gently connects Bitcoin to ${lessonDefinition.bitcoinValueThread}.`,
+    bitcoinBridge: buildBitcoinStoryBridgeText("Mom", context.lesson),
     emotionalPromise: `Move from uncertainty to understanding, then to ${lessonDefinition.emotionalArcTarget}.`,
     caregiverWarmthMoment: `Mom kneels beside ${context.childFirstName}, names the feeling, and offers a calm next step.`,
     bitcoinValueThread: lessonDefinition.bitcoinValueThread,
@@ -1170,6 +1175,24 @@ function buildMockStoryConcept(context: StoryContext): StoryConcept {
   }
 }
 
+function mockBitcoinBeatIndexes(context: StoryContext): number[] {
+  if (context.pageCount <= 1) {
+    return [0];
+  }
+
+  const indexes = new Set<number>();
+  if (context.pageCount >= 4) {
+    indexes.add(1);
+    indexes.add(Math.max(1, context.pageCount - 2));
+  } else if (context.pageCount === 3) {
+    indexes.add(1);
+  } else {
+    indexes.add(0);
+  }
+
+  return Array.from(indexes).sort((left, right) => left - right);
+}
+
 function mockStoryConflict(context: StoryContext, concept: StoryConcept): string {
   const scenario = concept.lessonScenario;
 
@@ -1189,12 +1212,13 @@ function mockStoryConflict(context: StoryContext, concept: StoryConcept): string
 
 function mockPageTextForBeat(context: StoryContext, concept: StoryConcept, idx: number, total: number): string {
   const highlight = storyConceptHighlightLabels(concept)[0] ?? "small family moment";
+  const bitcoinBeatIndexes = new Set(mockBitcoinBeatIndexes(context));
   if (idx === total - 1) {
-    return `${concept.caregiverLabel} spoke in a calm voice about ${concept.bitcoinBridge.toLowerCase()}. ${context.childFirstName} felt relieved and proud.`;
+    return `${concept.caregiverLabel} held ${context.childFirstName} close. ${context.childFirstName} felt relieved, safe, and proud.`;
   }
 
-  if (idx === total - 2) {
-    return `${concept.caregiverLabel} held ${context.childFirstName}'s hand and helped make sense of ${highlight}.`;
+  if (bitcoinBeatIndexes.has(idx)) {
+    return `${concept.caregiverLabel} helped ${context.childFirstName} make sense of ${highlight}. ${concept.bitcoinBridge}`;
   }
 
   return `${context.childFirstName} noticed ${highlight} and took one small, steady step forward.`;
@@ -1222,6 +1246,7 @@ class MockLlmProvider implements LlmProvider {
     const deadlineEvent = storyConceptDeadlineEvent(concept);
     const countTarget = storyConceptCountTarget(concept);
     const earningOptions = storyConceptEarningOptionLabels(concept);
+    const bitcoinBeatIndexes = new Set(mockBitcoinBeatIndexes(context));
     const beatSheet: BeatSheet = {
       beats: Array.from({ length: context.pageCount }, (_, idx) => {
         const sceneNumber = Math.floor(idx / 2) + 1;
@@ -1253,7 +1278,7 @@ class MockLlmProvider implements LlmProvider {
           pageIndexEstimate: idx,
           decodabilityTags: ["controlled_vocab", "repetition", "taught_words_late"],
           newWordsIntroduced: ["save"],
-          bitcoinRelevanceScore: idx >= context.pageCount - 2 ? 0.85 : 0.2,
+          bitcoinRelevanceScore: bitcoinBeatIndexes.has(idx) ? 0.7 : idx === context.pageCount - 1 ? 0.3 : 0.15,
           introduces: idx === 0 ? concept.requiredSetups.slice(0, 2) : [],
           paysOff: idx === context.pageCount - 1 ? concept.requiredPayoffs.slice(0, 2) : [],
           continuityFacts: [
@@ -1269,6 +1294,7 @@ class MockLlmProvider implements LlmProvider {
     const deterministic = runDeterministicBeatChecks(
       {
         profile: context.profile,
+        lesson: context.lesson,
         ageYears: context.ageYears,
         pageCount: context.pageCount
       },
@@ -1334,7 +1360,7 @@ class MockLlmProvider implements LlmProvider {
 
     return {
       story: {
-        title: `${context.childFirstName}'s Bitcoin Adventure`,
+        title: buildBitcoinStoryFallbackTitle(context.childFirstName, context.lesson),
         concept,
         beats: beatSheet.beats,
         pages,
@@ -1455,6 +1481,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
       const deterministic = runDeterministicBeatChecks(
         {
           profile: context.profile,
+          lesson: context.lesson,
           ageYears: context.ageYears,
           pageCount: context.pageCount
         },
@@ -1551,6 +1578,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
     const deterministic = runDeterministicBeatChecks(
       {
         profile: context.profile,
+        lesson: context.lesson,
         ageYears: context.ageYears,
         pageCount: context.pageCount
       },

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   pageSeed,
+  validateBitcoinStoryTitle,
   validateBitcoinUsage,
   validateCaregiverConsistency,
   validateCountSequences,
@@ -209,6 +210,22 @@ describe("caregiver consistency", () => {
 });
 
 describe("bitcoin usage", () => {
+  it("rejects generic Bitcoin Adventure fallback titles", () => {
+    const result = validateBitcoinStoryTitle(
+      "early_decoder_5_7",
+      concept,
+      "Mia's Bitcoin Adventure",
+      12
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        code: "BITCOIN_TITLE"
+      })
+    );
+  });
+
   it("allows recurring safe Bitcoin mentions that support the theme", () => {
     const result = validateBitcoinUsage("early_decoder_5_7", concept, [
       {
@@ -250,6 +267,24 @@ describe("bitcoin usage", () => {
     expect(result.ok).toBe(false);
     expect(result.issues.some((issue) => issue.code === "BITCOIN_CHILD_LANGUAGE")).toBe(true);
     expect(result.issues.some((issue) => issue.code === "BITCOIN_POLICY")).toBe(true);
+  });
+
+  it("requires Bitcoin to appear before the final page in longer stories", () => {
+    const result = validateBitcoinUsage("early_decoder_5_7", concept, Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 11
+          ? "Mom says Bitcoin can be one way grown-ups save for later."
+          : `Mia saves coin ${idx + 1}.`,
+      illustrationBrief: "",
+      sceneId: `scene-${idx}`,
+      sceneVisualDescription: "Kitchen table",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    })));
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.message.includes("before the final page"))).toBe(true);
   });
 });
 

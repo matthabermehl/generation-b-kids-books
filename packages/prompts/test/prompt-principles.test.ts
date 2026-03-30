@@ -117,7 +117,7 @@ describe("prompt principles", () => {
     const prompt = buildBeatPlannerPrompt(context, concept, 12);
 
     expectSignals(prompt, [
-      "bitcoin must positively support the story's money values",
+      "keep bitcoin clearly present in caregiver or narrator framing before the ending",
       "caregiver or narrator language",
       "device-first",
       "chosen_earning_option",
@@ -152,7 +152,8 @@ describe("prompt principles", () => {
       "thematic guidance",
       "bitcoin may recur briefly",
       "investment promises",
-      "child should not say, decode, or explain bitcoin"
+      "child should not say, decode, or explain bitcoin",
+      "avoid generic fallback titles like 'bitcoin adventure'"
     ]);
   });
 

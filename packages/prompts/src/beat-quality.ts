@@ -1,4 +1,4 @@
-import type { BeatSheet, ReadingProfile } from "@book/domain";
+import { resolveBitcoinStoryPolicy, type BeatSheet, type MoneyLessonKey, type ReadingProfile } from "@book/domain";
 
 const fantasyTerms = [
   "dragon",
@@ -12,7 +12,6 @@ const fantasyTerms = [
 ];
 
 const taughtWords = ["bitcoin"];
-const defaultThemeThreshold = 0.35;
 const warmthSignals = ["calm", "reassur", "comfort", "close", "warm", "safe", "steady", "relief", "relieved", "proud", "secure"];
 const calmEndingSignals = ["calm", "relief", "relieved", "reassur", "proud", "safe", "secure", "close", "gentle"];
 
@@ -30,6 +29,7 @@ export interface BeatDeterministicSummary {
 
 export interface BeatValidationContext {
   profile: ReadingProfile;
+  lesson?: MoneyLessonKey;
   ageYears: number;
   pageCount: number;
 }
@@ -71,6 +71,12 @@ export function runDeterministicBeatChecks(
 ): BeatDeterministicSummary {
   const issues: BeatDeterministicIssue[] = [];
   const beats = beatSheet.beats;
+  const policy = resolveBitcoinStoryPolicy({
+    lesson: context.lesson ?? "jar_saving_limits",
+    profile: context.profile,
+    ageYears: context.ageYears,
+    pageCount: context.pageCount
+  });
 
   if (beats.length !== context.pageCount) {
     issues.push({
@@ -85,17 +91,21 @@ export function runDeterministicBeatChecks(
 
   const bitcoinBeatIndexes = beats
     .map((beat, index) => ({ index, score: beat.bitcoinRelevanceScore }))
-    .filter((entry) => entry.score >= defaultThemeThreshold)
+    .filter((entry) => entry.score >= policy.minimumHighRelevanceScore)
     .map((entry) => entry.index);
 
-  if (bitcoinBeatIndexes.length === 0) {
+  if (bitcoinBeatIndexes.length < policy.minimumHighRelevanceBeats) {
     issues.push({
       code: "BITCOIN_THEME_INTEGRATION",
-      message: `At least one beat must use bitcoinRelevanceScore >= ${defaultThemeThreshold} to show Bitcoin positively supporting the story theme.`,
+      message:
+        policy.minimumHighRelevanceBeats > 1
+          ? `At least ${policy.minimumHighRelevanceBeats} beats must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin feels recurring and story-forward instead of late-only.`
+          : `At least one beat must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} to show Bitcoin positively supporting the story theme.`,
       details: {
         highBeatIndexes: bitcoinBeatIndexes,
         highBeatCount: bitcoinBeatIndexes.length,
-        requiredThreshold: defaultThemeThreshold
+        requiredThreshold: policy.minimumHighRelevanceScore,
+        requiredHighBeatCount: policy.minimumHighRelevanceBeats
       }
     });
   }
