@@ -21,10 +21,11 @@ Use this file as a lightweight quality rubric. Track trend over time rather than
 
 <!-- HARNESS-INFERRED:START -->
 ## Inferred Snapshot
-- Date: 2026-03-04T18:28:29-05:00
-- Score: 11/25
-- Test determinism: 2/5
-- Lint/format determinism: 4/10
+- Date: 2026-03-30T18:53:15-04:00
+- Score: 21/25
+- Test determinism: 5/5
+- Lint/format determinism: 5/5
 - Documentation freshness: 3/5
-- Build reproducibility: 2/5
+- Build reproducibility: 4/5
+- Operational clarity (scripts/runbooks): 4/5
 <!-- HARNESS-INFERRED:END -->

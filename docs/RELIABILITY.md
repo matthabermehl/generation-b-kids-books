@@ -22,8 +22,7 @@ Escalate to human review when:
 
 <!-- HARNESS-INFERRED:START -->
 ## Inferred Snapshot
-- Files scanned: 0
-- Has obvious test layout: False
-- TODO/FIXME hotspots:
-- No TODO/FIXME hotspots detected
+- Runtime, README seed, and WIP context are refreshed in `.agent/handoff.md`.
+- TODO/FIXME debt inventory is refreshed in `docs/exec-plans/tech-debt-tracker.md`.
+- Execution evidence belongs in `.agent/progress.log`.
 <!-- HARNESS-INFERRED:END -->

@@ -13,10 +13,10 @@
 
 <!-- HARNESS-INFERRED:START -->
 ## Inferred Session Snapshot
-- Generated: 2026-03-04T18:28:29-05:00
-- Runtime: No dominant runtime detected
-- README seed (README.md): (none detected)
-- WIP summary: AI children’s book app from tech spec + market research
+- Generated: 2026-03-30T18:53:15-04:00
+- Runtime: Node.js
+- README seed (README.md): Monorepo for the AI children's book app (web, API, workers, renderer, and AWS CDK infra).
+- WIP summary: README.md seed: Monorepo for the AI children's book app (web, API, workers, renderer, and AWS CDK infra).
 - TODO/FIXME hotspots:
 - none detected
 <!-- HARNESS-INFERRED:END -->
