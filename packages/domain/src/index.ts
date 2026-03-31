@@ -1,4 +1,5 @@
 export * from "./enums.js";
+export * from "./bitcoin-story-policy.js";
 export * from "./lessons.js";
 export * from "./seed.js";
 export * from "./story-concepts.js";

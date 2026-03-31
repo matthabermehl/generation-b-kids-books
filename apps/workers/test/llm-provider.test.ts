@@ -1044,10 +1044,14 @@ describe("llm provider routing", () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(true));
 
     const provider = await resolveLlmProvider({ mockRunTag: "test-run", source: "unit-test" });
-    const beatPlan = await provider.generateBeatSheet(context, compliantConcept);
+    const conceptResult = await provider.generateStoryConcept({ ...context, mockRunTag: "test-run" });
+    const beatPlan = await provider.generateBeatSheet(context, conceptResult.concept);
+    const story = await provider.draftPages(context, conceptResult.concept, beatPlan.beatSheet);
 
     expect(beatPlan.meta.provider).toBe("mock");
     expect(beatPlan.beatSheet.beats).toHaveLength(4);
+    expect(story.story.title).toBe("Ava's Saving Plan");
+    expect(story.story.title).not.toContain("Bitcoin Adventure");
   });
 
   it("requires mock run tag when mock providers are enabled", async () => {

@@ -4,6 +4,7 @@ import { runDeterministicBeatChecks, type BeatValidationContext } from "../src/b
 function makeContext(overrides: Partial<BeatValidationContext> = {}): BeatValidationContext {
   return {
     profile: "early_decoder_5_7",
+    lesson: "jar_saving_limits",
     ageYears: 6,
     pageCount: 10,
     ...overrides
@@ -45,6 +46,15 @@ describe("runDeterministicBeatChecks", () => {
     expect(result.ok).toBe(false);
     expect(themeIssue).toBeDefined();
     expect(themeIssue?.details?.requiredThreshold).toBe(0.35);
+  });
+
+  it("requires recurring high-salience Bitcoin beats for longer stories", () => {
+    const beats = Array.from({ length: 12 }, (_, index) => makeBeat(index, index === 10 ? 0.5 : 0.1));
+    const result = runDeterministicBeatChecks(makeContext({ pageCount: 12 }), { beats });
+    const themeIssue = result.issues.find((issue) => issue.code === "BITCOIN_THEME_INTEGRATION");
+
+    expect(result.ok).toBe(false);
+    expect(themeIssue?.details?.requiredHighBeatCount).toBe(2);
   });
 
   it("fails montessori realism for under-6 fantasy beats", () => {

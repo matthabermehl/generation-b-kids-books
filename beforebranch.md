@@ -1,33 +1,51 @@
 ## Current State
 
-- Branch before split: `master` tracking `Github/master`.
-- Working tree before branch creation is not clean:
-  - modified tracked file: `.agent/feature_list.json`
-- The repository is harnessed, but the harness audit found stale managed artifacts and missing harness metadata:
-  - missing `.agent/harness_version.json`
-  - missing repo-root `mymemory.md`
-  - stale managed blocks in `AGENTS.md`, `.agent/handoff.md`, and multiple `docs/` files
-- Several `scripts/agent/` files differ from the current home harness payload, so script parity needs to be reviewed separately from the managed-doc refresh.
+- Branch before split: `master` at `7b6afe3`.
+- Working tree status before the new branch:
+  - clean tracked tree except the harness smoke evidence timestamp update in `.agent/feature_list.json`
+  - `bash scripts/agent/smoke.sh` rerun on 2026-03-30 passed from `master`
+- The current product already has the 5-card money-problem lesson taxonomy and the emotional-vision prompt refactor.
+- The current story pipeline still hard-codes one Bitcoin stance:
+  - Bitcoin is always present
+  - Bitcoin is always positive
+  - Bitcoin is usually described as secondary or gentle rather than deliberately Bitcoin-forward
+- The relevant logic is spread across prompt templates, deterministic validators, and mock/fallback outputs instead of one centralized policy seam.
 
 ## Objectives
 
-- Create a fresh `codex/refresh-harness` branch from the current `master`.
-- Refresh the managed harness artifacts using the installed `harness-update-existing-repo` workflow.
-- Preserve the existing local edit in `.agent/feature_list.json`.
-- Inspect the resulting diff and separate safe managed refresh changes from remaining manual script drift.
+- Run the Bitcoin-forward alignment on a fresh `codex/bitcoin-forward-modes` branch.
+- Keep the current money-problem lessons and reading profiles unchanged.
+- Make the shipped story posture more Bitcoin-forward while still keeping the child's money problem and emotional arc primary.
+- Centralize Bitcoin-story rules into one reusable policy seam so future mode work can branch from a clean foundation.
+- Add harness tracking for five new tasks:
+  - `bitcoin-forward-policy-seam-01`
+  - `bitcoin-forward-prompt-alignment-01`
+  - `bitcoin-forward-validator-alignment-01`
+  - `bitcoin-forward-fixtures-docs-01`
+  - `bitcoin-forward-deploy-smoke-01`
 
 ## Risks
 
-- The working tree already has a local modification, so the refresh must avoid clobbering user work.
-- A harness refresh updates repo documentation and metadata blocks automatically, which can produce a wide but mechanical diff.
-- Existing `scripts/agent/` drift may be intentional project customization; blindly syncing those scripts could remove repo-specific behavior.
+- Prompt-only wording changes will drift unless validators and mock outputs are updated in the same pass.
+- Stronger Bitcoin-forward language could accidentally turn endings preachy unless ending-shape checks remain strict.
+- Some lessons may naturally support different levels of explicit Bitcoin language, so a single stronger policy still needs lesson-aware nuance.
+- Live smoke could regress if the new prompt stance increases critic churn or rewrite loops.
 
 ## Assumptions
 
-- The user wants the managed harness artifacts refreshed now.
-- The existing `.agent/feature_list.json` modification should be carried forward untouched.
-- We can branch from the current `master` state without stashing, since the user asked to continue in-place.
+- This pass does not add a parent-facing selector, API request field, database column, or per-book persisted mode.
+- The requested target is one standardized shipped posture: Bitcoin-forward, but still inside the existing problem-led lesson system.
+- Child-safety policy remains unchanged:
+  - no hype or investment promises
+  - no technical or device-first framing
+  - no child decoding, teaching, or explaining Bitcoin
+- We can prepare for future multi-mode support by centralizing policy now without exposing mode choice yet.
 
 ## Open Decisions
 
-- Whether to manually sync any diverged `scripts/agent/` files after the managed refresh.
+- Exact policy shape:
+  - whether the shared policy should live in `packages/domain`, `packages/prompts`, or as a tiny shared contract spanning both
+- Coverage target:
+  - whether Bitcoin-forward should be expressed as minimum explicit mention count, beat salience distribution, title guidance, or a combination
+- Live proof pair:
+  - whether final live validation should emphasize `better_rules` + `read_aloud_3_4` and `jar_saving_limits` + `early_decoder_5_7`, or keep the prior fairness-heavy smoke pair

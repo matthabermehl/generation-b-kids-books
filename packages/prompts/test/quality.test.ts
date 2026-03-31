@@ -112,6 +112,42 @@ describe("runDeterministicStoryChecks", () => {
     expect(result.issues.some((issue) => issue.pageStart === 0 && issue.pageEnd === 11)).toBe(true);
   });
 
+  it("flags generic Bitcoin Adventure fallback titles", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 2
+          ? "Mom said Bitcoin can be one way grown-ups save for later, too."
+          : idx === 10
+            ? 'Mia counted, "One, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve."'
+            : idx === 11
+              ? "Mom held Mia close. Mia felt calm, proud, and safe."
+              : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "read_aloud_3_4",
+      {
+        title: "Mia's Bitcoin Adventure",
+        concept,
+        beats,
+        pages,
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "jar_saving_limits"
+      },
+      concept,
+      true
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.message.includes("generic Bitcoin Adventure label"))).toBe(true);
+  });
+
   it("preserves the real page index for read-aloud sentence-budget failures", () => {
     const pages = Array.from({ length: 12 }, (_, idx) => ({
       pageIndex: idx,

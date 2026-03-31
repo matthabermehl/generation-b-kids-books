@@ -4,7 +4,9 @@ import {
   buildBeatPlannerSystemPrompt,
   buildBeatRewritePrompt,
   buildCriticPrompt,
+  buildMontessoriCriticPrompt,
   buildNarrativeFreshnessCriticPrompt,
+  buildStoryConceptPrompt,
   buildScienceOfReadingCriticPrompt,
   buildPageWriterPrompt,
   principlesFor,
@@ -117,12 +119,38 @@ describe("prompt principles", () => {
     const prompt = buildBeatPlannerPrompt(context, concept, 12);
 
     expectSignals(prompt, [
-      "bitcoin must positively support the story's money values",
+      "keep bitcoin clearly present in caregiver or narrator framing before the ending",
       "caregiver or narrator language",
       "device-first",
       "chosen_earning_option",
       "count_target"
     ]);
+  });
+
+  it("story concept prompt asks for an earlier reusable Bitcoin bridge without making the book a lecture", () => {
+    const prompt = buildStoryConceptPrompt(context, 12);
+
+    expectSignals(prompt, [
+      "name bitcoin before the ending",
+      "echo it again in longer stories",
+      "without turning the book into a lecture",
+      "feature the child's lived money problem first"
+    ]);
+  });
+
+  it("montessori critic no longer treats Bitcoin as merely secondary", () => {
+    const prompt = buildMontessoriCriticPrompt(
+      context,
+      JSON.stringify(concept),
+      JSON.stringify(beatSheet)
+    );
+
+    expectSignals(prompt, [
+      "bitcoin should be clearly named in caregiver or narrator framing before the ending",
+      "never technical",
+      "never a child explanation task"
+    ]);
+    expect(prompt.toLowerCase()).not.toContain("secondary to the child's concrete arc");
   });
 
   it("sor critic preserves child-safe Bitcoin expectations", () => {
@@ -132,8 +160,9 @@ describe("prompt principles", () => {
       JSON.stringify(beatSheet)
     );
     expectSignals(prompt, [
-      "bitcoin may recur",
+      "bitcoin should be clearly named in caregiver or narrator framing before the ending",
       "do not decode or repeat the word bitcoin",
+      "do not ask the child to decode, repeat, or explain it",
       "child-facing newwordsintroduced item",
       "technical/device-first explanation"
     ]);
@@ -152,7 +181,8 @@ describe("prompt principles", () => {
       "thematic guidance",
       "bitcoin may recur briefly",
       "investment promises",
-      "child should not say, decode, or explain bitcoin"
+      "child should not say, decode, or explain bitcoin",
+      "avoid generic fallback titles like 'bitcoin adventure'"
     ]);
   });
 
@@ -235,6 +265,29 @@ describe("prompt principles", () => {
       "penultimate page",
       "final page should close emotionally",
       "late, verbose bitcoin explanation overloads the ending"
+    ]);
+  });
+
+  it("narrative freshness and rewrite prompts preserve story-forward Bitcoin plus warm endings", () => {
+    const narrativePrompt = buildNarrativeFreshnessCriticPrompt(
+      context,
+      JSON.stringify(concept),
+      JSON.stringify(beatSheet)
+    );
+    const rewritePrompt = buildBeatRewritePrompt(
+      context,
+      JSON.stringify(concept),
+      JSON.stringify(beatSheet),
+      "Fix beat 0 only."
+    );
+
+    expectSignals(narrativePrompt, [
+      "last-page add-on",
+      "meaningfully bitcoin-forward"
+    ]);
+    expectSignals(rewritePrompt, [
+      "emotionally warm, not lecture-like",
+      "echo an earlier idea"
     ]);
   });
 });

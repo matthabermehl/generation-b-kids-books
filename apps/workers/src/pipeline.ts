@@ -1,6 +1,7 @@
 import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import type { Handler } from "aws-lambda";
 import {
+  buildBitcoinStoryFallbackTitle,
   buildPageArtVisualGuidance,
   compositionForTemplate,
   pictureBookLayoutProfileId,
@@ -1448,6 +1449,13 @@ async function upsertPagePreviewRecord(bookId: string, pageId: string, pageIndex
 async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: string; outputPdfKey: string }> {
   const runtimeConfig = await getRuntimeConfig();
   const context = await loadBookContext(bookId);
+  let storedStoryTitle: string | null = null;
+  try {
+    const storedStory = await getJson<StoredStory>(`books/${bookId}/story.json`);
+    storedStoryTitle = storedStory.title?.trim() || null;
+  } catch {
+    storedStoryTitle = null;
+  }
   const usePictureBookPipeline =
     runtimeConfig.featureFlags.enablePictureBookPipeline &&
     context.product_family === "picture_book_fixed_layout" &&
@@ -1514,7 +1522,7 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
 
     await putJson(renderInputKey, {
       bookId,
-      title: "Bitcoin Adventure",
+      title: storedStoryTitle ?? buildBitcoinStoryFallbackTitle(context.child_first_name, context.money_lesson_key),
       pages: pageData.map((row) => ({
         index: Number(row.page_index),
         text: row.text,
@@ -1544,7 +1552,8 @@ async function prepareRenderInput(bookId: string): Promise<{ renderInputKey: str
 
   const renderInputKey = `books/${bookId}/render/render-input.json`;
   const outputPdfKey = `books/${bookId}/render/book.pdf`;
-  const title = `${context.child_first_name}'s Bitcoin Adventure`;
+  const title =
+    storedStoryTitle ?? buildBitcoinStoryFallbackTitle(context.child_first_name, context.money_lesson_key);
   const pictureBookReadingProfile = isPictureBookReadingProfile(context.reading_profile_id)
     ? context.reading_profile_id
     : "early_decoder_5_7";

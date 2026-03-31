@@ -399,3 +399,41 @@ Feature toggle:
 Next: no remaining failing continuity tasks; choose the next non-continuity task if needed
 Notes: the full visual continuity hardening initiative now has local verification, live deploy proof, and a persisted sample-book artifact.
 Commit: pending
+
+2026-03-30T18:35:00-0400
+Task: bitcoin-forward-planning
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: created branch `codex/bitcoin-forward-modes`, rewrote `beforebranch.md` for the narrowed Bitcoin-forward scope, added active execution plan `docs/exec-plans/active/004-bitcoin-forward-modes.md`, seeded five new failing harness tasks for the implementation slices, linked the new plan from `docs/index.md`, and repointed `.agent/current_task.md` to the first policy-seam slice.
+Evidence:
+- `git switch -c codex/bitcoin-forward-modes` => PASS
+- `bash scripts/agent/smoke.sh` => PASS
+Notes: scope is intentionally lower-risk than a public mode selector pass; current plan preserves the existing 5 lessons and avoids API/UI/DB changes unless hidden coupling forces an exception.
+Commit: pending
+
+2026-03-30T19:42:29-0400
+Task: bitcoin-forward-policy-seam-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: added a centralized `@book/domain` Bitcoin story policy seam for the single shipped Bitcoin-forward posture, routed prompt templates and deterministic beat/story validation through it, replaced stale mock/render fallback `Bitcoin Adventure` titles with lesson-aware problem-led title helpers, and updated worker mock outputs plus rewrite guidance to use earlier recurring caregiver/narrator Bitcoin framing without widening any UI/API/DB contracts.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-forward-policy-seam-01` passes=false -> true
+Next: `bitcoin-forward-prompt-alignment-01`
+Notes: `@book/prompts` now rebuilds `@book/domain` in its own build/lint/test scripts so the harness verification commands do not depend on stale workspace dist output when domain exports change.
+Commit: pending
+
+2026-03-30T20:04:38-0400
+Task: bitcoin-forward-prompt-alignment-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: removed the remaining prompt-level "Bitcoin stays secondary" drift, aligned story-concept bridge guidance plus Montessori, science-of-reading, narrative-freshness, and rewrite prompts to the shared Bitcoin-forward policy seam, and added focused prompt regressions for earlier recurring caregiver/narrator Bitcoin framing and warm non-lecture endings.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-forward-prompt-alignment-01` passes=false -> true
+Next: `bitcoin-forward-validator-alignment-01`
+Notes: prompt principles now import the shared Bitcoin-forward summary from `@book/domain`, keeping the seam wording centralized instead of duplicated inside `@book/prompts`.
+Commit: pending

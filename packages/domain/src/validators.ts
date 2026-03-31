@@ -1,4 +1,5 @@
 import { type ReadingProfile } from "./enums.js";
+import { bitcoinStoryTitlePolicyIssue, resolveBitcoinStoryPolicy } from "./bitcoin-story-policy.js";
 import { storyConceptDeadlineEvent, storyConceptEarningOptionLabels } from "./story-concepts.js";
 import type { StoryConcept, StoryPackage, StoryPage } from "./types.js";
 
@@ -382,6 +383,31 @@ export function validateCaregiverConsistency(
   return { ok: issues.length === 0, issues };
 }
 
+export function validateBitcoinStoryTitle(
+  profile: ReadingProfile,
+  concept: StoryConcept,
+  title: string,
+  pageCount: number
+): ValidationResult {
+  const issue = bitcoinStoryTitlePolicyIssue(title, {
+    lesson: concept.lessonScenario.moneyLessonKey,
+    profile,
+    pageCount
+  });
+
+  return issue
+    ? {
+        ok: false,
+        issues: [
+          {
+            code: "BITCOIN_TITLE",
+            message: issue
+          }
+        ]
+      }
+    : { ok: true, issues: [] };
+}
+
 export function validateBitcoinUsage(
   profile: ReadingProfile,
   concept: StoryConcept,
@@ -392,11 +418,27 @@ export function validateBitcoinUsage(
     return { ok: true, issues: [] };
   }
 
+  const policy = resolveBitcoinStoryPolicy({
+    lesson: concept.lessonScenario.moneyLessonKey,
+    profile,
+    pageCount: pages.length
+  });
   const mentionPages = pages.filter((page) => pageMentions(page, "bitcoin"));
-  if (mentionPages.length === 0) {
+  if (mentionPages.length < policy.minimumBitcoinMentions) {
     issues.push({
       code: "BITCOIN_USAGE",
-      message: "Story must mention Bitcoin at least once in a way that supports the story theme."
+      message:
+        policy.minimumBitcoinMentions > 1
+          ? "Story must mention Bitcoin more than once so the caregiver or narrator framing feels meaningfully Bitcoin-forward."
+          : "Story must mention Bitcoin at least once in a way that supports the story theme."
+    });
+  }
+
+  const finalPageIndex = Math.max(0, pages.length - 1);
+  if (policy.requireMentionBeforeEnding && !mentionPages.some((page) => page.pageIndex < finalPageIndex)) {
+    issues.push({
+      code: "BITCOIN_USAGE",
+      message: "Story must name Bitcoin before the final page so it does not read like a last-page add-on."
     });
   }
 
