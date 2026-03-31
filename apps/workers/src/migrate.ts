@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS books (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   money_lesson_key TEXT NOT NULL,
+  story_mode TEXT NOT NULL DEFAULT 'bitcoin_forward',
   interest_tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   reading_profile_id TEXT NOT NULL,
   character_description TEXT NOT NULL DEFAULT '',
@@ -163,6 +164,7 @@ ALTER TABLE books
   ADD COLUMN IF NOT EXISTS product_family TEXT NOT NULL DEFAULT 'picture_book_fixed_layout',
   ADD COLUMN IF NOT EXISTS layout_profile_id TEXT NOT NULL DEFAULT 'pb_square_spread_8_5_v1',
   ADD COLUMN IF NOT EXISTS character_description TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS story_mode TEXT NOT NULL DEFAULT 'bitcoin_forward',
   ADD COLUMN IF NOT EXISTS selected_character_image_id UUID REFERENCES images(id) ON DELETE SET NULL;
 
 ALTER TABLE pages
@@ -203,6 +205,10 @@ SET money_lesson_key = CASE money_lesson_key
   ELSE money_lesson_key
 END
 WHERE money_lesson_key IN ('inflation_candy', 'saving_later', 'delayed_gratification');
+
+UPDATE books
+SET story_mode = 'bitcoin_forward'
+WHERE story_mode IS NULL OR story_mode = '';
 
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_sessions_order ON payment_sessions(order_id);

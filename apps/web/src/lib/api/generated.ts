@@ -1238,6 +1238,8 @@ export interface components {
             ageYears: number;
             /** @enum {string} */
             moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
+            /** @enum {string} */
+            storyMode: "sound_money_implicit" | "bitcoin_reveal_8020" | "bitcoin_forward";
             interestTags: string[];
             /** @enum {string} */
             readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
@@ -1254,6 +1256,8 @@ export interface components {
             status: "created";
             /** @enum {string} */
             checkoutMode: "stripe";
+            /** @enum {string} */
+            storyMode: "sound_money_implicit" | "bitcoin_reveal_8020" | "bitcoin_forward";
         };
         CheckoutResponse: {
             /** Format: uuid */
@@ -1320,6 +1324,8 @@ export interface components {
             bookStatus: "draft" | "building" | "needs_review" | "ready" | "failed";
             /** Format: uuid */
             childProfileId: string;
+            /** @enum {string} */
+            storyMode: "sound_money_implicit" | "bitcoin_reveal_8020" | "bitcoin_forward";
         };
         BookResponse: {
             /** Format: uuid */
@@ -1331,6 +1337,8 @@ export interface components {
             readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
             /** @enum {string} */
             moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
+            /** @enum {string} */
+            storyMode: "sound_money_implicit" | "bitcoin_reveal_8020" | "bitcoin_forward";
             /** @enum {string} */
             productFamily?: "picture_book_fixed_layout" | "chapter_book_reflowable";
             /** @description Narrative spread count for picture books. One spread renders as two physical PDF pages. */
@@ -1380,6 +1388,8 @@ export interface components {
                 readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
                 /** @enum {string} */
                 moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
+                /** @enum {string} */
+                storyMode: "sound_money_implicit" | "bitcoin_reveal_8020" | "bitcoin_forward";
                 /** @description Narrative spread count for the book under review. */
                 pageCount: number;
                 /** @enum {string|null} */
@@ -1416,6 +1426,8 @@ export interface components {
                 readingProfileId: "read_aloud_3_4" | "early_decoder_5_7" | "independent_8_10";
                 /** @enum {string} */
                 moneyLessonKey: "prices_change" | "jar_saving_limits" | "new_money_unfair" | "keep_what_you_earn" | "better_rules";
+                /** @enum {string} */
+                storyMode: "sound_money_implicit" | "bitcoin_reveal_8020" | "bitcoin_forward";
                 /** @description Narrative spread count for picture books. */
                 spreadCount: number;
                 /** @description Physical PDF page count. Picture-book physical pages equal spreadCount * 2. */

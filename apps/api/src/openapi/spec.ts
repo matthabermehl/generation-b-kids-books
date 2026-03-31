@@ -1,4 +1,4 @@
-import { moneyLessonKeys } from "@book/domain";
+import { moneyLessonKeys, storyModes } from "@book/domain";
 
 const idempotencyHeader = {
   in: "header",
@@ -112,6 +112,7 @@ export const openApiSpec = {
           "pronouns",
           "ageYears",
           "moneyLessonKey",
+          "storyMode",
           "interestTags",
           "readingProfileId",
           "characterDescription"
@@ -123,6 +124,10 @@ export const openApiSpec = {
           moneyLessonKey: {
             type: "string",
             enum: [...moneyLessonKeys]
+          },
+          storyMode: {
+            type: "string",
+            enum: [...storyModes]
           },
           interestTags: {
             type: "array",
@@ -138,13 +143,14 @@ export const openApiSpec = {
       },
       CreateOrderResponse: {
         type: "object",
-        required: ["orderId", "bookId", "childProfileId", "status", "checkoutMode"],
+        required: ["orderId", "bookId", "childProfileId", "status", "checkoutMode", "storyMode"],
         properties: {
           orderId: { type: "string", format: "uuid" },
           bookId: { type: "string", format: "uuid" },
           childProfileId: { type: "string", format: "uuid" },
           status: { type: "string", enum: ["created"] },
-          checkoutMode: { type: "string", enum: ["stripe"] }
+          checkoutMode: { type: "string", enum: ["stripe"] },
+          storyMode: { type: "string", enum: [...storyModes] }
         }
       },
       CheckoutResponse: {
@@ -236,7 +242,7 @@ export const openApiSpec = {
       },
       OrderResponse: {
         type: "object",
-        required: ["orderId", "status", "createdAt", "bookId", "bookStatus", "childProfileId"],
+        required: ["orderId", "status", "createdAt", "bookId", "bookStatus", "childProfileId", "storyMode"],
         properties: {
           orderId: { type: "string", format: "uuid" },
           status: {
@@ -246,7 +252,8 @@ export const openApiSpec = {
           createdAt: { type: "string" },
           bookId: { type: "string", format: "uuid" },
           bookStatus: { type: "string", enum: ["draft", "building", "needs_review", "ready", "failed"] },
-          childProfileId: { type: "string", format: "uuid" }
+          childProfileId: { type: "string", format: "uuid" },
+          storyMode: { type: "string", enum: [...storyModes] }
         }
       },
       BookResponse: {
@@ -257,6 +264,7 @@ export const openApiSpec = {
           "childFirstName",
           "readingProfileId",
           "moneyLessonKey",
+          "storyMode",
           "spreadCount",
           "physicalPageCount",
           "pages"
@@ -272,6 +280,10 @@ export const openApiSpec = {
           moneyLessonKey: {
             type: "string",
             enum: [...moneyLessonKeys]
+          },
+          storyMode: {
+            type: "string",
+            enum: [...storyModes]
           },
           productFamily: {
             type: "string",
@@ -345,6 +357,7 @@ export const openApiSpec = {
                 "childFirstName",
                 "readingProfileId",
                 "moneyLessonKey",
+                "storyMode",
                 "pageCount"
               ],
               properties: {
@@ -369,6 +382,10 @@ export const openApiSpec = {
                 moneyLessonKey: {
                   type: "string",
                   enum: [...moneyLessonKeys]
+                },
+                storyMode: {
+                  type: "string",
+                  enum: [...storyModes]
                 },
                 pageCount: {
                   type: "integer",
@@ -426,7 +443,16 @@ export const openApiSpec = {
           },
           book: {
             type: "object",
-            required: ["bookId", "status", "childFirstName", "readingProfileId", "moneyLessonKey", "spreadCount", "physicalPageCount"],
+            required: [
+              "bookId",
+              "status",
+              "childFirstName",
+              "readingProfileId",
+              "moneyLessonKey",
+              "storyMode",
+              "spreadCount",
+              "physicalPageCount"
+            ],
             properties: {
               bookId: { type: "string", format: "uuid" },
               status: { type: "string", enum: ["draft", "building", "needs_review", "ready", "failed"] },
@@ -438,6 +464,10 @@ export const openApiSpec = {
               moneyLessonKey: {
                 type: "string",
                 enum: [...moneyLessonKeys]
+              },
+              storyMode: {
+                type: "string",
+                enum: [...storyModes]
               },
               spreadCount: {
                 type: "integer",

@@ -214,6 +214,7 @@ describe("bitcoin usage", () => {
   it("rejects generic Bitcoin Adventure fallback titles", () => {
     const result = validateBitcoinStoryTitle(
       "early_decoder_5_7",
+      "bitcoin_forward",
       concept,
       "Mia's Bitcoin Adventure",
       12
@@ -228,7 +229,7 @@ describe("bitcoin usage", () => {
   });
 
   it("allows recurring safe Bitcoin mentions that support the theme", () => {
-    const result = validateBitcoinUsage("early_decoder_5_7", concept, [
+    const result = validateBitcoinUsage("early_decoder_5_7", "bitcoin_forward", concept, [
       {
         pageIndex: 0,
         pageText: "Mom said Bitcoin can be one way grown-ups save for later.",
@@ -253,7 +254,7 @@ describe("bitcoin usage", () => {
   });
 
   it("rejects technical or child-facing Bitcoin framing", () => {
-    const result = validateBitcoinUsage("early_decoder_5_7", concept, [
+    const result = validateBitcoinUsage("early_decoder_5_7", "bitcoin_forward", concept, [
       {
         pageIndex: 0,
         pageText: "Mia opened an app to read Bitcoin on the phone.",
@@ -271,7 +272,7 @@ describe("bitcoin usage", () => {
   });
 
   it("does not treat happened or appear as app-based Bitcoin framing", () => {
-    const result = validateBitcoinUsage("early_decoder_5_7", concept, [
+    const result = validateBitcoinUsage("early_decoder_5_7", "bitcoin_forward", concept, [
       {
         pageIndex: 0,
         pageText:
@@ -298,7 +299,7 @@ describe("bitcoin usage", () => {
   });
 
   it("requires Bitcoin to appear before the final page in longer stories", () => {
-    const result = validateBitcoinUsage("early_decoder_5_7", concept, Array.from({ length: 12 }, (_, idx) => ({
+    const result = validateBitcoinUsage("early_decoder_5_7", "bitcoin_forward", concept, Array.from({ length: 12 }, (_, idx) => ({
       pageIndex: idx,
       pageText:
         idx === 11
@@ -318,6 +319,7 @@ describe("bitcoin usage", () => {
   it("requires Bitcoin to appear before the final ending window in longer stories", () => {
     const result = validateBitcoinUsage(
       "early_decoder_5_7",
+      "bitcoin_forward",
       concept,
       Array.from({ length: 12 }, (_, idx) => ({
         pageIndex: idx,
@@ -340,7 +342,7 @@ describe("bitcoin usage", () => {
   });
 
   it("requires caregiver or grown-up framing for Bitcoin mentions", () => {
-    const result = validateBitcoinUsage("early_decoder_5_7", concept, [
+    const result = validateBitcoinUsage("early_decoder_5_7", "bitcoin_forward", concept, [
       {
         pageIndex: 0,
         pageText: "Bitcoin was there when Mia looked at her jar.",
@@ -359,7 +361,7 @@ describe("bitcoin usage", () => {
 
 describe("story tone", () => {
   it("allows a warm ending that echoes Bitcoin without turning into a lecture", () => {
-    const result = validateStoryTone("read_aloud_3_4", concept, [
+    const result = validateStoryTone("read_aloud_3_4", "bitcoin_forward", concept, [
       {
         pageIndex: 0,
         pageText: "Mom gives Mia a warm hug while they count coins together.",
@@ -384,7 +386,7 @@ describe("story tone", () => {
   });
 
   it("flags lecture-like Bitcoin endings separately from warm endings", () => {
-    const result = validateStoryTone("read_aloud_3_4", concept, [
+    const result = validateStoryTone("read_aloud_3_4", "bitcoin_forward", concept, [
       {
         pageIndex: 0,
         pageText: "Mom sits close and keeps Mia steady at the table.",

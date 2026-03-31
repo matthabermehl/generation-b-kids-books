@@ -18,6 +18,7 @@ const context: StoryTemplateContext = {
   pronouns: "she/her",
   ageYears: 6,
   lesson: "jar_saving_limits",
+  storyMode: "bitcoin_forward",
   interests: ["puzzles"],
   profile: "early_decoder_5_7"
 };
@@ -110,8 +111,8 @@ describe("prompt principles", () => {
       "controlled_vocab",
       "repetition",
       "taught_words",
-      "thematic salience",
-      "positive bitcoin connection"
+      "bitcoinrelevancescore",
+      "intended bitcoin connection explicit"
     ]);
   });
 

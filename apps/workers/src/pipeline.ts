@@ -14,6 +14,7 @@ import {
   type PictureBookReadingProfile,
   type ReviewStage,
   type ReadingProfile,
+  type StoryMode,
   type StoryCriticVerdict,
   type StoryPackage,
   type StoryRewriteTurn,
@@ -62,6 +63,7 @@ interface BookContextRow {
   pronouns: string;
   reading_profile_id: ReadingProfile;
   money_lesson_key: MoneyLessonKey;
+  story_mode: StoryMode;
   interest_tags: string;
   product_family: BookProductFamily;
   layout_profile_id: string | null;
@@ -82,6 +84,7 @@ async function loadBookContext(bookId: string): Promise<BookContextRow> {
         cp.pronouns,
         b.reading_profile_id,
         b.money_lesson_key,
+        COALESCE(b.story_mode, 'bitcoin_forward') AS story_mode,
         array_to_string(b.interest_tags, ',') AS interest_tags,
         COALESCE(b.product_family, 'picture_book_fixed_layout') AS product_family,
         b.layout_profile_id
@@ -303,6 +306,7 @@ async function prepareStory(
     pronouns: context.pronouns,
     ageYears: Number(context.age_years),
     lesson: context.money_lesson_key,
+    storyMode: context.story_mode,
     interests,
     profile: context.reading_profile_id,
     pageCount,

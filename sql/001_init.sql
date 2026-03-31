@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS books (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   money_lesson_key TEXT NOT NULL,
+  story_mode TEXT NOT NULL DEFAULT 'bitcoin_forward',
   interest_tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   reading_profile_id TEXT NOT NULL,
   book_version TEXT NOT NULL,

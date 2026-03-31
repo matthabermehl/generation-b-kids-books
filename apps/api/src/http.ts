@@ -9,12 +9,14 @@ import {
   moneyLessonKeys,
   pictureBookLayoutProfileId,
   readingProfiles,
+  storyModes,
   type BookProductFamily,
   type MoneyLessonKey,
   type ReviewAction,
   type ReviewCaseStatus,
   type ReviewStage,
-  type ReadingProfile
+  type ReadingProfile,
+  type StoryMode
 } from "@book/domain";
 import {
   createLoginToken,
@@ -51,6 +53,7 @@ const createOrderSchema = z.object({
   pronouns: z.string().min(1),
   ageYears: z.number().int().min(2).max(12),
   moneyLessonKey: z.enum(moneyLessonKeys),
+  storyMode: z.enum(storyModes),
   interestTags: z.array(z.string().min(1)).max(10),
   readingProfileId: z.enum(readingProfiles),
   characterDescription: z.string().trim().min(1).max(1000)
@@ -201,12 +204,20 @@ async function createOrder(
     pronouns: string;
     ageYears: number;
     moneyLessonKey: MoneyLessonKey;
+    storyMode: StoryMode;
     interestTags: string[];
     readingProfileId: ReadingProfile;
     characterDescription: string;
   },
   bookConfig: { productFamily: BookProductFamily; layoutProfileId: string | null }
-): Promise<{ orderId: string; bookId: string; childProfileId: string; status: string; checkoutMode: string }> {
+): Promise<{
+  orderId: string;
+  bookId: string;
+  childProfileId: string;
+  status: string;
+  checkoutMode: string;
+  storyMode: StoryMode;
+}> {
   const childProfileId = randomUUID();
   const orderId = randomUUID();
   const bookId = randomUUID();
@@ -248,6 +259,7 @@ async function createOrder(
           id,
           order_id,
           money_lesson_key,
+          story_mode,
           interest_tags,
           reading_profile_id,
           product_family,
@@ -260,6 +272,7 @@ async function createOrder(
           CAST(:id AS uuid),
           CAST(:orderId AS uuid),
           :lesson,
+          :storyMode,
           string_to_array(:interests, ','),
           :profile,
           :productFamily,
@@ -273,6 +286,7 @@ async function createOrder(
         { name: "id", value: { stringValue: bookId } },
         { name: "orderId", value: { stringValue: orderId } },
         { name: "lesson", value: { stringValue: input.moneyLessonKey } },
+        { name: "storyMode", value: { stringValue: input.storyMode } },
         { name: "interests", value: { stringValue: input.interestTags.join(",") } },
         { name: "profile", value: { stringValue: input.readingProfileId } },
         { name: "productFamily", value: { stringValue: bookConfig.productFamily } },
@@ -287,7 +301,8 @@ async function createOrder(
     bookId,
     childProfileId,
     status: "created",
-    checkoutMode: "stripe"
+    checkoutMode: "stripe",
+    storyMode: input.storyMode
   };
 }
 
@@ -354,6 +369,7 @@ interface ReviewCaseRow {
   child_first_name: string;
   reading_profile_id: string;
   money_lesson_key: string;
+  story_mode: string;
 }
 
 interface ReviewCaseQueueRow extends ReviewCaseRow {
@@ -506,7 +522,8 @@ async function loadReviewCase(caseId: string): Promise<ReviewCaseRow | null> {
         o.status AS order_status,
         cp.child_first_name,
         b.reading_profile_id,
-        b.money_lesson_key
+        b.money_lesson_key,
+        b.story_mode
       FROM review_cases rc
       INNER JOIN books b ON b.id = rc.book_id
       INNER JOIN orders o ON o.id = rc.order_id
@@ -1611,6 +1628,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           childFirstName: row.child_first_name,
           readingProfileId: row.reading_profile_id,
           moneyLessonKey: row.money_lesson_key,
+          storyMode: row.story_mode,
           pageCount: Number(row.page_count),
           latestAction: row.latest_action,
           latestReviewerEmail: row.latest_reviewer_email
@@ -1750,15 +1768,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           orderId: reviewCase.order_id,
           status: reviewCase.order_status
         },
-        book: {
-          bookId: reviewCase.book_id,
-          status: reviewCase.book_status,
-          childFirstName: reviewCase.child_first_name,
-          readingProfileId: reviewCase.reading_profile_id,
-          moneyLessonKey: reviewCase.money_lesson_key,
-          spreadCount: pages.length,
-          physicalPageCount: pages.length * 2
-        },
+          book: {
+            bookId: reviewCase.book_id,
+            status: reviewCase.book_status,
+            childFirstName: reviewCase.child_first_name,
+            readingProfileId: reviewCase.reading_profile_id,
+            moneyLessonKey: reviewCase.money_lesson_key,
+            storyMode: reviewCase.story_mode,
+            spreadCount: pages.length,
+            physicalPageCount: pages.length * 2
+          },
         pdfUrl: publicArtifactUrl(pdfArtifact?.s3_url ?? null),
         storyProofPdfUrl: publicArtifactUrl(storyProofArtifact?.s3_url ?? null),
         scenePlan: scenePlanArtifact
@@ -2004,9 +2023,17 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         book_id: string;
         book_status: string;
         child_profile_id: string;
+        story_mode: string;
       }>(
         `
-          SELECT o.id, o.status, o.created_at::text, b.id AS book_id, b.status AS book_status, o.child_profile_id::text AS child_profile_id
+          SELECT
+            o.id,
+            o.status,
+            o.created_at::text,
+            b.id AS book_id,
+            b.status AS book_status,
+            o.child_profile_id::text AS child_profile_id,
+            b.story_mode
           FROM orders o
           INNER JOIN books b ON b.order_id = o.id
           WHERE o.id = CAST(:orderId AS uuid) AND o.user_id = CAST(:userId AS uuid)
@@ -2029,7 +2056,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         createdAt: row.created_at,
         bookId: row.book_id,
         bookStatus: row.book_status,
-        childProfileId: row.child_profile_id
+        childProfileId: row.child_profile_id,
+        storyMode: row.story_mode
       });
     }
 
@@ -2043,11 +2071,19 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         status: string;
         reading_profile_id: string;
         money_lesson_key: string;
+        story_mode: string;
         child_first_name: string;
         product_family: BookProductFamily;
       }>(
         `
-          SELECT b.id, b.status, b.reading_profile_id, b.money_lesson_key, cp.child_first_name, COALESCE(b.product_family, 'picture_book_fixed_layout') AS product_family
+          SELECT
+            b.id,
+            b.status,
+            b.reading_profile_id,
+            b.money_lesson_key,
+            b.story_mode,
+            cp.child_first_name,
+            COALESCE(b.product_family, 'picture_book_fixed_layout') AS product_family
           FROM books b
           INNER JOIN orders o ON o.id = b.order_id
           INNER JOIN child_profiles cp ON cp.id = o.child_profile_id
@@ -2095,6 +2131,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         childFirstName: bookRows[0].child_first_name,
         readingProfileId: bookRows[0].reading_profile_id,
         moneyLessonKey: bookRows[0].money_lesson_key,
+        storyMode: bookRows[0].story_mode,
         productFamily: bookRows[0].product_family,
         spreadCount: pages.length,
         physicalPageCount: pages.length * 2,

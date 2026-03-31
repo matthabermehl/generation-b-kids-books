@@ -1,5 +1,3 @@
-import { bitcoinForwardStoryPrincipleSummary } from "@book/domain";
-
 export interface PromptPrinciple {
   id: string;
   summary: string;
@@ -10,9 +8,10 @@ export interface PromptPrinciple {
 export const promptPrinciples: PromptPrinciple[] = [
   {
     id: "bitcoin_theme_positive",
-    summary: bitcoinForwardStoryPrincipleSummary,
+    summary:
+      "Obey story_mode exactly: implicit mode never names Bitcoin, reveal mode delays Bitcoin until the late solution window, and forward mode names Bitcoin earlier in caregiver or narrator framing while the child's money problem stays primary.",
     appliesTo: "planner",
-    requiredSignals: ["bitcoin", "caregiver or narrator", "before the ending", "concrete money problem"]
+    requiredSignals: ["story_mode", "implicit mode", "reveal mode", "forward mode", "child-centered"]
   },
   {
     id: "child_agency",

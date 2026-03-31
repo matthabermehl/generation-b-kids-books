@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T22:30:56Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T23:01:33Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -382,8 +382,8 @@
       "Introduce a shared StoryMode enum plus create-order and book payload fields",
       "Persist the selected mode on books and thread it into worker story-generation context so retries and rebuilds stay deterministic"
     ],
-    "passes": false,
-    "evidence": ""
+    "passes": true,
+    "evidence": "bash scripts/agent/smoke.sh (PASS); pnpm --filter @book/domain test (PASS); pnpm --filter @book/prompts test (PASS); pnpm --filter @book/api test (PASS); pnpm --filter @book/web test (PASS); pnpm --filter @book/workers test (PASS); bash scripts/agent/quality.sh (PASS)"
   },
   {
     "id": "bitcoin-story-modes-policy-prompt-01",

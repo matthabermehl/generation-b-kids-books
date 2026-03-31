@@ -36,7 +36,9 @@ describe("openapi spec", () => {
   it("documents character approval request and response schemas", () => {
     const createOrderSchema = openApiSpec.components.schemas.CreateOrderRequest;
     expect(createOrderSchema.properties.characterDescription).toBeDefined();
+    expect(createOrderSchema.properties.storyMode).toBeDefined();
     expect(createOrderSchema.required).toContain("characterDescription");
+    expect(createOrderSchema.required).toContain("storyMode");
     expect(openApiSpec.components.schemas.BookCharacterResponse).toBeDefined();
     expect(openApiSpec.components.schemas.SelectCharacterRequest).toBeDefined();
   });
@@ -55,5 +57,7 @@ describe("openapi spec", () => {
     expect(openApiSpec.components.schemas.ReviewActionResponse).toBeDefined();
     expect(openApiSpec.components.schemas.ReviewCaseDetailResponse.properties.storyProofPdfUrl).toBeDefined();
     expect(openApiSpec.components.schemas.BookResponse.properties.spreadCount.description).toMatch(/spread/i);
+    expect(openApiSpec.components.schemas.BookResponse.properties.storyMode).toBeDefined();
+    expect(openApiSpec.components.schemas.OrderResponse.properties.storyMode).toBeDefined();
   });
 });

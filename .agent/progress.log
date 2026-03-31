@@ -95,6 +95,23 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-31T19:04:00-0400
+Task: bitcoin-story-modes-contract-persistence-01
+Baseline: `bash scripts/agent/smoke.sh` PASS on `codex/bitcoin-story-modes`
+Change: added a first-class `StoryMode` enum and persisted `story_mode` book field, threaded the selected mode through create-order domain/API/web/worker contracts, exposed a parent-visible create-flow selector plus checkout/current-book summaries, and tightened the immediate prompt/validator/test fixtures needed to keep the repo green against the new contract.
+Evidence:
+- `bash scripts/agent/smoke.sh` => PASS
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/api test` => PASS
+- `pnpm --filter @book/web test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-story-modes-contract-persistence-01` passes=false -> true
+Next: `bitcoin-story-modes-policy-prompt-01`
+Notes: the first `bash scripts/agent/smoke.sh` run hit a renderer timeout in cold image-heavy tests, but the immediate rerun passed cleanly after caches warmed; `bash scripts/agent/quality.sh` passed on the same code.
+Commit: pending
+
 2026-03-31T18:35:17-0400
 Task: bitcoin-story-modes-planning
 Baseline: `bash scripts/agent/smoke.sh` PASS

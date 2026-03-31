@@ -1,8 +1,8 @@
 # Current Task
-Task ID: bitcoin-story-modes-contract-persistence-01
+Task ID: bitcoin-story-modes-policy-prompt-01
 
 ## Goal
-Make `storyMode` a first-class, persisted book setting across domain types, parent flow, API/OpenAPI, and worker context so the three-mode dial is real instead of prompt-only.
+Generalize the Bitcoin story policy seam and prompt templates so `sound_money_implicit`, `bitcoin_reveal_8020`, and `bitcoin_forward` each have clear deterministic prompt targets without drifting from the persisted mode contract.
 
 ## Constraints
 - Keep the current 5 lesson keys and current reading profiles.
@@ -13,21 +13,22 @@ Make `storyMode` a first-class, persisted book setting across domain types, pare
   - no technical or device-first framing
   - no child decoding or explaining Bitcoin
 - Preserve the existing shipped `bitcoin_forward` behavior as the default/backfill mode for historical books.
+- Keep the child's concrete money problem primary in every mode.
 
 ## Plan (short)
-1. Add a shared `StoryMode` enum plus domain/API request-response surfaces and persisted `books` storage.
-2. Thread `storyMode` through create-order, book/order payloads, generated web types, parent-flow state, and worker load context.
-3. Verify the new contract with targeted domain/api/web/workers tests, then move to policy and validator alignment tasks.
+1. Finish aligning `packages/domain/src/bitcoin-story-policy.ts` to describe all three modes from one shared seam.
+2. Update prompt templates and prompt-principle coverage so story concept, beat planner, rewrite, writer, and critic prompts obey the selected `storyMode`.
+3. Verify with domain/prompts/workers tests before moving to the dedicated validator-alignment task.
 
 ## Evidence required
 - `bash scripts/agent/smoke.sh`
 - `pnpm --filter @book/domain test`
-- `pnpm --filter @book/api test`
-- `pnpm --filter @book/web test`
+- `pnpm --filter @book/prompts test`
 - `pnpm --filter @book/workers test`
 - `bash scripts/agent/quality.sh`
 
 ## Status
-- baseline: `bash scripts/agent/smoke.sh` PASS on `master` before branching and on `codex/bitcoin-story-modes` during harness reset
+- baseline: `bash scripts/agent/smoke.sh` PASS after the contract/persistence slice on `codex/bitcoin-story-modes`
+- previous: `bitcoin-story-modes-contract-persistence-01` complete with persisted `storyMode` threaded through domain/API/web/workers
 - work: in progress
-- next: thread the new persisted `storyMode` contract through the create flow, OpenAPI, and worker load path
+- next: finish mode-aware story policy and prompt-template semantics without widening the newly landed contracts
