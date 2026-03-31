@@ -1,6 +1,7 @@
 import {
   getMoneyLessonDefinition,
   getStoryModeDefinition,
+  orderedStoryModes,
   resolveBitcoinStoryPolicy,
   storyConceptCountTarget,
   storyConceptDeadlineEvent,
@@ -65,6 +66,13 @@ function jsonOnlyBlock(schemaName: string): string {
     "Do not wrap JSON in markdown fences.",
     "Do not include keys outside the schema."
   ].join("\n");
+}
+
+function storyModePolicyBlock(): string[] {
+  return [
+    "Obey the supplied story_mode exactly via this story-mode policy seam:",
+    ...orderedStoryModes.map((mode) => `- ${mode.key}: ${mode.promptSummary}`)
+  ];
 }
 
 function profileBlock(context: StoryTemplateContext, pageCount: number): string {
@@ -178,7 +186,7 @@ export function buildStoryConceptSystemPrompt(): string {
     "Create a lightweight story spine that prevents ad-hoc plot inventions, preserves setup/payoff continuity, and protects the emotional arc.",
     "Choose exactly one caregiver label: Mom or Dad.",
     "Build a StoryConcept whose lessonScenario exactly matches the supplied moneyLessonKey.",
-    "Obey the supplied story_mode exactly: implicit mode never names Bitcoin, reveal mode saves Bitcoin for the late solution window, and forward mode names Bitcoin earlier in caregiver or narrator framing.",
+    ...storyModePolicyBlock(),
     jsonOnlyBlock("StoryConcept")
   ].join("\n");
 }
@@ -203,7 +211,8 @@ export function buildStoryConceptPrompt(
     "- lessonScenario.moneyLessonKey must exactly equal the supplied money_lesson_key.",
     ...lessonScenarioRules(context.lesson),
     "- deadlineEvent may be null. If non-null, it must be concrete, seedable before the ending, and matter to the payoff.",
-    "- bitcoinBridge must capture the canonical thematic guidance for how Bitcoin clearly connects to this exact story in caregiver or narrator framing through the value thread. Make it strong enough that later prompts can name Bitcoin before the ending and echo it again in longer stories without turning the book into a lecture.",
+    `- Story-mode anchor: ${policy.basePromptSummary}`,
+    `- ${policy.storyConceptBridgeLine}`,
     "- requiredSetups should list the specific nouns, options, events, or facts that must appear before they matter.",
     "- requiredPayoffs should list the exact things the ending must resolve.",
     "- forbiddenLateIntroductions should list nouns/events that would feel ad-hoc if they suddenly appeared near the end.",
@@ -221,7 +230,7 @@ export function buildBeatPlannerSystemPrompt(): string {
     "You must produce a child-centered beat sheet with strict continuity to the supplied StoryConcept and a calm, emotionally relieving arc.",
     "",
     "Core constraints:",
-    "- Mode handling: obey the supplied story_mode exactly. Never name Bitcoin in implicit mode, delay Bitcoin until the late solution window in reveal mode, and keep Bitcoin earlier plus recurring in forward mode.",
+    ...storyModePolicyBlock(),
     "- Child agency: the child is the hero and makes meaningful choices, including at least one choice that clearly changes the outcome.",
     "- Caregiver warmth: include at least one clear caregiver reassurance or connection beat.",
     "- Emotional arc: move from wanting or uncertainty toward patience, understanding, closeness, and calm pride or relief.",
@@ -276,6 +285,7 @@ export function buildBeatPlannerPrompt(
     "For early readers, keep newWordsIntroduced <= 2 per beat and keep child-facing taught words concrete.",
     "For read_aloud_3_4 and early_decoder_5_7, keep child-facing newWordsIntroduced concrete and do not put Bitcoin itself in newWordsIntroduced.",
     "Include at least one meaningful child choice and at least one clear caregiver reassurance or connection beat.",
+    `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.beatPlannerLine}`,
     "Let the child experience the underlying money value before a beat names Bitcoin directly.",
     "If a deadlineEvent is used in the final two beats, it must be introduced earlier.",
@@ -390,6 +400,7 @@ export function buildNarrativeFreshnessCriticPrompt(
     "- A beat must not introduce a new deadline, event, or plot mechanic that the StoryConcept forbids as a late introduction.",
     "- Earning-option action continuity must stay coherent. Do not switch from one named option to a different action with no bridge.",
     "- Include at least one caregiver reassurance or connection beat.",
+    `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.criticLine}`,
     "- The selected story mode should feel intentional rather than contradictory, bolted on, or accidentally spoiled.",
     "- Classify each issue with tier='hard' or tier='soft'.",
@@ -434,6 +445,7 @@ export function buildBeatRewritePrompt(
     "- Honor the StoryConcept exactly. Do not invent a new caregiver term, earning option, or deadline/event outside the concept.",
     "- Ensure every beat includes at least one canonical decodability tag: controlled_vocab, repetition, or taught_words.",
     "- For early-reader profiles, keep newWordsIntroduced <= 2 in every beat and do not make Bitcoin a decoding target.",
+    `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.beatRewriteLine}`,
     `- ${policy.endingLine}`,
     "- Ensure at least one meaningful child choice with visible downstream consequences.",
@@ -487,13 +499,11 @@ export function buildPageWriterPrompt(
     "- Avoid hype and investment promises.",
     "- The story should feel emotionally relieving: move toward reassurance, closeness, and calm pride or relief.",
     "- Include the caregiverWarmthMoment somewhere clearly and naturally.",
+    `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.writerLine}`,
     `- ${policy.titleGuidanceLine}`,
     "- Use StoryConcept.bitcoinBridge as thematic guidance, not as an exact quote that must be copied.",
     "- If Bitcoin is named directly, keep it in caregiver or narrator language; the child should not say, decode, or explain Bitcoin.",
-    "- If story_mode is sound_money_implicit, Bitcoin must not be named at all.",
-    "- If story_mode is bitcoin_reveal_8020, keep Bitcoin out of early pages and use it late as a warm solution beat.",
-    "- If story_mode is bitcoin_forward, Bitcoin may recur briefly across the story if it stays grounded and child-safe.",
     "- Keep adult-managed money tools secondary; the child's visible choices and consequences must stay primary.",
     `- ${policy.endingLine}`,
     ...betterRulesReadAloudEndingRules(context, pageCount),
@@ -529,6 +539,7 @@ export function buildCriticPrompt(
     "- Are age-implausible chores or responsibilities present?",
     "- Does the story feel warm, calm, and emotionally relieving rather than preachy?",
     "- Is there at least one clear caregiver reassurance or connection moment?",
+    `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.criticLine}`,
     "- Does the selected story mode positively reinforce the lesson's value thread rather than feeling pasted on or contradictory?",
     "- If Bitcoin appears, is it kept child-safe, concrete, non-technical, and out of the child's decoding or explaining voice?",

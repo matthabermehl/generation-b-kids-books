@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T23:01:33Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T23:16:45Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -394,8 +394,8 @@
       "Make the shared story policy resolver mode-aware for explicitness, timing, recurrence, title guidance, and ending behavior",
       "Align story concept, beat planner, rewrite, writer, and critic prompts so each mode produces the intended posture without breaking safety"
     ],
-    "passes": false,
-    "evidence": ""
+    "passes": true,
+    "evidence": "pnpm --filter @book/domain test (PASS); pnpm --filter @book/prompts test (PASS); pnpm --filter @book/workers test (PASS); bash scripts/agent/quality.sh (PASS)"
   },
   {
     "id": "bitcoin-story-modes-validator-alignment-01",

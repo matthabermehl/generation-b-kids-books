@@ -34,6 +34,7 @@ export interface BitcoinStoryPolicy {
   titleShouldHideBitcoin: boolean;
   basePromptSummary: string;
   storyConceptLine: string;
+  storyConceptBridgeLine: string;
   beatPlannerLine: string;
   beatRewriteLine: string;
   writerLine: string;
@@ -249,6 +250,8 @@ export function resolveBitcoinStoryPolicy(
       basePromptSummary: getStoryModePrincipleSummary(storyMode),
       storyConceptLine:
         "Do not name Bitcoin anywhere. Capture the underlying sound-money lesson through the child's concrete money problem, caregiver warmth, and steady value thread only.",
+      storyConceptBridgeLine:
+        "bitcoinBridge must stay thematic only: describe the steady, fair, sound-money value behind the story without naming Bitcoin or implying a future reveal.",
       beatPlannerLine:
         "Keep Bitcoin implicit. Every beat should deepen the child's concrete money problem and the sound-money value behind it without naming Bitcoin directly.",
       beatRewriteLine:
@@ -292,6 +295,8 @@ export function resolveBitcoinStoryPolicy(
       basePromptSummary: getStoryModePrincipleSummary(storyMode),
       storyConceptLine:
         "Keep the child's lived money problem primary for most of the concept. Plan a late, warm caregiver or narrator Bitcoin reveal that solves the problem without turning the ending into a lecture.",
+      storyConceptBridgeLine:
+        "bitcoinBridge must justify a late, warm caregiver or narrator Bitcoin answer. Keep it strong enough that later prompts know the reveal belongs in the solution window, not earlier.",
       beatPlannerLine:
         "Let the child experience the money problem first. Do not name Bitcoin explicitly until the late reveal window, then use a brief caregiver or narrator solution beat and preserve an emotionally warm ending.",
       beatRewriteLine:
@@ -333,6 +338,8 @@ export function resolveBitcoinStoryPolicy(
     basePromptSummary: getStoryModePrincipleSummary(storyMode),
     storyConceptLine:
       "Feature the child's lived money problem first, then define a warm caregiver or narrator Bitcoin bridge that can recur before the ending without turning the story into a lecture.",
+    storyConceptBridgeLine:
+      "bitcoinBridge must clearly explain how Bitcoin warmly fits this exact child-sized problem in caregiver or narrator framing, strong enough to appear before the ending and echo again in longer stories without becoming a lecture.",
     beatPlannerLine:
       "Make the story Bitcoin-forward in caregiver or narrator framing: once the child has felt the problem, plan at least one non-final explicit Bitcoin bridge and let a later beat echo it when the page budget allows.",
     beatRewriteLine:

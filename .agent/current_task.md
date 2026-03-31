@@ -28,7 +28,7 @@ Generalize the Bitcoin story policy seam and prompt templates so `sound_money_im
 - `bash scripts/agent/quality.sh`
 
 ## Status
-- baseline: `bash scripts/agent/smoke.sh` PASS after the contract/persistence slice on `codex/bitcoin-story-modes`
+- baseline: synced `master` confirmed with `git fetch Github master`; `bash scripts/agent/smoke.sh` => PASS
 - previous: `bitcoin-story-modes-contract-persistence-01` complete with persisted `storyMode` threaded through domain/API/web/workers
-- work: in progress
-- next: finish mode-aware story policy and prompt-template semantics without widening the newly landed contracts
+- work: complete
+- next: `bitcoin-story-modes-validator-alignment-01`

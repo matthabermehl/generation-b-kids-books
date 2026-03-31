@@ -31,6 +31,27 @@ function makeBeat(index: number, bitcoinScore = 0.1) {
 }
 
 describe("runDeterministicBeatChecks", () => {
+  it("passes sound_money_implicit beat sheets without explicit Bitcoin-forward beats", () => {
+    const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, 0.1));
+    const result = runDeterministicBeatChecks(makeContext({ storyMode: "sound_money_implicit" }), {
+      beats
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("fails sound_money_implicit beat sheets that make Bitcoin explicit", () => {
+    const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, index === 8 ? 0.5 : 0.1));
+    const result = runDeterministicBeatChecks(makeContext({ storyMode: "sound_money_implicit" }), {
+      beats
+    });
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("No beat should use bitcoinRelevanceScore"))
+    ).toBe(true);
+  });
+
   it("passes a compliant beat sheet with recurring thematic Bitcoin salience", () => {
     const beats = Array.from({ length: 10 }, (_, index) =>
       makeBeat(index, index === 3 || index >= 8 ? 0.5 : 0.1)
@@ -66,6 +87,19 @@ describe("runDeterministicBeatChecks", () => {
     expect(result.ok).toBe(false);
     expect(
       result.issues.some((issue) => issue.message.includes("before the final 2 beats"))
+    ).toBe(true);
+  });
+
+  it("fails reveal mode when high-salience Bitcoin arrives before the reveal window", () => {
+    const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, index === 4 ? 0.5 : 0.1));
+    const result = runDeterministicBeatChecks(
+      makeContext({ storyMode: "bitcoin_reveal_8020", pageCount: 10 }),
+      { beats }
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("must not appear before beat 9"))
     ).toBe(true);
   });
 

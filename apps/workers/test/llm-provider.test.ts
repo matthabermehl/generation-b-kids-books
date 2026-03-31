@@ -567,6 +567,62 @@ describe("llm provider routing", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
+  it("uses story-mode-aware beat rewrite guidance for sound_money_implicit", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const implicitContext = {
+      ...context,
+      storyMode: "sound_money_implicit" as const
+    };
+    const implicitConcept = {
+      ...compliantConcept,
+      bitcoinBridge: "Mom names the grown-up habit of protecting patient effort over time."
+    };
+    const overlyExplicitBeatSheet = {
+      beats: compliantBeatSheet.beats.map((beat, index) => ({
+        ...beat,
+        bitcoinRelevanceScore: index === 2 ? 0.8 : 0.1
+      }))
+    };
+    const repairedImplicitBeatSheet = {
+      beats: compliantBeatSheet.beats.map((beat) => ({
+        ...beat,
+        bitcoinRelevanceScore: 0.1
+      }))
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(openAiStructuredResponse(overlyExplicitBeatSheet))
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiStructuredResponse(repairedImplicitBeatSheet))
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(implicitContext, implicitConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.audit.rewritesApplied).toBe(1);
+
+    const rewriteRequestBody = JSON.parse(String(fetchMock.mock.calls[4]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const rewritePrompt = rewriteRequestBody.messages?.[1]?.content ?? "";
+
+    expect(rewritePrompt).toContain("Story-mode anchor: Do not name Bitcoin anywhere.");
+    expect(rewritePrompt).toContain(
+      "Do not make any beat explicitly Bitcoin-forward in score or wording in this implicit mode."
+    );
+    expect(rewritePrompt).not.toContain("Ensure at least 1 beat");
+    expect(rewritePrompt).not.toContain("Ensure at least 0 beat");
+  });
+
   it("uses structured OpenAI page writing when the configured JSON model is available", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
@@ -827,11 +883,14 @@ describe("llm provider routing", () => {
     expect(messages[3]?.content).toContain("4 sentences or fewer");
     expect(messages[3]?.content).toContain("page 11");
     expect(messages[3]?.content).toContain("page 10");
-    expect(messages[3]?.content).toContain("at least two pages");
-    expect(messages[3]?.content).toContain("Do not move all Bitcoin language off page 10");
+    expect(messages[3]?.content).toContain("Story-mode anchor:");
+    expect(messages[3]?.content).toContain("add one earlier caregiver or narrator Bitcoin bridge before page 10");
+    expect(messages[3]?.content).toContain("reserve page 10 for a brief caregiver or narrator Bitcoin echo");
+    expect(messages[3]?.content).toContain("expect Bitcoin more than once");
+    expect(messages[3]?.content).toContain("do not push every Bitcoin line earlier");
     expect(messages[3]?.content).toContain("combine clipped observations");
     expect(messages[3]?.content).toContain("one short quoted sentence plus narration");
-    expect(messages[3]?.content).toContain("calm emotional closure only");
+    expect(messages[3]?.content).toContain("final page should close emotionally");
   });
 
   it("keeps an earlier Bitcoin bridge plus penultimate echo for new_money_unfair early decoders when critic instructions are blank", async () => {
@@ -952,10 +1011,12 @@ describe("llm provider routing", () => {
     const messages = requestBody.messages ?? [];
     expect(messages[3]?.content).toContain("45 words or fewer");
     expect(messages[3]?.content).toContain("page 10");
-    expect(messages[3]?.content).toContain("at least two pages");
-    expect(messages[3]?.content).toContain("one late Bitcoin page");
-    expect(messages[3]?.content).toContain("earlier bridge short and concrete");
-    expect(messages[3]?.content).toContain("emotional closure only");
+    expect(messages[3]?.content).toContain("Story-mode anchor:");
+    expect(messages[3]?.content).toContain("add one short caregiver or narrator Bitcoin bridge before page 10");
+    expect(messages[3]?.content).toContain("reserve page 10 for one brief caregiver or narrator Bitcoin echo");
+    expect(messages[3]?.content).toContain("expect Bitcoin more than once");
+    expect(messages[3]?.content).toContain("do not collapse the story to one late Bitcoin page");
+    expect(messages[3]?.content).toContain("final page should land on calm or pride");
   });
 
   it("mock critic preserves deterministic page ranges for read-aloud sentence-budget issues", async () => {

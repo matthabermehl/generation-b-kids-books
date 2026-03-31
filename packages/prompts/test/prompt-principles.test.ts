@@ -7,6 +7,7 @@ import {
   buildMontessoriCriticPrompt,
   buildNarrativeFreshnessCriticPrompt,
   buildStoryConceptPrompt,
+  buildStoryConceptSystemPrompt,
   buildScienceOfReadingCriticPrompt,
   buildPageWriterPrompt,
   principlesFor,
@@ -76,6 +77,14 @@ function expectSignals(prompt: string, signals: string[]): void {
 }
 
 describe("prompt principles", () => {
+  it("story concept system prompt preserves core story-mode signals", () => {
+    const prompt = buildStoryConceptSystemPrompt();
+    const conceptPrinciples = principlesFor("concept");
+    conceptPrinciples.forEach((principle) => {
+      expectSignals(prompt, principle.requiredSignals);
+    });
+  });
+
   it("planner prompt preserves core spirit signals", () => {
     const prompt = buildBeatPlannerSystemPrompt();
     const plannerPrinciples = principlesFor("planner");
@@ -132,10 +141,33 @@ describe("prompt principles", () => {
     const prompt = buildStoryConceptPrompt(context, 12);
 
     expectSignals(prompt, [
-      "name bitcoin before the ending",
-      "echo it again in longer stories",
-      "without turning the book into a lecture",
+      "story-mode anchor",
+      "appear before the ending",
+      "echo again in longer stories",
+      "without becoming a lecture",
       "feature the child's lived money problem first"
+    ]);
+  });
+
+  it("story concept prompt keeps sound_money_implicit fully unnamed", () => {
+    const prompt = buildStoryConceptPrompt({ ...context, storyMode: "sound_money_implicit" }, 12);
+
+    expectSignals(prompt, [
+      "story-mode anchor",
+      "do not name bitcoin anywhere",
+      "bitcoinbridge must stay thematic only",
+      "without naming bitcoin"
+    ]);
+  });
+
+  it("story concept prompt keeps bitcoin_reveal_8020 late and warm", () => {
+    const prompt = buildStoryConceptPrompt({ ...context, storyMode: "bitcoin_reveal_8020" }, 12);
+
+    expectSignals(prompt, [
+      "story-mode anchor",
+      "late, warm caregiver or narrator bitcoin answer",
+      "solution window",
+      "not earlier"
     ]);
   });
 
@@ -179,8 +211,8 @@ describe("prompt principles", () => {
     const prompt = buildPageWriterPrompt(context, concept, beatSheet, 1);
     expectSignals(prompt, [
       "generic terms like people, adults, or grown-ups are fine",
+      "story-mode anchor",
       "thematic guidance",
-      "bitcoin may recur briefly",
       "investment promises",
       "child should not say, decode, or explain bitcoin",
       "avoid generic fallback titles like 'bitcoin adventure'"
@@ -338,10 +370,12 @@ describe("prompt principles", () => {
     );
 
     expectSignals(narrativePrompt, [
+      "story-mode anchor",
       "last-page add-on",
       "meaningfully bitcoin-forward"
     ]);
     expectSignals(rewritePrompt, [
+      "story-mode anchor",
       "emotionally warm, not lecture-like",
       "echo an earlier idea"
     ]);
