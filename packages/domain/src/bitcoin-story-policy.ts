@@ -12,6 +12,7 @@ export interface BitcoinStoryPolicy {
   lesson: MoneyLessonKey;
   profile: ReadingProfile;
   pageCount: number;
+  protectedEndingPageCount: number;
   minimumBitcoinMentions: number;
   minimumHighRelevanceScore: number;
   minimumHighRelevanceBeats: number;
@@ -53,6 +54,7 @@ export function resolveBitcoinStoryPolicy(
     lesson: context.lesson,
     profile: context.profile,
     pageCount,
+    protectedEndingPageCount: requiresRecurringBitcoin ? 2 : 1,
     minimumBitcoinMentions: requiresRecurringBitcoin ? 2 : 1,
     minimumHighRelevanceScore: 0.35,
     minimumHighRelevanceBeats: requiresRecurringBitcoin ? 2 : 1,
@@ -91,16 +93,30 @@ export function resolveBitcoinStoryPolicy(
     lessonPlacementRules:
       context.profile === "read_aloud_3_4" && context.lesson === "better_rules" && pageCount >= 2
         ? [
-            `- For better_rules in read_aloud_3_4, reserve page ${pageCount - 2} for the clearest explicit Bitcoin bridge after the child has already felt why fair rules matter.`,
+            `- For better_rules in read_aloud_3_4, add one earlier caregiver or narrator Bitcoin bridge before page ${pageCount - 2} once the child has already felt why fair rules matter.`,
+            `- For better_rules in read_aloud_3_4, reserve page ${pageCount - 2} for a brief caregiver or narrator Bitcoin echo that reconnects the repaired fair rule to Bitcoin without turning the ending into a lecture.`,
             `- Keep page ${pageCount - 1} for emotional resolution only: togetherness, safety, calm pride, or relief. Do not introduce new Bitcoin explanation there.`
           ]
+        : context.profile === "early_decoder_5_7" && context.lesson === "new_money_unfair" && pageCount >= 2
+          ? [
+              `- For new_money_unfair in early_decoder_5_7, add one short caregiver or narrator Bitcoin bridge before page ${pageCount - 2} once the child has already felt why surprise tickets seem unfair.`,
+              `- For new_money_unfair in early_decoder_5_7, reserve page ${pageCount - 2} for one brief caregiver or narrator Bitcoin echo that reconnects the steady ticket count to Bitcoin without sounding technical.`,
+              `- Keep page ${pageCount - 1} focused on calm emotional resolution only: fairness understood, closeness, relief, or pride. Do not introduce fresh Bitcoin explanation there.`
+            ]
         : [],
     criticEndingRules:
       context.profile === "read_aloud_3_4" && context.lesson === "better_rules"
         ? [
-            "- For better_rules in read_aloud_3_4, the clearest explicit Bitcoin bridge should land by the penultimate page.",
+            "- For better_rules in read_aloud_3_4, expect Bitcoin more than once: one earlier caregiver or narrator bridge, then one brief echo on the penultimate page.",
+            "- For better_rules in read_aloud_3_4, do not push every Bitcoin line earlier if that would erase the penultimate echo; shorten the penultimate echo instead.",
             "- For better_rules in read_aloud_3_4, the final page should close emotionally and must not introduce new Bitcoin explanation."
           ]
+        : context.profile === "early_decoder_5_7" && context.lesson === "new_money_unfair"
+          ? [
+              "- For new_money_unfair in early_decoder_5_7, expect Bitcoin more than once: one earlier caregiver or narrator bridge before the final 2 pages, then one brief echo on the penultimate page.",
+              "- For new_money_unfair in early_decoder_5_7, do not collapse the story to one late Bitcoin page just to avoid repetition; keep the earlier bridge short and concrete instead.",
+              "- For new_money_unfair in early_decoder_5_7, the final page should land on calm or pride and must not carry fresh Bitcoin explanation."
+            ]
         : [],
     disallowedGenericTitlePatterns: [/\bbitcoin adventure\b/i]
   };

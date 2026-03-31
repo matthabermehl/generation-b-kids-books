@@ -39,7 +39,7 @@ describe("runDeterministicBeatChecks", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("requires at least one beat to tie Bitcoin positively into the theme", () => {
+  it("requires at least one beat to make Bitcoin explicitly story-forward", () => {
     const beats = Array.from({ length: 10 }, (_, index) => makeBeat(index, 0));
     const result = runDeterministicBeatChecks(makeContext(), { beats });
     const themeIssue = result.issues.find((issue) => issue.code === "BITCOIN_THEME_INTEGRATION");
@@ -55,6 +55,18 @@ describe("runDeterministicBeatChecks", () => {
 
     expect(result.ok).toBe(false);
     expect(themeIssue?.details?.requiredHighBeatCount).toBe(2);
+  });
+
+  it("requires a high-salience Bitcoin beat before the protected ending window", () => {
+    const beats = Array.from({ length: 12 }, (_, index) =>
+      makeBeat(index, index === 10 || index === 11 ? 0.5 : 0.1)
+    );
+    const result = runDeterministicBeatChecks(makeContext({ pageCount: 12 }), { beats });
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("before the final 2 beats"))
+    ).toBe(true);
   });
 
   it("fails montessori realism for under-6 fantasy beats", () => {

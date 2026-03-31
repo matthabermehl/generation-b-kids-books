@@ -187,7 +187,7 @@ Fixed-layout additions:
 - Deterministic spread template selection for fixed-layout books
 - Story checks:
   - strict beat sheet schema validation (planner, critics, rewrite, final writer)
-  - positive Bitcoin-theme integration through lesson-specific value threads without turning Bitcoin into a pitch or a late-only reveal
+  - policy-backed Bitcoin-forward integration through lesson-specific value threads, including pre-ending distribution, caregiver or narrator framing, and warm-ending guardrails
   - banned financial claims
   - SoR decodability checks (beat planning + page-level checks)
   - low-variation/repetition guard for final story pages

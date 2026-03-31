@@ -824,9 +824,134 @@ describe("llm provider routing", () => {
     expect(messages[3]?.content).toContain("4 sentences or fewer");
     expect(messages[3]?.content).toContain("page 11");
     expect(messages[3]?.content).toContain("page 10");
+    expect(messages[3]?.content).toContain("at least two pages");
+    expect(messages[3]?.content).toContain("Do not move all Bitcoin language off page 10");
     expect(messages[3]?.content).toContain("combine clipped observations");
     expect(messages[3]?.content).toContain("one short quoted sentence plus narration");
     expect(messages[3]?.content).toContain("calm emotional closure only");
+  });
+
+  it("keeps an earlier Bitcoin bridge plus penultimate echo for new_money_unfair early decoders when critic instructions are blank", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const unfairContext = {
+      ...context,
+      lesson: "new_money_unfair" as const,
+      pageCount: 12
+    };
+    const unfairConcept = {
+      premise: "Ava feels upset when extra tickets appear in the game.",
+      caregiverLabel: "Mom" as const,
+      bitcoinBridge: "Bitcoin can reinforce steady fair rules in grown-up money.",
+      emotionalPromise: "Ava moves from confusion to calm relief.",
+      caregiverWarmthMoment: "Mom kneels beside Ava and helps her feel steady.",
+      bitcoinValueThread: "fairness, honest rules, and trust",
+      requiredSetups: ["ticket game", "same starting tickets", "bell prize"],
+      requiredPayoffs: ["the unfair feeling is named", "a calmer fair rule is understood"],
+      forbiddenLateIntroductions: ["surprise app"],
+      lessonScenario: {
+        moneyLessonKey: "new_money_unfair" as const,
+        gameName: "Star Ticket Game",
+        tokenName: "blue tickets",
+        childGoal: "ring the bell first",
+        ruleDisruption: "extra tickets appear halfway through the game",
+        fairnessRepair: "Mom explains the ticket count should stay steady for everyone",
+        deadlineEvent: "before cleanup time"
+      }
+    };
+    const unfairBeatSheet = {
+      beats: Array.from({ length: 12 }, (_, index) => ({
+        ...compliantBeatSheet.beats[Math.min(index, compliantBeatSheet.beats.length - 1)],
+        pageIndexEstimate: index,
+        sceneId: `ticket-scene-${Math.floor(index / 2) + 1}`,
+        purpose: `Ticket beat ${index + 1}`,
+        conflict: "Ava feels upset when extra tickets suddenly appear for other players.",
+        sceneLocation: "School fair",
+        sceneVisualDescription: "School fair ticket game with bright paper stars and a calm evening sky.",
+        emotionalTarget: index < 9 ? "upset" : index === 10 ? "understanding" : "relieved",
+        bitcoinRelevanceScore: index === 9 ? 0.6 : index === 10 ? 0.9 : 0.1,
+        introduces: index === 0 ? ["ticket game", "same starting tickets", "bell prize"] : [],
+        paysOff: index === 11 ? ["the unfair feeling is named", "a calmer fair rule is understood"] : [],
+        continuityFacts: ["caregiver_label:Mom", "deadline_event:before cleanup time"]
+      }))
+    };
+    const rewrittenPages = unfairBeatSheet.beats.map((beat, index) => ({
+      pageIndex: index,
+      pageText: `Rewritten unfair page ${index + 1}`,
+      illustrationBrief: beat.sceneLocation,
+      sceneId: beat.sceneId,
+      sceneVisualDescription: beat.sceneVisualDescription,
+      newWordsIntroduced: [],
+      repetitionTargets: ["fair"]
+    }));
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiStructuredResponse({
+        title: "Ava and the Ticket Rule",
+        concept: unfairConcept,
+        beats: unfairBeatSheet.beats,
+        pages: rewrittenPages
+      })
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    await provider.draftPages(
+      unfairContext,
+      unfairConcept,
+      unfairBeatSheet,
+      {
+        rewriteHistory: [
+          {
+            story: {
+              title: "Ava and the Ticket Rule",
+              concept: unfairConcept,
+              beats: unfairBeatSheet.beats,
+              pages: unfairBeatSheet.beats.map((beat, index) => ({
+                pageIndex: index,
+                pageText: `Draft unfair page ${index + 1}`,
+                illustrationBrief: beat.sceneLocation,
+                sceneId: beat.sceneId,
+                sceneVisualDescription: beat.sceneVisualDescription,
+                newWordsIntroduced: [],
+                repetitionTargets: ["fair"]
+              })),
+              readingProfileId: "early_decoder_5_7",
+              moneyLessonKey: "new_money_unfair"
+            },
+            criticVerdict: {
+              ok: false,
+              issues: [
+                {
+                  pageStart: 0,
+                  pageEnd: 11,
+                  issueType: "theme_integration",
+                  severity: "hard",
+                  rewriteTarget: "page",
+                  evidence:
+                    "Story must mention Bitcoin more than once so the caregiver or narrator framing feels meaningfully Bitcoin-forward.",
+                  suggestedFix:
+                    "Story must mention Bitcoin more than once so the caregiver or narrator framing feels meaningfully Bitcoin-forward."
+                }
+              ],
+              rewriteInstructions: ""
+            }
+          }
+        ]
+      }
+    );
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const messages = requestBody.messages ?? [];
+    expect(messages[3]?.content).toContain("45 words or fewer");
+    expect(messages[3]?.content).toContain("page 10");
+    expect(messages[3]?.content).toContain("at least two pages");
+    expect(messages[3]?.content).toContain("one late Bitcoin page");
+    expect(messages[3]?.content).toContain("earlier bridge short and concrete");
+    expect(messages[3]?.content).toContain("emotional closure only");
   });
 
   it("mock critic preserves deterministic page ranges for read-aloud sentence-budget issues", async () => {
@@ -984,7 +1109,7 @@ describe("llm provider routing", () => {
     const rewritePrompt =
       rewriteRequestBody.messages?.find((message) => message.role === "user")?.content ?? "";
     expect(rewritePrompt).toContain("Bitcoin policy constraints");
-    expect(rewritePrompt).toContain("positive thematic relevance");
+    expect(rewritePrompt).toContain("story-forward in caregiver or narrator framing");
     expect(rewritePrompt).toContain("thematic salience");
     expect(rewritePrompt).toContain("3-7 profile guardrails");
     expect(rewritePrompt).toContain("digital jar");

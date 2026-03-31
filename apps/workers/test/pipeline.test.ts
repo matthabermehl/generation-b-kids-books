@@ -214,13 +214,15 @@ describe("pipeline beat-planning failure persistence", () => {
 
   it("persists beat-plan-failed artifact and evaluation then rethrows", async () => {
     const beatFailure = new BeatPlanningError(
-      "Beat planning failed validation after rewrites: Bitcoin beat ratio 0.00 must be between 0.15 and 0.30.",
+      "Beat planning failed validation after rewrites: At least one beat must use bitcoinRelevanceScore >= 0.35 so Bitcoin is explicitly story-forward in caregiver or narrator framing.",
       { beats: [] },
       {
         attempts: [],
         rewritesApplied: 2,
         passed: false,
-        finalIssues: ["Bitcoin beat ratio 0.00 must be between 0.15 and 0.30."],
+        finalIssues: [
+          "At least one beat must use bitcoinRelevanceScore >= 0.35 so Bitcoin is explicitly story-forward in caregiver or narrator framing."
+        ],
         softIssues: []
       },
       {

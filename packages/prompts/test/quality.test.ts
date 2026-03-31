@@ -202,4 +202,119 @@ describe("runDeterministicStoryChecks", () => {
       })
     );
   });
+
+  it("surfaces hype phrases as bitcoin-fit failures", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 2
+          ? "Mom said Bitcoin has guaranteed returns for families."
+          : idx === 11
+            ? "Mom held Mia close and Mia felt calm and safe."
+            : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "read_aloud_3_4",
+      {
+        title: "Mia Saves",
+        concept,
+        beats,
+        pages,
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "jar_saving_limits"
+      },
+      concept,
+      true
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some(
+        (issue) => issue.issueType === "bitcoin_fit" && issue.message.includes("guaranteed returns")
+      )
+    ).toBe(true);
+  });
+
+  it("does not surface false app matches from happened or appear", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 5
+          ? "Mom sat beside Mia with a warm smile while Mia saved one coin after task 6."
+          : idx === 9
+            ? 'Mia told Mom what happened at the fair. Mom listened and asked, "Have you heard of Bitcoin?"'
+            : idx === 10
+              ? 'Mom said, "Bitcoin has rules that do not let surprise coins appear, so the game can stay fair for grown-ups."'
+              : idx === 11
+                ? "Mom held Mia close and Mia felt calm, proud, and safe."
+                : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "early_decoder_5_7",
+      {
+        title: "Mia Saves",
+        concept,
+        beats,
+        pages,
+        readingProfileId: "early_decoder_5_7",
+        moneyLessonKey: "jar_saving_limits"
+      },
+      concept,
+      true
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("flags lecture-like Bitcoin endings as ending-emotion failures", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 2
+          ? "Mom said Bitcoin can be one way grown-ups save for later, too."
+          : idx === 11
+            ? "Always remember that is why Bitcoin proves the lesson."
+            : idx === 5
+              ? "Mom sat beside Mia with a warm smile."
+              : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "read_aloud_3_4",
+      {
+        title: "Mia Saves",
+        concept,
+        beats,
+        pages,
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "jar_saving_limits"
+      },
+      concept,
+      true
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some(
+        (issue) => issue.issueType === "ending_emotion" && issue.message.includes("warm")
+      )
+    ).toBe(true);
+  });
 });

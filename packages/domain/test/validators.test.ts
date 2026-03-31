@@ -8,7 +8,8 @@ import {
   validateMontessoriRealism,
   validateNarrativeRatio,
   validatePageVariation,
-  validateReadingProfile
+  validateReadingProfile,
+  validateStoryTone
 } from "../src/index.js";
 
 const concept = {
@@ -269,6 +270,33 @@ describe("bitcoin usage", () => {
     expect(result.issues.some((issue) => issue.code === "BITCOIN_POLICY")).toBe(true);
   });
 
+  it("does not treat happened or appear as app-based Bitcoin framing", () => {
+    const result = validateBitcoinUsage("early_decoder_5_7", concept, [
+      {
+        pageIndex: 0,
+        pageText:
+          'Mom asked what happened at the fair. Mia said it felt unfair. Mom said, "Have you heard of Bitcoin?"',
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "School hallway",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      },
+      {
+        pageIndex: 1,
+        pageText:
+          'Mom said, "Bitcoin has rules that do not let surprise coins appear, so the game can stay fair for grown-ups."',
+        illustrationBrief: "",
+        sceneId: "scene-2",
+        sceneVisualDescription: "Bedroom with warm lamp light",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(true);
+  });
+
   it("requires Bitcoin to appear before the final page in longer stories", () => {
     const result = validateBitcoinUsage("early_decoder_5_7", concept, Array.from({ length: 12 }, (_, idx) => ({
       pageIndex: idx,
@@ -285,6 +313,101 @@ describe("bitcoin usage", () => {
 
     expect(result.ok).toBe(false);
     expect(result.issues.some((issue) => issue.message.includes("before the final page"))).toBe(true);
+  });
+
+  it("requires Bitcoin to appear before the final ending window in longer stories", () => {
+    const result = validateBitcoinUsage(
+      "early_decoder_5_7",
+      concept,
+      Array.from({ length: 12 }, (_, idx) => ({
+        pageIndex: idx,
+        pageText:
+          idx === 10
+            ? "Mom says Bitcoin can be one grown-up saving idea."
+            : idx === 11
+              ? "Mia feels calm as Bitcoin echoes the same patient plan for grown-ups."
+              : `Mia saves coin ${idx + 1}.`,
+        illustrationBrief: "",
+        sceneId: `scene-${idx}`,
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }))
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.message.includes("final 2 pages"))).toBe(true);
+  });
+
+  it("requires caregiver or grown-up framing for Bitcoin mentions", () => {
+    const result = validateBitcoinUsage("early_decoder_5_7", concept, [
+      {
+        pageIndex: 0,
+        pageText: "Bitcoin was there when Mia looked at her jar.",
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.message.includes("grown-up language"))).toBe(true);
+  });
+});
+
+describe("story tone", () => {
+  it("allows a warm ending that echoes Bitcoin without turning into a lecture", () => {
+    const result = validateStoryTone("read_aloud_3_4", concept, [
+      {
+        pageIndex: 0,
+        pageText: "Mom gives Mia a warm hug while they count coins together.",
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      },
+      {
+        pageIndex: 1,
+        pageText: "Mom says the same patient saving idea can fit Bitcoin for grown-ups, too, and Mia feels calm and safe.",
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("flags lecture-like Bitcoin endings separately from warm endings", () => {
+    const result = validateStoryTone("read_aloud_3_4", concept, [
+      {
+        pageIndex: 0,
+        pageText: "Mom sits close and keeps Mia steady at the table.",
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      },
+      {
+        pageIndex: 1,
+        pageText: "Always remember that is why Bitcoin proves the right lesson.",
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.code === "PREACHY_TONE")).toBe(true);
+    expect(result.issues.some((issue) => issue.code === "ENDING_EMOTION")).toBe(true);
   });
 });
 
