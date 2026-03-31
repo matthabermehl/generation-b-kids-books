@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T01:13:04Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T01:20:54Z)"
   },
   {
     "id": "wip-carryover-01",
