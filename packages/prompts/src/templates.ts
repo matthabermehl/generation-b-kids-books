@@ -197,7 +197,7 @@ export function buildStoryConceptPrompt(
     "- lessonScenario.moneyLessonKey must exactly equal the supplied money_lesson_key.",
     ...lessonScenarioRules(context.lesson),
     "- deadlineEvent may be null. If non-null, it must be concrete, seedable before the ending, and matter to the payoff.",
-    "- bitcoinBridge must capture the canonical thematic guidance for how Bitcoin can positively connect to this exact story, lesson scenario, and value thread. Treat it as guidance for later writing, not an exact quote to reproduce.",
+    "- bitcoinBridge must capture the canonical thematic guidance for how Bitcoin can positively connect to this exact story, lesson scenario, and value thread. Make it strong enough that later prompts can name Bitcoin before the ending and echo it again in longer stories without turning the book into a lecture.",
     "- requiredSetups should list the specific nouns, options, events, or facts that must appear before they matter.",
     "- requiredPayoffs should list the exact things the ending must resolve.",
     "- forbiddenLateIntroductions should list nouns/events that would feel ad-hoc if they suddenly appeared near the end.",
@@ -297,6 +297,7 @@ export function buildMontessoriCriticPrompt(
   conceptJson: string,
   beatSheetJson: string
 ): string {
+  const policy = bitcoinStoryPolicy(context);
   return [
     "Role: Montessori validator for children's narrative beats.",
     profileBlock(context, 0),
@@ -309,7 +310,7 @@ export function buildMontessoriCriticPrompt(
     "2) Flag age-implausible chores, unsafe earning actions, or unrealistic child responsibility levels as hard issues.",
     "3) Flag beats that rename the caregiver, earning options, or deadline from the StoryConcept.",
     "4) Preserve child agency and interests in proposed fixes.",
-    "5) Preserve child-safe Bitcoin handling: keep it grounded, positive, and secondary to the child's concrete arc.",
+    `5) Preserve child-safe Bitcoin handling: ${policy.basePromptSummary} Keep it grounded, never technical, and never a child explanation task.`,
     "6) Preserve the warm bedtime feel: at least one caregiver connection beat and a reassuring ending.",
     "7) Classify each issue with tier='hard' or tier='soft'.",
     "8) Hard issues are objective blockers that should trigger a rewrite or fail the beat sheet.",
@@ -328,6 +329,7 @@ export function buildScienceOfReadingCriticPrompt(
   conceptJson: string,
   beatSheetJson: string
 ): string {
+  const policy = bitcoinStoryPolicy(context);
   return [
     "Role: Science-of-Reading validator for early-reader planning.",
     profileBlock(context, 0),
@@ -340,7 +342,8 @@ export function buildScienceOfReadingCriticPrompt(
     "- Flag when decodabilityTags miss canonical tags: controlled_vocab, repetition, or taught_words.",
     "- Flag when comprehension depends entirely on pictures instead of explicit text-level meaning.",
     "- Do not decode or repeat the word Bitcoin; flag beats that ask the child to decode or repeat the word Bitcoin.",
-    "- For ages 3-7, Bitcoin may recur in caregiver or narrator language if it stays concrete, positive, and child-safe.",
+    `- ${policy.basePromptSummary}`,
+    "- If Bitcoin appears, keep it in caregiver or narrator language only; do not ask the child to decode, repeat, or explain it.",
     "- Flag beats that make Bitcoin a child-facing newWordsIntroduced item or a technical/device-first explanation.",
     "- Prefer concrete child-facing words like coin, jar, wait, count, choice, more, less, and price.",
     "- Classify each issue with tier='hard' or tier='soft'.",
@@ -360,6 +363,7 @@ export function buildNarrativeFreshnessCriticPrompt(
   conceptJson: string,
   beatSheetJson: string
 ): string {
+  const policy = bitcoinStoryPolicy(context);
   return [
     "Role: Narrative freshness and story-logic critic for children's stories.",
     profileBlock(context, 0),
@@ -376,6 +380,7 @@ export function buildNarrativeFreshnessCriticPrompt(
     "- A beat must not introduce a new deadline, event, or plot mechanic that the StoryConcept forbids as a late introduction.",
     "- Earning-option action continuity must stay coherent. Do not switch from one named option to a different action with no bridge.",
     "- Include at least one caregiver reassurance or connection beat.",
+    `- ${policy.criticLine}`,
     "- Bitcoin should feel positively tied to the child's specific value arc and story theme, not pasted on or contradictory.",
     "- Classify each issue with tier='hard' or tier='soft'.",
     "- Hard issues are structural blockers that should trigger rewrite/fail.",
@@ -420,6 +425,7 @@ export function buildBeatRewritePrompt(
     "- Ensure every beat includes at least one canonical decodability tag: controlled_vocab, repetition, or taught_words.",
     "- For early-reader profiles, keep newWordsIntroduced <= 2 in every beat and do not make Bitcoin a decoding target.",
     `- ${policy.beatRewriteLine}`,
+    `- ${policy.endingLine}`,
     "- Ensure at least one meaningful child choice with visible downstream consequences.",
     "- Ensure at least one clear caregiver reassurance or connection beat.",
     "- Ensure the final beat contains clear concrete payoff/resolution and lands in calm pride, reassurance, or relief.",

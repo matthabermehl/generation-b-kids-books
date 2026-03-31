@@ -1,8 +1,8 @@
 # Current Task
-Task ID: bitcoin-forward-policy-seam-01
+Task ID: bitcoin-forward-prompt-alignment-01
 
 ## Goal
-Create the lowest-risk implementation seam for a single shipped Bitcoin-forward story posture while keeping the current money-problem lessons and current parent/API/DB contracts unchanged.
+Retune the shipped story prompts so the current single Bitcoin-forward posture reads clearly earlier and more often in caregiver or narrator framing while the child's money problem stays primary.
 
 ## Constraints
 - Keep the repo on `codex/bitcoin-forward-modes`.
@@ -12,12 +12,13 @@ Create the lowest-risk implementation seam for a single shipped Bitcoin-forward 
   - no hype or investment promises
   - no technical or device-first framing
   - no child decoding or explaining Bitcoin
-- Make the policy seam shared by prompts, validators, and mock outputs so future multi-mode work can branch cleanly from it later.
+- Use the existing shared Bitcoin-story policy seam instead of reintroducing scattered hard-coded prompt wording.
+- Keep endings emotionally warm and non-lecture-like across all current lessons.
 
 ## Plan (short)
-1. Add a centralized Bitcoin-story policy contract or resolver near the prompt/validation boundary.
-2. Thread that policy into prompt builders, deterministic checks, and mock/fallback story outputs without widening public contracts.
-3. Lock the seam with focused domain, prompt, and worker tests before moving on to broader prompt rewrites.
+1. Audit prompt builders for any remaining gentle-secondary wording or missing Bitcoin-forward guidance.
+2. Tighten story concept, beat critic/rewrite, writer, and final critic wording around earlier recurring caregiver or narrator Bitcoin framing.
+3. Add focused prompt regressions for concept, critic, and rewrite behavior before moving to validator alignment.
 
 ## Evidence required
 - `pnpm --filter @book/domain test`
@@ -27,5 +28,5 @@ Create the lowest-risk implementation seam for a single shipped Bitcoin-forward 
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS
-- work: completed 2026-03-30; shared Bitcoin-forward policy seam now drives prompt rules, deterministic checks, and worker mock/fallback titles/outputs without changing UI/API/DB contracts
-- next: `bitcoin-forward-prompt-alignment-01`
+- work: completed 2026-03-30; story concept, beat critics, rewrite guidance, and prompt principles now align to the Bitcoin-forward seam without reintroducing lecture-like endings
+- next: `bitcoin-forward-validator-alignment-01`

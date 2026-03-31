@@ -1,3 +1,5 @@
+import { bitcoinForwardStoryPrincipleSummary } from "@book/domain";
+
 export interface PromptPrinciple {
   id: string;
   summary: string;
@@ -8,8 +10,7 @@ export interface PromptPrinciple {
 export const promptPrinciples: PromptPrinciple[] = [
   {
     id: "bitcoin_theme_positive",
-    summary:
-      "Bitcoin is named earlier and more than once in caregiver or narrator framing while the child's concrete money problem stays primary.",
+    summary: bitcoinForwardStoryPrincipleSummary,
     appliesTo: "planner",
     requiredSignals: ["bitcoin", "caregiver or narrator", "before the ending", "concrete money problem"]
   },

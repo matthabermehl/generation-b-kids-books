@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-30T23:22:49Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-30T23:58:39Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -334,8 +334,8 @@
       "Update concept, planner, rewrite, writer, and critic templates to make Bitcoin earlier, clearer, and more recurring in caregiver or narrator framing while keeping the child's concrete arc primary",
       "Preserve bedtime warmth, lesson-specific nuance, and non-lecture endings across all 5 current money-problem lessons"
     ],
-    "passes": false,
-    "evidence": ""
+    "passes": true,
+    "evidence": "pnpm --filter @book/domain test (PASS); pnpm --filter @book/prompts test (PASS); pnpm --filter @book/workers test (PASS); bash scripts/agent/quality.sh (PASS)"
   },
   {
     "id": "bitcoin-forward-validator-alignment-01",
