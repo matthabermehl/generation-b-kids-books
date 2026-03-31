@@ -116,6 +116,15 @@ function normalizedLower(value: string): string {
   return value.toLowerCase();
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsWholeTerm(value: string, term: string): boolean {
+  const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalizedLower(term))}([^a-z0-9]|$)`);
+  return pattern.test(value);
+}
+
 function pageMentions(page: StoryPage, phrase: string): boolean {
   return normalizedLower(page.pageText).includes(normalizedLower(phrase));
 }
@@ -527,7 +536,7 @@ export function validateBitcoinUsage(
       });
     }
 
-    const technicalTerm = bitcoinTechnicalTerms.find((term) => lowered.includes(term));
+    const technicalTerm = bitcoinTechnicalTerms.find((term) => containsWholeTerm(lowered, term));
     if (technicalTerm) {
       issues.push({
         code: "BITCOIN_POLICY",

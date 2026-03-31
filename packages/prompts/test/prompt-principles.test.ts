@@ -217,7 +217,8 @@ describe("prompt principles", () => {
       "every page must stay at 4 sentences or fewer",
       "prefer 2-3 short sentences",
       "one short quoted sentence plus narration",
-      "reserve page 10 for the clearest explicit bitcoin bridge",
+      "before page 10",
+      "reserve page 10 for a brief caregiver or narrator bitcoin echo",
       "keep page 11 for emotional resolution only"
     ]);
     expectSignals(earlyDecoderPrompt, [
@@ -258,13 +259,67 @@ describe("prompt principles", () => {
     const criticPrompt = buildCriticPrompt(betterRulesContext, betterRulesConcept, "{\"pages\":[]}");
 
     expectSignals(plannerPrompt, [
-      "reserve page 10 for the clearest explicit bitcoin bridge",
+      "before page 10",
+      "reserve page 10 for a brief caregiver or narrator bitcoin echo",
       "keep page 11 for emotional resolution only"
     ]);
     expectSignals(criticPrompt, [
+      "expect bitcoin more than once",
       "penultimate page",
+      "do not push every bitcoin line earlier",
       "final page should close emotionally",
       "late, verbose bitcoin explanation overloads the ending"
+    ]);
+  });
+
+  it("new_money_unfair early-decoder prompts preserve an earlier bridge plus penultimate echo", () => {
+    const unfairContext: StoryTemplateContext = {
+      ...context,
+      ageYears: 7,
+      lesson: "new_money_unfair",
+      interests: ["soccer"],
+      profile: "early_decoder_5_7"
+    };
+    const unfairConcept = {
+      premise: "Maya feels upset when extra tickets appear in the fair game.",
+      caregiverLabel: "Mom" as const,
+      bitcoinBridge: "Bitcoin can reinforce steady fair rules in grown-up money.",
+      emotionalPromise: "Maya moves from confusion to calm relief.",
+      caregiverWarmthMoment: "Mom kneels beside Maya and helps her feel steady.",
+      bitcoinValueThread: "fairness, honest rules, and trust",
+      requiredSetups: ["ticket game", "same starting tickets", "bell prize"],
+      requiredPayoffs: ["the unfair feeling is named", "a calmer fair rule is understood"],
+      forbiddenLateIntroductions: ["surprise app"],
+      lessonScenario: {
+        moneyLessonKey: "new_money_unfair" as const,
+        gameName: "Star Ticket Game",
+        tokenName: "blue tickets",
+        childGoal: "ring the bell first",
+        ruleDisruption: "extra tickets appear halfway through the game",
+        fairnessRepair: "Mom explains the ticket count should stay steady for everyone",
+        deadlineEvent: "before cleanup time"
+      }
+    };
+
+    const plannerPrompt = buildBeatPlannerPrompt(unfairContext, unfairConcept, 12);
+    const writerPrompt = buildPageWriterPrompt(unfairContext, unfairConcept, beatSheet, 12);
+    const criticPrompt = buildCriticPrompt(unfairContext, unfairConcept, "{\"pages\":[]}");
+
+    expectSignals(plannerPrompt, [
+      "before page 10",
+      "page 10",
+      "page 11"
+    ]);
+    expectSignals(writerPrompt, [
+      "before page 10",
+      "page 10",
+      "page 11"
+    ]);
+    expectSignals(criticPrompt, [
+      "expect bitcoin more than once",
+      "penultimate page",
+      "one late bitcoin page",
+      "final page should land on calm or pride"
     ]);
   });
 

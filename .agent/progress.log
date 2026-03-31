@@ -464,3 +464,21 @@ Feature toggle: `bitcoin-forward-fixtures-docs-01` passes=false -> true
 Next: `bitcoin-forward-deploy-smoke-01`
 Notes: the only harness drift beyond this slice is the expected refreshed baseline smoke timestamp in `.agent/feature_list.json`; live deploy proof and downloadable sample books remain outstanding.
 Commit: pending
+
+2026-03-30T23:23:16-0400
+Task: bitcoin-forward-deploy-smoke-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: deployed the Bitcoin-forward branch to dev, validated provider connectivity, confirmed both required live picture-book smokes with saved smoke JSON plus downloaded PDFs, and closed the final initiative slice after fixing two live blockers uncovered during validation: a false positive technical-term matcher that treated words like `happened` and `appear` as `app`, and an early-decoder `new_money_unfair` rewrite gap that could collapse Bitcoin to one late page instead of an earlier caregiver bridge plus penultimate echo.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+- `pnpm cdk:deploy:dev` => UPDATE_COMPLETE
+- `pnpm ops:provider-smoke` => PASS
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules pnpm ops:picture-book-smoke` => PASS (`.agent/artifacts/bitcoin-forward-modes/better_rules-read_aloud-smoke.json`, order `3dc0b994-d21c-4a89-a4b0-0dbf11c71939`, book `be1d85fc-7b98-45f0-b74a-a2b454331178`, previews `12/12`, pdf `.agent/artifacts/bitcoin-forward-modes/better_rules-read_aloud-book.pdf`)
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 MONEY_LESSON_KEY=new_money_unfair pnpm ops:picture-book-smoke` => PASS (`.agent/artifacts/picture-book-smoke-2026-03-31T02-57-35.496Z.json`, order `84d93edb-e2c3-4028-9edd-c6bed5071776`, book `290cea37-9174-4dca-8b07-14a86700cfe6`, previews `12/12`, copied to `.agent/artifacts/bitcoin-forward-modes/new_money_unfair-early_decoder-smoke.json`, pdf `.agent/artifacts/bitcoin-forward-modes/new_money_unfair-early_decoder-book.pdf`)
+Feature toggle: `bitcoin-forward-deploy-smoke-01` passes=false -> true
+Next: no remaining open `bitcoin-forward-*` task; the initiative is complete unless a new follow-up slice is added
+Notes: intermediate live-failure evidence is preserved under `.agent/artifacts/bitcoin-forward-modes/live-failure-early-decoder/` and `.agent/artifacts/bitcoin-forward-modes/live-failure-early-decoder-late/`; the final passing early-decoder run reached `ready` after all 12 pages rendered and the final book PDF artifact was produced.
+Commit: pending

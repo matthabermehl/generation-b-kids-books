@@ -565,8 +565,17 @@ function fallbackStoryRewriteInstructions(
 
   if (context.profile === "read_aloud_3_4" && context.lesson === "better_rules" && context.pageCount >= 2) {
     profileLines.push(
-      `- For better_rules read-aloud stories, place the clearest explicit Bitcoin bridge by page ${context.pageCount - 2}.`,
+      `- For better_rules read-aloud stories, keep Bitcoin on at least two pages: one earlier caregiver or narrator bridge before page ${context.pageCount - 2}, then one brief echo on page ${context.pageCount - 2}.`,
+      `- Do not move all Bitcoin language off page ${context.pageCount - 2}; keep that page to one short Bitcoin reminder plus emotional payoff.`,
       `- Keep page ${context.pageCount - 1} for calm emotional closure only: togetherness, safety, calm pride, or relief.`
+    );
+  }
+
+  if (context.profile === "early_decoder_5_7" && context.lesson === "new_money_unfair" && context.pageCount >= 2) {
+    profileLines.push(
+      `- For new_money_unfair early-decoder stories, keep Bitcoin on at least two pages: one short caregiver or narrator bridge before page ${context.pageCount - 2}, then one brief echo on page ${context.pageCount - 2}.`,
+      `- Do not collapse the story to one late Bitcoin page just to avoid repetition; keep the earlier bridge short and concrete instead.`,
+      `- Keep page ${context.pageCount - 1} focused on emotional closure only: calm, pride, relief, or safety.`
     );
   }
 

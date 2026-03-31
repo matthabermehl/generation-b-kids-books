@@ -270,6 +270,33 @@ describe("bitcoin usage", () => {
     expect(result.issues.some((issue) => issue.code === "BITCOIN_POLICY")).toBe(true);
   });
 
+  it("does not treat happened or appear as app-based Bitcoin framing", () => {
+    const result = validateBitcoinUsage("early_decoder_5_7", concept, [
+      {
+        pageIndex: 0,
+        pageText:
+          'Mom asked what happened at the fair. Mia said it felt unfair. Mom said, "Have you heard of Bitcoin?"',
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "School hallway",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      },
+      {
+        pageIndex: 1,
+        pageText:
+          'Mom said, "Bitcoin has rules that do not let surprise coins appear, so the game can stay fair for grown-ups."',
+        illustrationBrief: "",
+        sceneId: "scene-2",
+        sceneVisualDescription: "Bedroom with warm lamp light",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(true);
+  });
+
   it("requires Bitcoin to appear before the final page in longer stories", () => {
     const result = validateBitcoinUsage("early_decoder_5_7", concept, Array.from({ length: 12 }, (_, idx) => ({
       pageIndex: idx,

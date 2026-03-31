@@ -35,5 +35,6 @@ Prove the Bitcoin-forward alignment in deployed dev with fresh local gates, prov
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS
-- work: queued 2026-03-30 after `bitcoin-forward-fixtures-docs-01` passed with prompt/worker/quality evidence
-- next: deploy dev, capture live smoke artifacts, and download both ready-book PDFs
+- work: complete on 2026-03-30 after `pnpm cdk:deploy:dev`, `pnpm ops:provider-smoke`, and both live picture-book smokes passed with persisted artifacts under `.agent/artifacts/bitcoin-forward-modes/`
+- outcome: `bitcoin-forward-deploy-smoke-01` now passes with read-aloud artifact pair `better_rules-read_aloud-*` and early-decoder artifact pair `new_money_unfair-early_decoder-*`
+- next: no remaining open `bitcoin-forward-*` task in `.agent/feature_list.json`; initiative is complete on this branch

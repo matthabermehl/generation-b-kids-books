@@ -370,7 +370,7 @@
       "Run smoke, targeted package tests, and repo quality before deploying dev",
       "Run provider smoke plus two live picture-book smokes and store smoke JSON plus final PDFs under `.agent/artifacts/bitcoin-forward-modes/`"
     ],
-    "passes": false,
-    "evidence": ""
+    "passes": true,
+    "evidence": "bash scripts/agent/smoke.sh => PASS; pnpm --filter @book/domain test => PASS; pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS; pnpm cdk:deploy:dev => UPDATE_COMPLETE; pnpm ops:provider-smoke => PASS; API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules pnpm ops:picture-book-smoke => PASS (.agent/artifacts/bitcoin-forward-modes/better_rules-read_aloud-smoke.json, order=3dc0b994-d21c-4a89-a4b0-0dbf11c71939, book=be1d85fc-7b98-45f0-b74a-a2b454331178, previews=12/12, pdf=.agent/artifacts/bitcoin-forward-modes/better_rules-read_aloud-book.pdf); API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 MONEY_LESSON_KEY=new_money_unfair pnpm ops:picture-book-smoke => PASS (.agent/artifacts/bitcoin-forward-modes/new_money_unfair-early_decoder-smoke.json, order=84d93edb-e2c3-4028-9edd-c6bed5071776, book=290cea37-9174-4dca-8b07-14a86700cfe6, previews=12/12, pdf=.agent/artifacts/bitcoin-forward-modes/new_money_unfair-early_decoder-book.pdf)"
   }
 ]

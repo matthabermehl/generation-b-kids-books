@@ -19,8 +19,27 @@ describe("bitcoin story policy", () => {
     expect(policy.minimumBitcoinMentions).toBe(2);
     expect(policy.minimumHighRelevanceBeats).toBe(2);
     expect(policy.requireMentionBeforeEnding).toBe(true);
+    expect(policy.lessonPlacementRules.join(" ")).toContain("before page 10");
     expect(policy.lessonPlacementRules.join(" ")).toContain("page 10");
     expect(policy.lessonPlacementRules.join(" ")).toContain("page 11");
+    expect(policy.criticEndingRules.join(" ")).toContain("more than once");
+    expect(policy.criticEndingRules.join(" ")).toContain("penultimate page");
+  });
+
+  it("adds an earlier bridge and penultimate echo for new_money_unfair early decoders", () => {
+    const policy = resolveBitcoinStoryPolicy({
+      lesson: "new_money_unfair",
+      profile: "early_decoder_5_7",
+      ageYears: 7,
+      pageCount: 12
+    });
+
+    expect(policy.lessonPlacementRules.join(" ")).toContain("before page 10");
+    expect(policy.lessonPlacementRules.join(" ")).toContain("page 10");
+    expect(policy.lessonPlacementRules.join(" ")).toContain("page 11");
+    expect(policy.criticEndingRules.join(" ")).toContain("more than once");
+    expect(policy.criticEndingRules.join(" ")).toContain("penultimate page");
+    expect(policy.criticEndingRules.join(" ")).toContain("one late Bitcoin page");
   });
 
   it("provides warm problem-led fallback titles and caregiver bridge text", () => {
