@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T01:20:54Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T22:30:56Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -372,5 +372,65 @@
     ],
     "passes": true,
     "evidence": "bash scripts/agent/smoke.sh => PASS; pnpm --filter @book/domain test => PASS; pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS; pnpm cdk:deploy:dev => UPDATE_COMPLETE; pnpm ops:provider-smoke => PASS; API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules pnpm ops:picture-book-smoke => PASS (.agent/artifacts/bitcoin-forward-modes/better_rules-read_aloud-smoke.json, order=3dc0b994-d21c-4a89-a4b0-0dbf11c71939, book=be1d85fc-7b98-45f0-b74a-a2b454331178, previews=12/12, pdf=.agent/artifacts/bitcoin-forward-modes/better_rules-read_aloud-book.pdf); API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=early_decoder_5_7 MONEY_LESSON_KEY=new_money_unfair pnpm ops:picture-book-smoke => PASS (.agent/artifacts/bitcoin-forward-modes/new_money_unfair-early_decoder-smoke.json, order=84d93edb-e2c3-4028-9edd-c6bed5071776, book=290cea37-9174-4dca-8b07-14a86700cfe6, previews=12/12, pdf=.agent/artifacts/bitcoin-forward-modes/new_money_unfair-early_decoder-book.pdf)"
+  },
+  {
+    "id": "bitcoin-story-modes-contract-persistence-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Add a first-class storyMode contract across domain types, parent flow, API/OpenAPI, persisted books, and worker load context",
+    "steps": [
+      "Introduce a shared StoryMode enum plus create-order and book payload fields",
+      "Persist the selected mode on books and thread it into worker story-generation context so retries and rebuilds stay deterministic"
+    ],
+    "passes": false,
+    "evidence": ""
+  },
+  {
+    "id": "bitcoin-story-modes-policy-prompt-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Generalize the Bitcoin story policy seam and prompt templates for implicit, reveal-8020, and forward modes",
+    "steps": [
+      "Make the shared story policy resolver mode-aware for explicitness, timing, recurrence, title guidance, and ending behavior",
+      "Align story concept, beat planner, rewrite, writer, and critic prompts so each mode produces the intended posture without breaking safety"
+    ],
+    "passes": false,
+    "evidence": ""
+  },
+  {
+    "id": "bitcoin-story-modes-validator-alignment-01",
+    "priority": 1,
+    "category": "functional",
+    "description": "Align deterministic beat and story validation with the selected storyMode",
+    "steps": [
+      "Forbid Bitcoin mention in implicit mode, require late-only reveal timing in reveal mode, and preserve earlier salience plus recurrence in forward mode",
+      "Keep caregiver or narrator framing, anti-hype, anti-technical, anti-child-explainer, and warm-ending guardrails across all modes"
+    ],
+    "passes": false,
+    "evidence": ""
+  },
+  {
+    "id": "bitcoin-story-modes-fixtures-docs-01",
+    "priority": 2,
+    "category": "documentation",
+    "description": "Refresh fixtures, mock outputs, prompt principles, and docs so the repo consistently describes the three-mode architecture",
+    "steps": [
+      "Update mock or fallback outputs, prompt-principle tests, and example artifacts to cover all three modes",
+      "Refresh product, architecture, and execution docs to document the new parent-visible selector and persisted per-book mode"
+    ],
+    "passes": false,
+    "evidence": ""
+  },
+  {
+    "id": "bitcoin-story-modes-deploy-smoke-01",
+    "priority": 2,
+    "category": "integration",
+    "description": "Prove the story-mode dial in dev with local quality gates, live smoke artifacts, and downloadable sample books for each mode",
+    "steps": [
+      "Run smoke, targeted package tests, and repo quality before deploying dev",
+      "Run provider smoke plus live picture-book smoke across the three modes and store smoke JSON plus final PDFs under `.agent/artifacts/story-modes/`"
+    ],
+    "passes": false,
+    "evidence": ""
   }
 ]
