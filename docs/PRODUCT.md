@@ -35,7 +35,7 @@ Generate personalized, visually polished children's books that teach money conce
   - public landing plus parent create, checkout, and current-book routes
   - internal reviewer queue and case detail console
 - Tailwind + shadcn clean-product UI system for both parent and reviewer surfaces
-- Prompting and story-generation rules that keep Bitcoin present as a gentle value thread rather than a loud reveal:
+- Prompting and story-generation rules that keep Bitcoin clearly story-forward in caregiver or narrator framing without turning the book into a pitch or lecture:
   - story-first, value-first framing
   - warm caregiver reassurance
   - calm ending that lands in relief or quiet pride
@@ -63,7 +63,7 @@ Primary behavioral acceptance criteria must live in `.agent/feature_list.json`.
 
 ## Story Experience Rules
 - Every book should read like a warm bedtime story first and a money lesson second.
-- Bitcoin should be framed through values the child already experienced in the story, such as patience, fair rules, long-term thinking, stewardship, and earned rewards.
+- Bitcoin should be clearly named in caregiver or narrator framing before the ending, through values the child already experienced in the story, such as patience, fair rules, long-term thinking, stewardship, and earned rewards.
 - The story should include at least one clear caregiver reassurance or connection beat.
 - The ending should land in reassurance, calm understanding, or quiet pride rather than a transactional finish.
 

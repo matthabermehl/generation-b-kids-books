@@ -451,3 +451,16 @@ Feature toggle: `bitcoin-forward-validator-alignment-01` passes=false -> true
 Next: `bitcoin-forward-fixtures-docs-01`
 Notes: no UI, API, DB, or migration contracts changed; the validator pass stays inside the existing five lesson keys and reading profiles.
 Commit: pending
+
+2026-03-30T21:17:52-0400
+Task: bitcoin-forward-fixtures-docs-01
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: refreshed the remaining rewrite-guidance, template, and runtime fixture wording that still described Bitcoin as merely positive or secondary, updated the worker rewrite instructions and regression to match the shared Bitcoin-forward caregiver/narrator framing, and refreshed product, architecture, and prompting-alignment docs so the shipped single-mode posture is documented consistently without reintroducing a selector or persisted mode state.
+Evidence:
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-forward-fixtures-docs-01` passes=false -> true
+Next: `bitcoin-forward-deploy-smoke-01`
+Notes: the only harness drift beyond this slice is the expected refreshed baseline smoke timestamp in `.agent/feature_list.json`; live deploy proof and downloadable sample books remain outstanding.
+Commit: pending

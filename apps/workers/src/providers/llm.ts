@@ -1037,7 +1037,7 @@ function buildRewriteInstructions(
     ...deterministicLines,
     ...criticLines,
     "- Bitcoin policy constraints:",
-    `- Ensure at least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} clearly give Bitcoin positive thematic relevance to the story's value arc.`,
+    `- Ensure at least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} clearly keep Bitcoin story-forward in caregiver or narrator framing through the story's value arc.`,
     "- Treat bitcoinRelevanceScore as thematic salience, not a late-stage quota.",
     `- ${policy.beatRewriteLine}`,
     ...(earlyReader

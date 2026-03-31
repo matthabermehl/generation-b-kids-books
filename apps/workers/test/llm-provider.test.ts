@@ -984,7 +984,7 @@ describe("llm provider routing", () => {
     const rewritePrompt =
       rewriteRequestBody.messages?.find((message) => message.role === "user")?.content ?? "";
     expect(rewritePrompt).toContain("Bitcoin policy constraints");
-    expect(rewritePrompt).toContain("positive thematic relevance");
+    expect(rewritePrompt).toContain("story-forward in caregiver or narrator framing");
     expect(rewritePrompt).toContain("thematic salience");
     expect(rewritePrompt).toContain("3-7 profile guardrails");
     expect(rewritePrompt).toContain("digital jar");

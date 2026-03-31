@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T00:36:57Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T01:13:04Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -358,8 +358,8 @@
       "Update mock outputs, title guidance, prompt-principle tests, and targeted fixtures to remove stale gentle-secondary assumptions",
       "Refresh docs and execution notes to document the centralized Bitcoin-forward policy seam and the intentional lack of a parent-facing selector"
     ],
-    "passes": false,
-    "evidence": ""
+    "passes": true,
+    "evidence": "pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS"
   },
   {
     "id": "bitcoin-forward-deploy-smoke-01",
