@@ -15,6 +15,7 @@ describe("bitcoin story policy", () => {
     });
 
     expect(policy.postureId).toBe("bitcoin_forward");
+    expect(policy.protectedEndingPageCount).toBe(2);
     expect(policy.minimumBitcoinMentions).toBe(2);
     expect(policy.minimumHighRelevanceBeats).toBe(2);
     expect(policy.requireMentionBeforeEnding).toBe(true);

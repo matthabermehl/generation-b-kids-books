@@ -27,6 +27,7 @@ const montessoriFantasyTerms = [
   "sorcerer"
 ];
 const explicitCaregiverTerms = ["mom", "dad"];
+const bitcoinAdultFramingTerms = ["grown-up", "grown-ups", "adult", "adults", "parent", "parents"];
 const bitcoinTechnicalTerms = [
   "app",
   "phone",
@@ -39,7 +40,34 @@ const bitcoinTechnicalTerms = [
   "market",
   "chart"
 ];
-const bitcoinChildActionTerms = ["say bitcoin", "repeat bitcoin", "spell bitcoin", "read bitcoin", "decode bitcoin"];
+const bitcoinChildActionTerms = [
+  "say bitcoin",
+  "repeat bitcoin",
+  "spell bitcoin",
+  "read bitcoin",
+  "decode bitcoin",
+  "explain bitcoin",
+  "teach bitcoin"
+];
+const warmthSignals = [
+  "warm",
+  "calm",
+  "quiet",
+  "gentle",
+  "steady",
+  "safe",
+  "snug",
+  "soft",
+  "hand",
+  "hug",
+  "close",
+  "relieved",
+  "proud",
+  "reassured",
+  "secure"
+];
+const preachySignals = ["the lesson is", "always remember", "you must", "never forget", "that is why bitcoin", "this proves"];
+const endingSignals = ["calm", "relieved", "reassured", "proud", "safe", "secure", "close", "gentle"];
 const numberWords = [
   "zero",
   "one",
@@ -90,6 +118,22 @@ function normalizedLower(value: string): string {
 
 function pageMentions(page: StoryPage, phrase: string): boolean {
   return normalizedLower(page.pageText).includes(normalizedLower(phrase));
+}
+
+function includesAnySignal(value: string, signals: string[]): boolean {
+  const lowered = normalizedLower(value);
+  return signals.some((signal) => lowered.includes(signal));
+}
+
+function bitcoinFramingPages(pages: StoryPage[], caregiverLabel: StoryConcept["caregiverLabel"]): StoryPage[] {
+  const caregiverTerm = caregiverLabel.toLowerCase();
+  return pages.filter((page) => {
+    const lowered = normalizedLower(page.pageText);
+    return (
+      lowered.includes(caregiverTerm) ||
+      bitcoinAdultFramingTerms.some((term) => lowered.includes(term))
+    );
+  });
 }
 
 function tokenizePageWords(text: string): string[] {
@@ -430,15 +474,44 @@ export function validateBitcoinUsage(
       message:
         policy.minimumBitcoinMentions > 1
           ? "Story must mention Bitcoin more than once so the caregiver or narrator framing feels meaningfully Bitcoin-forward."
-          : "Story must mention Bitcoin at least once in a way that supports the story theme."
+          : "Story must mention Bitcoin at least once in caregiver or narrator framing while the child's money problem stays primary."
     });
   }
 
   const finalPageIndex = Math.max(0, pages.length - 1);
-  if (policy.requireMentionBeforeEnding && !mentionPages.some((page) => page.pageIndex < finalPageIndex)) {
+  const endingWindowStart = Math.max(0, pages.length - policy.protectedEndingPageCount);
+  const preEndingMentionPages = mentionPages.filter((page) => page.pageIndex < finalPageIndex);
+  const earlyMentionPages = mentionPages.filter((page) => page.pageIndex < endingWindowStart);
+  if (policy.requireMentionBeforeEnding && preEndingMentionPages.length === 0) {
     issues.push({
       code: "BITCOIN_USAGE",
       message: "Story must name Bitcoin before the final page so it does not read like a last-page add-on."
+    });
+  }
+
+  if (policy.requireMentionBeforeEnding && earlyMentionPages.length === 0) {
+    issues.push({
+      code: "BITCOIN_USAGE",
+      message: `Story must establish Bitcoin before the final ${policy.protectedEndingPageCount} pages so the ending can stay warm instead of carrying all the Bitcoin weight.`
+    });
+  }
+
+  const framingPages = bitcoinFramingPages(mentionPages, concept.caregiverLabel);
+  if (mentionPages.length > 0 && framingPages.length === 0) {
+    issues.push({
+      code: "BITCOIN_POLICY",
+      message: `Bitcoin mentions must stay in ${concept.caregiverLabel} or narrator framing using grown-up language.`
+    });
+  }
+
+  if (
+    policy.requireMentionBeforeEnding &&
+    preEndingMentionPages.length > 0 &&
+    bitcoinFramingPages(preEndingMentionPages, concept.caregiverLabel).length === 0
+  ) {
+    issues.push({
+      code: "BITCOIN_POLICY",
+      message: "Bitcoin should be clearly named in caregiver or narrator framing before the ending, not saved for an unframed late mention."
     });
   }
 
@@ -474,6 +547,54 @@ export function validateBitcoinUsage(
       });
     }
   });
+
+  return { ok: issues.length === 0, issues };
+}
+
+export function validateStoryTone(
+  profile: ReadingProfile,
+  concept: StoryConcept,
+  pages: StoryPage[]
+): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  const policy = resolveBitcoinStoryPolicy({
+    lesson: concept.lessonScenario.moneyLessonKey,
+    profile,
+    pageCount: pages.length
+  });
+
+  if (!pages.some((page) => includesAnySignal(page.pageText, warmthSignals))) {
+    issues.push({
+      code: "EMOTIONAL_WARMTH",
+      message: "Story needs at least one warm, reassuring page-level moment to support the bedtime emotional arc."
+    });
+  }
+
+  const preachyPage = pages.find((page) => includesAnySignal(page.pageText, preachySignals));
+  if (preachyPage) {
+    const finalPage = pages[pages.length - 1];
+    issues.push({
+      code: "PREACHY_TONE",
+      message:
+        preachyPage.pageIndex === finalPage?.pageIndex && pageMentions(preachyPage, "bitcoin")
+          ? policy.endingLine
+          : "Story uses preachy caregiver or narrator language instead of calm, story-first guidance.",
+      pageStart: preachyPage.pageIndex,
+      pageEnd: preachyPage.pageIndex
+    });
+  }
+
+  const finalPage = pages[pages.length - 1];
+  if (finalPage && !includesAnySignal(finalPage.pageText, endingSignals)) {
+    issues.push({
+      code: "ENDING_EMOTION",
+      message: pageMentions(finalPage, "bitcoin")
+        ? policy.endingLine
+        : "Final page should land in reassurance, calm pride, safety, or relief.",
+      pageStart: finalPage.pageIndex,
+      pageEnd: finalPage.pageIndex
+    });
+  }
 
   return { ok: issues.length === 0, issues };
 }

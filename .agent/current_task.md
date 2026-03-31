@@ -1,8 +1,8 @@
 # Current Task
-Task ID: bitcoin-forward-prompt-alignment-01
+Task ID: bitcoin-forward-validator-alignment-01
 
 ## Goal
-Retune the shipped story prompts so the current single Bitcoin-forward posture reads clearly earlier and more often in caregiver or narrator framing while the child's money problem stays primary.
+Align deterministic beat and story validation to the shared Bitcoin-forward policy seam so salience, timing, safety, and ending checks agree while the child's money problem stays primary.
 
 ## Constraints
 - Keep the repo on `codex/bitcoin-forward-modes`.
@@ -12,13 +12,13 @@ Retune the shipped story prompts so the current single Bitcoin-forward posture r
   - no hype or investment promises
   - no technical or device-first framing
   - no child decoding or explaining Bitcoin
-- Use the existing shared Bitcoin-story policy seam instead of reintroducing scattered hard-coded prompt wording.
-- Keep endings emotionally warm and non-lecture-like across all current lessons.
+- Use the existing shared Bitcoin-story policy seam instead of reintroducing scattered hard-coded validator thresholds or wording.
+- Keep endings emotionally warm and non-lecture-like across all current lessons, and keep the child's concrete money problem primary.
 
 ## Plan (short)
-1. Audit prompt builders for any remaining gentle-secondary wording or missing Bitcoin-forward guidance.
-2. Tighten story concept, beat critic/rewrite, writer, and final critic wording around earlier recurring caregiver or narrator Bitcoin framing.
-3. Add focused prompt regressions for concept, critic, and rewrite behavior before moving to validator alignment.
+1. Completed: route domain validators and prompt deterministic checks through policy-backed Bitcoin salience, timing, framing, and ending expectations.
+2. Completed: add focused regressions for pre-ending distribution, caregiver or narrator framing, hype and technical bans, and warm-ending versus lecture-ending behavior.
+3. Next: move to `bitcoin-forward-fixtures-docs-01`.
 
 ## Evidence required
 - `pnpm --filter @book/domain test`
@@ -28,5 +28,5 @@ Retune the shipped story prompts so the current single Bitcoin-forward posture r
 
 ## Status
 - baseline: `bash scripts/agent/smoke.sh` PASS
-- work: completed 2026-03-30; story concept, beat critics, rewrite guidance, and prompt principles now align to the Bitcoin-forward seam without reintroducing lecture-like endings
-- next: `bitcoin-forward-validator-alignment-01`
+- work: completed 2026-03-30; validators now enforce policy-backed Bitcoin timing and framing, prompt-side deterministic checks share the same ending and safety logic, and focused regressions cover the new failure modes
+- next: `bitcoin-forward-fixtures-docs-01`

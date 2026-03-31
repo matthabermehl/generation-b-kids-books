@@ -12,6 +12,7 @@ export interface BitcoinStoryPolicy {
   lesson: MoneyLessonKey;
   profile: ReadingProfile;
   pageCount: number;
+  protectedEndingPageCount: number;
   minimumBitcoinMentions: number;
   minimumHighRelevanceScore: number;
   minimumHighRelevanceBeats: number;
@@ -53,6 +54,7 @@ export function resolveBitcoinStoryPolicy(
     lesson: context.lesson,
     profile: context.profile,
     pageCount,
+    protectedEndingPageCount: requiresRecurringBitcoin ? 2 : 1,
     minimumBitcoinMentions: requiresRecurringBitcoin ? 2 : 1,
     minimumHighRelevanceScore: 0.35,
     minimumHighRelevanceBeats: requiresRecurringBitcoin ? 2 : 1,

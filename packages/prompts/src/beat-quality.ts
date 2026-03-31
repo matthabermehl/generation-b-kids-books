@@ -93,6 +93,8 @@ export function runDeterministicBeatChecks(
     .map((beat, index) => ({ index, score: beat.bitcoinRelevanceScore }))
     .filter((entry) => entry.score >= policy.minimumHighRelevanceScore)
     .map((entry) => entry.index);
+  const endingWindowStart = Math.max(0, beats.length - policy.protectedEndingPageCount);
+  const earlyBitcoinBeatIndexes = bitcoinBeatIndexes.filter((index) => index < endingWindowStart);
 
   if (bitcoinBeatIndexes.length < policy.minimumHighRelevanceBeats) {
     issues.push({
@@ -100,12 +102,24 @@ export function runDeterministicBeatChecks(
       message:
         policy.minimumHighRelevanceBeats > 1
           ? `At least ${policy.minimumHighRelevanceBeats} beats must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin feels recurring and story-forward instead of late-only.`
-          : `At least one beat must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} to show Bitcoin positively supporting the story theme.`,
+          : `At least one beat must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin is explicitly story-forward in caregiver or narrator framing.`,
       details: {
         highBeatIndexes: bitcoinBeatIndexes,
         highBeatCount: bitcoinBeatIndexes.length,
         requiredThreshold: policy.minimumHighRelevanceScore,
         requiredHighBeatCount: policy.minimumHighRelevanceBeats
+      }
+    });
+  }
+
+  if (policy.requireMentionBeforeEnding && earlyBitcoinBeatIndexes.length === 0) {
+    issues.push({
+      code: "BITCOIN_THEME_INTEGRATION",
+      message: `At least one high-salience Bitcoin beat must land before the final ${policy.protectedEndingPageCount} beats so the ending does not carry all of the Bitcoin framing.`,
+      details: {
+        highBeatIndexes: bitcoinBeatIndexes,
+        earlyHighBeatIndexes: earlyBitcoinBeatIndexes,
+        endingWindowStart
       }
     });
   }

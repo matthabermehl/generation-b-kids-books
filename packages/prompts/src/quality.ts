@@ -15,6 +15,7 @@ import {
   validateNarrativeRatio,
   validatePageVariation,
   validateReadingProfile,
+  validateStoryTone,
   type ReadingProfile,
   type StoryConcept,
   type StoryPackage
@@ -32,15 +33,6 @@ export interface DeterministicStoryIssue {
 export interface QualitySummary {
   ok: boolean;
   issues: DeterministicStoryIssue[];
-}
-
-const warmthSignals = ["warm", "calm", "quiet", "gentle", "steady", "safe", "snug", "soft", "hand", "hug", "close", "relieved", "proud", "reassured", "secure"];
-const preachySignals = ["the lesson is", "always remember", "you must", "never forget", "that is why bitcoin", "this proves"];
-const endingSignals = ["calm", "relieved", "reassured", "proud", "safe", "secure", "close", "gentle"];
-
-function includesAnySignal(value: string, signals: string[]): boolean {
-  const lowered = value.toLowerCase();
-  return signals.some((signal) => lowered.includes(signal));
 }
 
 function wholeStoryRange(pages: StoryPage[]): { pageStart: number; pageEnd: number } {
@@ -172,40 +164,15 @@ export function runDeterministicStoryChecks(
     issues.push(...realism.issues.map((issue) => fromValidationIssue(pages, issue, "age_plausibility")));
   }
 
-  if (!pages.some((page) => includesAnySignal(page.pageText, warmthSignals))) {
+  const tone = validateStoryTone(profile, concept, pages);
+  if (!tone.ok) {
     issues.push(
-      deterministicIssue(
-        pages,
-        "emotional_tone",
-        "page",
-        "Story needs at least one warm, reassuring page-level moment to support the bedtime emotional arc.",
-        fullStoryRange
-      )
-    );
-  }
-
-  const preachyPage = pages.find((page) => includesAnySignal(page.pageText, preachySignals));
-  if (preachyPage) {
-    issues.push(
-      deterministicIssue(
-        pages,
-        "emotional_tone",
-        "page",
-        "Story uses preachy caregiver or narrator language instead of calm, story-first guidance.",
-        { pageStart: preachyPage.pageIndex, pageEnd: preachyPage.pageIndex }
-      )
-    );
-  }
-
-  const finalPage = pages[pages.length - 1];
-  if (finalPage && !includesAnySignal(finalPage.pageText, endingSignals)) {
-    issues.push(
-      deterministicIssue(
-        pages,
-        "ending_emotion",
-        "page",
-        "Final page should land in reassurance, calm pride, safety, or relief.",
-        { pageStart: finalPage.pageIndex, pageEnd: finalPage.pageIndex }
+      ...tone.issues.map((issue) =>
+        fromValidationIssue(
+          pages,
+          issue,
+          issue.code === "ENDING_EMOTION" ? "ending_emotion" : "emotional_tone"
+        )
       )
     );
   }
