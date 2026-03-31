@@ -14,6 +14,7 @@ const context = {
   pronouns: "she/her",
   ageYears: 7,
   lesson: "jar_saving_limits" as const,
+  storyMode: "bitcoin_forward" as const,
   interests: ["space"],
   profile: "early_decoder_5_7" as const,
   pageCount: 4
@@ -673,7 +674,8 @@ describe("llm provider routing", () => {
               repetitionTargets: ["save"]
             })),
             readingProfileId: context.profile,
-            moneyLessonKey: context.lesson
+            moneyLessonKey: context.lesson,
+            storyMode: context.storyMode
           },
           criticVerdict: {
             ok: false,
@@ -795,7 +797,8 @@ describe("llm provider routing", () => {
                 repetitionTargets: ["fair"]
               })),
               readingProfileId: "read_aloud_3_4",
-              moneyLessonKey: "better_rules"
+              moneyLessonKey: "better_rules",
+              storyMode: betterRulesContext.storyMode
             },
             criticVerdict: {
               ok: false,
@@ -918,7 +921,8 @@ describe("llm provider routing", () => {
                 repetitionTargets: ["fair"]
               })),
               readingProfileId: "early_decoder_5_7",
-              moneyLessonKey: "new_money_unfair"
+              moneyLessonKey: "new_money_unfair",
+              storyMode: unfairContext.storyMode
             },
             criticVerdict: {
               ok: false,
@@ -1025,7 +1029,8 @@ describe("llm provider routing", () => {
           repetitionTargets: []
         })),
         readingProfileId: "read_aloud_3_4",
-        moneyLessonKey: "better_rules"
+        moneyLessonKey: "better_rules",
+        storyMode: "bitcoin_forward"
       }
     );
 

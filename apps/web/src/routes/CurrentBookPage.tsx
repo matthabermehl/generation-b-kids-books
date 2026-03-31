@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useParentFlow } from "@/lib/parent-flow";
+import { getStoryModeLabel } from "@/lib/story-modes";
 
 export function CurrentBookPage() {
   const [showTranscript, setShowTranscript] = useState(false);
@@ -85,6 +86,10 @@ export function CurrentBookPage() {
                   </div>
                   {bookPayload ? (
                     <div className="sw-meta-grid sw-meta-grid--two grid gap-4 text-sm sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Story mode</p>
+                        <p className="mt-1 text-slate-900">{getStoryModeLabel(bookPayload.storyMode)}</p>
+                      </div>
                       <div>
                         <p className="text-xs font-medium tracking-[0.16em] text-slate-500 uppercase">Spreads</p>
                         <p className="mt-1 text-slate-900">{bookPayload.spreadCount}</p>

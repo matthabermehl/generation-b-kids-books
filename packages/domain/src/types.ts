@@ -7,7 +7,8 @@ import type {
   ReviewAction,
   ReviewCaseStatus,
   ReviewStage,
-  ReadingProfile
+  ReadingProfile,
+  StoryMode
 } from "./enums.js";
 
 export interface CreateOrderInput {
@@ -15,6 +16,7 @@ export interface CreateOrderInput {
   pronouns: string;
   ageYears: number;
   moneyLessonKey: MoneyLessonKey;
+  storyMode: StoryMode;
   interestTags: string[];
   readingProfileId: ReadingProfile;
   characterDescription: string;
@@ -137,6 +139,7 @@ export interface StoryPackage {
   pages: StoryPage[];
   readingProfileId: ReadingProfile;
   moneyLessonKey: MoneyLessonKey;
+  storyMode: StoryMode;
 }
 
 export type StoryCriticIssueType =

@@ -8,6 +8,9 @@ export const moneyLessonKeys = [
 
 export type MoneyLessonKey = (typeof moneyLessonKeys)[number];
 
+export const storyModes = ["sound_money_implicit", "bitcoin_reveal_8020", "bitcoin_forward"] as const;
+export type StoryMode = (typeof storyModes)[number];
+
 export const readingProfiles = [
   "read_aloud_3_4",
   "early_decoder_5_7",

@@ -95,6 +95,35 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-31T19:04:00-0400
+Task: bitcoin-story-modes-contract-persistence-01
+Baseline: `bash scripts/agent/smoke.sh` PASS on `codex/bitcoin-story-modes`
+Change: added a first-class `StoryMode` enum and persisted `story_mode` book field, threaded the selected mode through create-order domain/API/web/worker contracts, exposed a parent-visible create-flow selector plus checkout/current-book summaries, and tightened the immediate prompt/validator/test fixtures needed to keep the repo green against the new contract.
+Evidence:
+- `bash scripts/agent/smoke.sh` => PASS
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/api test` => PASS
+- `pnpm --filter @book/web test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-story-modes-contract-persistence-01` passes=false -> true
+Next: `bitcoin-story-modes-policy-prompt-01`
+Notes: the first `bash scripts/agent/smoke.sh` run hit a renderer timeout in cold image-heavy tests, but the immediate rerun passed cleanly after caches warmed; `bash scripts/agent/quality.sh` passed on the same code.
+Commit: pending
+
+2026-03-31T18:35:17-0400
+Task: bitcoin-story-modes-planning
+Baseline: `bash scripts/agent/smoke.sh` PASS
+Change: refreshed the managed harness, rewrote `beforebranch.md` for the actual three-mode goal, archived the completed single-mode plan to `docs/exec-plans/completed/004-bitcoin-forward-modes.md`, added active execution plan `docs/exec-plans/active/005-bitcoin-story-modes.md`, seeded five new failing `bitcoin-story-modes-*` tasks, and repointed `.agent/current_task.md` to the first contract/persistence slice on branch `codex/bitcoin-story-modes`.
+Evidence:
+- `bash scripts/agent/smoke.sh` => PASS
+- `git switch -c codex/bitcoin-story-modes` => PASS
+- `bash ~/.codex/skills/harness-update-existing-repo/scripts/run.sh --target .` => PASS
+- `scripts/agent/feature_list.py list --limit 10` => PASS (shows new failing `bitcoin-story-modes-*` tasks with `bitcoin-story-modes-contract-persistence-01` first)
+Notes: the previous `bitcoin-forward-*` work remains preserved as completed history, but it is no longer the active product direction; the new initiative intentionally widens UI/API/DB contracts to make the story mode dial real and deterministic.
+Commit: pending
+
 2026-03-25T12:07:24-0400
 Task: lesson-taxonomy-refresh-01 / story-emotional-vision-prompting-01 / story-emotional-vision-docs-01 / story-emotional-vision-deploy-smoke-01 / story-emotional-vision-sample-download-01
 Baseline: `bash scripts/agent/smoke.sh` PASS

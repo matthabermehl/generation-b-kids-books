@@ -75,7 +75,8 @@ describe("runDeterministicStoryChecks", () => {
         beats,
         pages,
         readingProfileId: "read_aloud_3_4",
-        moneyLessonKey: "jar_saving_limits"
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_forward"
       },
       concept,
       true
@@ -102,7 +103,8 @@ describe("runDeterministicStoryChecks", () => {
         beats,
         pages,
         readingProfileId: "read_aloud_3_4",
-        moneyLessonKey: "jar_saving_limits"
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_forward"
       },
       concept,
       true
@@ -138,7 +140,8 @@ describe("runDeterministicStoryChecks", () => {
         beats,
         pages,
         readingProfileId: "read_aloud_3_4",
-        moneyLessonKey: "jar_saving_limits"
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_forward"
       },
       concept,
       true
@@ -170,7 +173,8 @@ describe("runDeterministicStoryChecks", () => {
         beats,
         pages,
         readingProfileId: "read_aloud_3_4",
-        moneyLessonKey: "better_rules"
+        moneyLessonKey: "better_rules",
+        storyMode: "bitcoin_forward"
       },
       {
         ...concept,
@@ -227,7 +231,8 @@ describe("runDeterministicStoryChecks", () => {
         beats,
         pages,
         readingProfileId: "read_aloud_3_4",
-        moneyLessonKey: "jar_saving_limits"
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_forward"
       },
       concept,
       true
@@ -269,7 +274,8 @@ describe("runDeterministicStoryChecks", () => {
         beats,
         pages,
         readingProfileId: "early_decoder_5_7",
-        moneyLessonKey: "jar_saving_limits"
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_forward"
       },
       concept,
       true
@@ -304,7 +310,8 @@ describe("runDeterministicStoryChecks", () => {
         beats,
         pages,
         readingProfileId: "read_aloud_3_4",
-        moneyLessonKey: "jar_saving_limits"
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_forward"
       },
       concept,
       true

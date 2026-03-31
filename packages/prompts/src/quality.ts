@@ -124,12 +124,12 @@ export function runDeterministicStoryChecks(
     issues.push(...caregiver.issues.map((issue) => fromValidationIssue(pages, issue, "caregiver_consistency")));
   }
 
-  const title = validateBitcoinStoryTitle(profile, concept, story.title, pages.length);
+  const title = validateBitcoinStoryTitle(profile, story.storyMode ?? "bitcoin_forward", concept, story.title, pages.length);
   if (!title.ok) {
     issues.push(...title.issues.map((issue) => fromValidationIssue(pages, issue, "theme_integration")));
   }
 
-  const bitcoinUsage = validateBitcoinUsage(profile, concept, pages);
+  const bitcoinUsage = validateBitcoinUsage(profile, story.storyMode ?? "bitcoin_forward", concept, pages);
   if (!bitcoinUsage.ok) {
     issues.push(
       ...bitcoinUsage.issues.map((issue) =>
@@ -164,7 +164,7 @@ export function runDeterministicStoryChecks(
     issues.push(...realism.issues.map((issue) => fromValidationIssue(pages, issue, "age_plausibility")));
   }
 
-  const tone = validateStoryTone(profile, concept, pages);
+  const tone = validateStoryTone(profile, story.storyMode ?? "bitcoin_forward", concept, pages);
   if (!tone.ok) {
     issues.push(
       ...tone.issues.map((issue) =>

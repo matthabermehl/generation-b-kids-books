@@ -6,7 +6,7 @@ import type {
   StoryCriticVerdict,
   StoryPackage
 } from "./types.js";
-import type { MoneyLessonKey, ReadingProfile } from "./enums.js";
+import type { MoneyLessonKey, ReadingProfile, StoryMode } from "./enums.js";
 
 export interface ProviderUsage {
   promptTokens: number;
@@ -37,6 +37,7 @@ export interface StoryGenerationContext {
   pronouns: string;
   ageYears: number;
   lesson: MoneyLessonKey;
+  storyMode: StoryMode;
   interests: string[];
   profile: ReadingProfile;
   pageCount: number;

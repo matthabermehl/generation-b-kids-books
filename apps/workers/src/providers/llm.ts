@@ -5,6 +5,7 @@ import type {
   StoryConcept,
   StoryDraftOptions,
   StoryCriticVerdict,
+  StoryMode,
   StoryPackage
 } from "@book/domain";
 import {
@@ -51,6 +52,7 @@ export interface StoryContext {
   pronouns: string;
   ageYears: number;
   lesson: MoneyLessonKey;
+  storyMode: StoryMode;
   interests: string[];
   profile: ReadingProfile;
   pageCount: number;
@@ -1075,7 +1077,7 @@ function buildMockStoryConcept(context: StoryContext): StoryConcept {
   const baseConcept = {
     premise: `${context.childFirstName} lives through a small money moment that reveals ${lessonDefinition.label.toLowerCase()}.`,
     caregiverLabel: "Mom" as const,
-    bitcoinBridge: buildBitcoinStoryBridgeText("Mom", context.lesson),
+    bitcoinBridge: buildBitcoinStoryBridgeText("Mom", context.lesson, context.storyMode),
     emotionalPromise: `Move from uncertainty to understanding, then to ${lessonDefinition.emotionalArcTarget}.`,
     caregiverWarmthMoment: `Mom kneels beside ${context.childFirstName}, names the feeling, and offers a calm next step.`,
     bitcoinValueThread: lessonDefinition.bitcoinValueThread,
@@ -1185,12 +1187,21 @@ function buildMockStoryConcept(context: StoryContext): StoryConcept {
 }
 
 function mockBitcoinBeatIndexes(context: StoryContext): number[] {
+  if (context.storyMode === "sound_money_implicit") {
+    return [];
+  }
+
   if (context.pageCount <= 1) {
     return [0];
   }
 
   const indexes = new Set<number>();
-  if (context.pageCount >= 4) {
+  if (context.storyMode === "bitcoin_reveal_8020") {
+    indexes.add(Math.max(0, context.pageCount - 2));
+    if (context.pageCount >= 8) {
+      indexes.add(Math.max(0, context.pageCount - 3));
+    }
+  } else if (context.pageCount >= 4) {
     indexes.add(1);
     indexes.add(Math.max(1, context.pageCount - 2));
   } else if (context.pageCount === 3) {
@@ -1224,6 +1235,10 @@ function mockPageTextForBeat(context: StoryContext, concept: StoryConcept, idx: 
   const bitcoinBeatIndexes = new Set(mockBitcoinBeatIndexes(context));
   if (idx === total - 1) {
     return `${concept.caregiverLabel} held ${context.childFirstName} close. ${context.childFirstName} felt relieved, safe, and proud.`;
+  }
+
+  if (context.storyMode === "sound_money_implicit") {
+    return `${context.childFirstName} noticed ${highlight} and took one small, steady step forward.`;
   }
 
   if (bitcoinBeatIndexes.has(idx)) {
@@ -1287,7 +1302,14 @@ class MockLlmProvider implements LlmProvider {
           pageIndexEstimate: idx,
           decodabilityTags: ["controlled_vocab", "repetition", "taught_words_late"],
           newWordsIntroduced: ["save"],
-          bitcoinRelevanceScore: bitcoinBeatIndexes.has(idx) ? 0.7 : idx === context.pageCount - 1 ? 0.3 : 0.15,
+          bitcoinRelevanceScore:
+            context.storyMode === "sound_money_implicit"
+              ? 0.15
+              : bitcoinBeatIndexes.has(idx)
+                ? 0.7
+                : idx === context.pageCount - 1
+                  ? 0.3
+                  : 0.15,
           introduces: idx === 0 ? concept.requiredSetups.slice(0, 2) : [],
           paysOff: idx === context.pageCount - 1 ? concept.requiredPayoffs.slice(0, 2) : [],
           continuityFacts: [
@@ -1304,6 +1326,7 @@ class MockLlmProvider implements LlmProvider {
       {
         profile: context.profile,
         lesson: context.lesson,
+        storyMode: context.storyMode,
         ageYears: context.ageYears,
         pageCount: context.pageCount
       },
@@ -1374,7 +1397,8 @@ class MockLlmProvider implements LlmProvider {
         beats: beatSheet.beats,
         pages,
         readingProfileId: context.profile,
-        moneyLessonKey: context.lesson
+        moneyLessonKey: context.lesson,
+        storyMode: context.storyMode
       },
       meta: {
         provider: "mock",
@@ -1491,6 +1515,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
         {
           profile: context.profile,
           lesson: context.lesson,
+          storyMode: context.storyMode,
           ageYears: context.ageYears,
           pageCount: context.pageCount
         },
@@ -1588,6 +1613,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
       {
         profile: context.profile,
         lesson: context.lesson,
+        storyMode: context.storyMode,
         ageYears: context.ageYears,
         pageCount: context.pageCount
       },
@@ -1655,9 +1681,10 @@ class OpenAiAnthropicProvider implements LlmProvider {
           sceneVisualDescription: page.sceneVisualDescription,
           newWordsIntroduced: page.newWordsIntroduced,
           repetitionTargets: page.repetitionTargets
-        })),
+      })),
       readingProfileId: context.profile,
-      moneyLessonKey: context.lesson
+      moneyLessonKey: context.lesson,
+      storyMode: context.storyMode
     };
 
     if (story.pages.length !== context.pageCount) {

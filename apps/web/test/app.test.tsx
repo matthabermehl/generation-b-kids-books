@@ -59,6 +59,7 @@ function buildFetchStub({
             childFirstName: "Ava",
             readingProfileId: "early_decoder_5_7",
             moneyLessonKey: "jar_saving_limits",
+            storyMode: "bitcoin_forward",
             spreadCount: 12,
             physicalPageCount: 24
           },
@@ -102,6 +103,7 @@ function buildFetchStub({
           bookId: "book-1",
           childProfileId: "child-1",
           bookStatus: "building",
+          storyMode: "bitcoin_forward",
           createdAt: "2026-03-08T12:00:00.000Z"
         }
       );
@@ -210,6 +212,7 @@ describe("web app", () => {
         bookId: "book-1",
         childProfileId: "child-1",
         bookStatus: "building",
+        storyMode: "bitcoin_forward",
         createdAt: "2026-03-08T12:00:00.000Z"
       })
     );
@@ -236,6 +239,7 @@ describe("web app", () => {
         bookId: "book-1",
         childProfileId: "child-1",
         bookStatus: "draft",
+        storyMode: "bitcoin_forward",
         createdAt: "2026-03-08T12:00:00.000Z"
       })
     );
@@ -296,6 +300,7 @@ describe("web app", () => {
         bookId: "book-1",
         childProfileId: "child-1",
         bookStatus: "draft",
+        storyMode: "bitcoin_forward",
         createdAt: "2026-03-08T12:00:00.000Z"
       })
     );
@@ -310,6 +315,7 @@ describe("web app", () => {
           bookId: "book-1",
           childProfileId: "child-1",
           bookStatus: "draft",
+          storyMode: "bitcoin_forward",
           createdAt: "2026-03-08T12:00:00.000Z"
         },
         characterState: {
@@ -345,6 +351,7 @@ describe("web app", () => {
         bookId: "book-1",
         childProfileId: "child-1",
         bookStatus: "draft",
+        storyMode: "bitcoin_forward",
         createdAt: "2026-03-08T12:00:00.000Z"
       })
     );
@@ -359,6 +366,7 @@ describe("web app", () => {
           bookId: "book-1",
           childProfileId: "child-1",
           bookStatus: "draft",
+          storyMode: "bitcoin_forward",
           createdAt: "2026-03-08T12:00:00.000Z"
         },
         characterState: {
@@ -413,6 +421,7 @@ describe("web app", () => {
             childFirstName: "Ava",
             readingProfileId: "early_decoder_5_7",
             moneyLessonKey: "jar_saving_limits",
+            storyMode: "bitcoin_forward",
             pageCount: 8,
             latestAction: null,
             latestReviewerEmail: null

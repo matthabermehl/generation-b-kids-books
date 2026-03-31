@@ -143,6 +143,7 @@ describe("pipeline beat-planning failure persistence", () => {
             pronouns: "she/her",
             reading_profile_id: "early_decoder_5_7",
             money_lesson_key: "jar_saving_limits",
+            story_mode: "bitcoin_forward",
             interest_tags: "space,soccer"
           }
         ];
@@ -341,7 +342,8 @@ describe("pipeline beat-planning failure persistence", () => {
             repetitionTargets: ["save"]
           })),
           readingProfileId: "early_decoder_5_7",
-          moneyLessonKey: "jar_saving_limits"
+          moneyLessonKey: "jar_saving_limits",
+          storyMode: "bitcoin_forward"
         },
         meta: {
           provider: "anthropic",
@@ -527,7 +529,8 @@ describe("pipeline beat-planning failure persistence", () => {
           repetitionTargets: ["save"]
         })),
         readingProfileId: "early_decoder_5_7",
-        moneyLessonKey: "jar_saving_limits"
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_forward"
       },
       meta: {
         provider: "openai",
@@ -706,7 +709,8 @@ describe("pipeline beat-planning failure persistence", () => {
         }
       ],
       readingProfileId: "early_decoder_5_7",
-      moneyLessonKey: "jar_saving_limits"
+      moneyLessonKey: "jar_saving_limits",
+      storyMode: "bitcoin_forward"
     });
 
     await expect(handler({ action: "resume_after_story_review", bookId: "book-1" })).resolves.toEqual({

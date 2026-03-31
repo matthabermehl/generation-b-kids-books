@@ -140,6 +140,7 @@
           "pronouns",
           "ageYears",
           "moneyLessonKey",
+          "storyMode",
           "interestTags",
           "readingProfileId",
           "characterDescription"
@@ -166,6 +167,14 @@
               "new_money_unfair",
               "keep_what_you_earn",
               "better_rules"
+            ]
+          },
+          "storyMode": {
+            "type": "string",
+            "enum": [
+              "sound_money_implicit",
+              "bitcoin_reveal_8020",
+              "bitcoin_forward"
             ]
           },
           "interestTags": {
@@ -198,7 +207,8 @@
           "bookId",
           "childProfileId",
           "status",
-          "checkoutMode"
+          "checkoutMode",
+          "storyMode"
         ],
         "properties": {
           "orderId": {
@@ -223,6 +233,14 @@
             "type": "string",
             "enum": [
               "stripe"
+            ]
+          },
+          "storyMode": {
+            "type": "string",
+            "enum": [
+              "sound_money_implicit",
+              "bitcoin_reveal_8020",
+              "bitcoin_forward"
             ]
           }
         }
@@ -448,7 +466,8 @@
           "createdAt",
           "bookId",
           "bookStatus",
-          "childProfileId"
+          "childProfileId",
+          "storyMode"
         ],
         "properties": {
           "orderId": {
@@ -488,6 +507,14 @@
           "childProfileId": {
             "type": "string",
             "format": "uuid"
+          },
+          "storyMode": {
+            "type": "string",
+            "enum": [
+              "sound_money_implicit",
+              "bitcoin_reveal_8020",
+              "bitcoin_forward"
+            ]
           }
         }
       },
@@ -499,6 +526,7 @@
           "childFirstName",
           "readingProfileId",
           "moneyLessonKey",
+          "storyMode",
           "spreadCount",
           "physicalPageCount",
           "pages"
@@ -537,6 +565,14 @@
               "new_money_unfair",
               "keep_what_you_earn",
               "better_rules"
+            ]
+          },
+          "storyMode": {
+            "type": "string",
+            "enum": [
+              "sound_money_implicit",
+              "bitcoin_reveal_8020",
+              "bitcoin_forward"
             ]
           },
           "productFamily": {
@@ -651,6 +687,7 @@
                 "childFirstName",
                 "readingProfileId",
                 "moneyLessonKey",
+                "storyMode",
                 "pageCount"
               ],
               "properties": {
@@ -738,6 +775,14 @@
                     "new_money_unfair",
                     "keep_what_you_earn",
                     "better_rules"
+                  ]
+                },
+                "storyMode": {
+                  "type": "string",
+                  "enum": [
+                    "sound_money_implicit",
+                    "bitcoin_reveal_8020",
+                    "bitcoin_forward"
                   ]
                 },
                 "pageCount": {
@@ -861,6 +906,7 @@
               "childFirstName",
               "readingProfileId",
               "moneyLessonKey",
+              "storyMode",
               "spreadCount",
               "physicalPageCount"
             ],
@@ -898,6 +944,14 @@
                   "new_money_unfair",
                   "keep_what_you_earn",
                   "better_rules"
+                ]
+              },
+              "storyMode": {
+                "type": "string",
+                "enum": [
+                  "sound_money_implicit",
+                  "bitcoin_reveal_8020",
+                  "bitcoin_forward"
                 ]
               },
               "spreadCount": {

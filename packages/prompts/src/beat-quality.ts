@@ -1,4 +1,10 @@
-import { resolveBitcoinStoryPolicy, type BeatSheet, type MoneyLessonKey, type ReadingProfile } from "@book/domain";
+import {
+  resolveBitcoinStoryPolicy,
+  type BeatSheet,
+  type MoneyLessonKey,
+  type ReadingProfile,
+  type StoryMode
+} from "@book/domain";
 
 const fantasyTerms = [
   "dragon",
@@ -30,6 +36,7 @@ export interface BeatDeterministicSummary {
 export interface BeatValidationContext {
   profile: ReadingProfile;
   lesson?: MoneyLessonKey;
+  storyMode?: StoryMode;
   ageYears: number;
   pageCount: number;
 }
@@ -74,6 +81,7 @@ export function runDeterministicBeatChecks(
   const policy = resolveBitcoinStoryPolicy({
     lesson: context.lesson ?? "jar_saving_limits",
     profile: context.profile,
+    storyMode: context.storyMode,
     ageYears: context.ageYears,
     pageCount: context.pageCount
   });
@@ -100,7 +108,9 @@ export function runDeterministicBeatChecks(
     issues.push({
       code: "BITCOIN_THEME_INTEGRATION",
       message:
-        policy.minimumHighRelevanceBeats > 1
+        policy.minimumHighRelevanceBeats === 0
+          ? "Do not make any beat explicitly Bitcoin-forward in this implicit mode."
+          : policy.minimumHighRelevanceBeats > 1
           ? `At least ${policy.minimumHighRelevanceBeats} beats must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin feels recurring and story-forward instead of late-only.`
           : `At least one beat must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin is explicitly story-forward in caregiver or narrator framing.`,
       details: {
@@ -110,6 +120,40 @@ export function runDeterministicBeatChecks(
         requiredHighBeatCount: policy.minimumHighRelevanceBeats
       }
     });
+  }
+
+  if (policy.maximumHighRelevanceBeats !== null && bitcoinBeatIndexes.length > policy.maximumHighRelevanceBeats) {
+    issues.push({
+      code: "BITCOIN_THEME_INTEGRATION",
+      message:
+        context.storyMode === "sound_money_implicit"
+          ? `No beat should use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} because this mode keeps Bitcoin implicit.`
+          : "Beat sheet contains more high-salience Bitcoin beats than this mode allows.",
+      details: {
+        highBeatIndexes: bitcoinBeatIndexes,
+        highBeatCount: bitcoinBeatIndexes.length,
+        allowedHighBeatCount: policy.maximumHighRelevanceBeats
+      }
+    });
+  }
+
+  if (
+    policy.maximumHighRelevanceBeatsBeforePageIndex !== null &&
+    policy.revealStartPageIndex !== null
+  ) {
+    const revealStartBeatIndex = policy.revealStartPageIndex;
+    const preRevealBitcoinBeatIndexes = bitcoinBeatIndexes.filter((index) => index < revealStartBeatIndex);
+    if (preRevealBitcoinBeatIndexes.length > policy.maximumHighRelevanceBeatsBeforePageIndex) {
+      issues.push({
+        code: "BITCOIN_THEME_INTEGRATION",
+        message: `High-salience Bitcoin beats must not appear before beat ${revealStartBeatIndex + 1} in late-reveal mode.`,
+        details: {
+          highBeatIndexes: bitcoinBeatIndexes,
+          preRevealBitcoinBeatIndexes,
+          revealStartBeatIndex
+        }
+      });
+    }
   }
 
   if (policy.requireMentionBeforeEnding && earlyBitcoinBeatIndexes.length === 0) {

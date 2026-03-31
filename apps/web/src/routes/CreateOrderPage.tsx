@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
 import { orderedMoneyLessons, type LessonKey } from "@/lib/money-lessons";
 import { readingProfileOptions, type ReadingProfile, useParentFlow, validateAgeYears } from "@/lib/parent-flow";
+import { storyModeOptions } from "@/lib/story-modes";
 import { cn } from "@/lib/utils";
 
 function formatAttemptTime(value: string) {
@@ -229,6 +230,38 @@ export function CreateOrderPage() {
               <p className="sw-field-note text-sm text-slate-500">
                 Choose the question you want the bedtime story to help your child gently understand.
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="story-mode">Story mode</Label>
+              <div id="story-mode" className="grid gap-3" role="radiogroup" aria-label="Story mode">
+                {storyModeOptions.map((mode) => {
+                  const selected = draft.storyMode === mode.value;
+                  return (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      disabled={hasActiveOrder}
+                      onClick={() => updateDraft("storyMode", mode.value)}
+                      className={cn(
+                        "w-full rounded-3xl border bg-white px-5 py-4 text-left transition",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400",
+                        hasActiveOrder && "cursor-not-allowed opacity-70",
+                        selected
+                          ? "border-slate-900 shadow-sm ring-1 ring-slate-900/10"
+                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/70"
+                      )}
+                    >
+                      <div className="space-y-1">
+                        <p className="font-medium text-slate-900">{mode.label}</p>
+                        <p className="text-sm text-slate-500">{mode.helperText}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-2">

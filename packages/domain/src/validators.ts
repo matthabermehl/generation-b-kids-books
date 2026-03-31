@@ -1,4 +1,4 @@
-import { type ReadingProfile } from "./enums.js";
+import { type ReadingProfile, type StoryMode } from "./enums.js";
 import { bitcoinStoryTitlePolicyIssue, resolveBitcoinStoryPolicy } from "./bitcoin-story-policy.js";
 import { storyConceptDeadlineEvent, storyConceptEarningOptionLabels } from "./story-concepts.js";
 import type { StoryConcept, StoryPackage, StoryPage } from "./types.js";
@@ -438,6 +438,7 @@ export function validateCaregiverConsistency(
 
 export function validateBitcoinStoryTitle(
   profile: ReadingProfile,
+  storyMode: StoryMode,
   concept: StoryConcept,
   title: string,
   pageCount: number
@@ -445,6 +446,7 @@ export function validateBitcoinStoryTitle(
   const issue = bitcoinStoryTitlePolicyIssue(title, {
     lesson: concept.lessonScenario.moneyLessonKey,
     profile,
+    storyMode,
     pageCount
   });
 
@@ -463,6 +465,7 @@ export function validateBitcoinStoryTitle(
 
 export function validateBitcoinUsage(
   profile: ReadingProfile,
+  storyMode: StoryMode,
   concept: StoryConcept,
   pages: StoryPage[]
 ): ValidationResult {
@@ -474,14 +477,29 @@ export function validateBitcoinUsage(
   const policy = resolveBitcoinStoryPolicy({
     lesson: concept.lessonScenario.moneyLessonKey,
     profile,
+    storyMode,
     pageCount: pages.length
   });
   const mentionPages = pages.filter((page) => pageMentions(page, "bitcoin"));
+  if (policy.maximumBitcoinMentions !== null && mentionPages.length > policy.maximumBitcoinMentions) {
+    issues.push({
+      code: "BITCOIN_USAGE",
+      message:
+        storyMode === "sound_money_implicit"
+          ? "Sound-money-implicit mode must not name Bitcoin anywhere in the story."
+          : "Story mentions Bitcoin more often than this mode allows."
+    });
+  }
+
   if (mentionPages.length < policy.minimumBitcoinMentions) {
     issues.push({
       code: "BITCOIN_USAGE",
       message:
-        policy.minimumBitcoinMentions > 1
+        storyMode === "bitcoin_reveal_8020"
+          ? policy.minimumBitcoinMentions > 1
+            ? "Story must reveal Bitcoin late and more than once so the solution lands clearly before the warm ending."
+            : "Story must reveal Bitcoin late in caregiver or narrator framing before the ending."
+          : policy.minimumBitcoinMentions > 1
           ? "Story must mention Bitcoin more than once so the caregiver or narrator framing feels meaningfully Bitcoin-forward."
           : "Story must mention Bitcoin at least once in caregiver or narrator framing while the child's money problem stays primary."
     });
@@ -491,22 +509,45 @@ export function validateBitcoinUsage(
   const endingWindowStart = Math.max(0, pages.length - policy.protectedEndingPageCount);
   const preEndingMentionPages = mentionPages.filter((page) => page.pageIndex < finalPageIndex);
   const earlyMentionPages = mentionPages.filter((page) => page.pageIndex < endingWindowStart);
+  const revealStartPageIndex = policy.revealStartPageIndex;
+  const preRevealMentionPages =
+    revealStartPageIndex === null
+      ? []
+      : mentionPages.filter((page) => page.pageIndex < revealStartPageIndex);
+
+  if (
+    policy.maximumBitcoinMentionsBeforePageIndex !== null &&
+    revealStartPageIndex !== null &&
+    preRevealMentionPages.length > policy.maximumBitcoinMentionsBeforePageIndex
+  ) {
+    issues.push({
+      code: "BITCOIN_USAGE",
+      message: `Story must not name Bitcoin before page ${revealStartPageIndex + 1} in this late-reveal mode.`
+    });
+  }
+
   if (policy.requireMentionBeforeEnding && preEndingMentionPages.length === 0) {
     issues.push({
       code: "BITCOIN_USAGE",
-      message: "Story must name Bitcoin before the final page so it does not read like a last-page add-on."
+      message:
+        storyMode === "bitcoin_reveal_8020"
+          ? "Story must reveal Bitcoin before the final page so the ending does not carry the entire explanation."
+          : "Story must name Bitcoin before the final page so it does not read like a last-page add-on."
     });
   }
 
   if (policy.requireMentionBeforeEnding && earlyMentionPages.length === 0) {
     issues.push({
       code: "BITCOIN_USAGE",
-      message: `Story must establish Bitcoin before the final ${policy.protectedEndingPageCount} pages so the ending can stay warm instead of carrying all the Bitcoin weight.`
+      message:
+        storyMode === "bitcoin_reveal_8020"
+          ? `Story must reveal Bitcoin by page ${Math.max(1, endingWindowStart)} so the final page can stay warm instead of carrying all the explanation.`
+          : `Story must establish Bitcoin before the final ${policy.protectedEndingPageCount} pages so the ending can stay warm instead of carrying all the Bitcoin weight.`
     });
   }
 
   const framingPages = bitcoinFramingPages(mentionPages, concept.caregiverLabel);
-  if (mentionPages.length > 0 && framingPages.length === 0) {
+  if (storyMode !== "sound_money_implicit" && mentionPages.length > 0 && framingPages.length === 0) {
     issues.push({
       code: "BITCOIN_POLICY",
       message: `Bitcoin mentions must stay in ${concept.caregiverLabel} or narrator framing using grown-up language.`
@@ -562,6 +603,7 @@ export function validateBitcoinUsage(
 
 export function validateStoryTone(
   profile: ReadingProfile,
+  storyMode: StoryMode,
   concept: StoryConcept,
   pages: StoryPage[]
 ): ValidationResult {
@@ -569,6 +611,7 @@ export function validateStoryTone(
   const policy = resolveBitcoinStoryPolicy({
     lesson: concept.lessonScenario.moneyLessonKey,
     profile,
+    storyMode,
     pageCount: pages.length
   });
 

@@ -7,6 +7,7 @@ import {
   type CreateOrderResponse,
   type OrderResponse
 } from "@/lib/api/client";
+import type { StoryMode } from "@book/domain";
 import type { LessonKey } from "@/lib/money-lessons";
 import { sanitizeBookPayload, toSafeAssetUrl, toSafeCheckoutUrl } from "@/lib/safe-url";
 import { useSession } from "@/lib/session";
@@ -24,6 +25,7 @@ export interface ParentDraft {
   pronouns: string;
   ageYears: number;
   moneyLessonKey: LessonKey;
+  storyMode: StoryMode;
   interestTags: string;
   readingProfileId: ReadingProfile;
   characterDescription: string;
@@ -73,6 +75,7 @@ const defaultDraft: ParentDraft = {
   pronouns: "she/her",
   ageYears: 6,
   moneyLessonKey: "jar_saving_limits",
+  storyMode: "bitcoin_forward",
   interestTags: "baking,forest,bikes",
   readingProfileId: "early_decoder_5_7",
   characterDescription:
@@ -285,6 +288,7 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
             pronouns: draft.pronouns,
             ageYears: draft.ageYears,
             moneyLessonKey: draft.moneyLessonKey,
+            storyMode: draft.storyMode,
             interestTags: draft.interestTags
               .split(",")
               .map((tag) => tag.trim())
@@ -300,6 +304,7 @@ export function ParentFlowProvider({ children }: { children: React.ReactNode }) 
             bookId: payload.bookId,
             childProfileId: payload.childProfileId,
             bookStatus: "draft",
+            storyMode: payload.storyMode,
             createdAt: new Date().toISOString()
           });
           setCharacterState(emptyCharacterState(payload.bookId, draft.characterDescription));
