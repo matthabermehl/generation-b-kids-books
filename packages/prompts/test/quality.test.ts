@@ -84,6 +84,85 @@ describe("runDeterministicStoryChecks", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("passes sound_money_implicit stories when Bitcoin stays fully unnamed", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 10
+          ? `Mia counted, "One, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve."`
+          : idx === 11
+            ? `Mom held Mia close and said patient saving can protect careful effort. Mia felt calm, proud, and safe with the soccer ball in her hands.`
+            : idx === 5
+              ? `Mom sat beside Mia with a warm smile while Mia saved one coin after task ${idx + 1}.`
+              : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "read_aloud_3_4",
+      {
+        title: "Mia's Saving Plan",
+        concept: {
+          ...concept,
+          bitcoinBridge: "Mom names the grown-up habit of protecting patient effort over time."
+        },
+        beats: beats.map((beat) => ({ ...beat, bitcoinRelevanceScore: 0.2 })),
+        pages,
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "sound_money_implicit"
+      },
+      {
+        ...concept,
+        bitcoinBridge: "Mom names the grown-up habit of protecting patient effort over time."
+      },
+      true
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("fails sound_money_implicit stories that name Bitcoin", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 4
+          ? "Mom said Bitcoin can help grown-ups save for later."
+          : idx === 11
+            ? "Mom held Mia close and Mia felt calm, proud, and safe."
+            : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "read_aloud_3_4",
+      {
+        title: "Mia Saves",
+        concept,
+        beats,
+        pages,
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "sound_money_implicit"
+      },
+      concept,
+      true
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("must not name Bitcoin anywhere"))
+    ).toBe(true);
+  });
+
   it("fails repetitive low-variation stories", () => {
     const pages = Array.from({ length: 12 }, (_, idx) => ({
       pageIndex: idx,
@@ -149,6 +228,45 @@ describe("runDeterministicStoryChecks", () => {
 
     expect(result.ok).toBe(false);
     expect(result.issues.some((issue) => issue.message.includes("generic Bitcoin Adventure label"))).toBe(true);
+  });
+
+  it("fails reveal mode when Bitcoin is named before the late reveal window", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 3
+          ? "Mom said Bitcoin can help grown-ups save for later."
+          : idx === 10
+            ? "Mom said Bitcoin can be one steady grown-up money idea for later."
+            : idx === 11
+              ? "Mom held Mia close and softly echoed the same calm Bitcoin idea. Mia felt safe and proud."
+              : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "read_aloud_3_4",
+      {
+        title: "Mia Saves",
+        concept,
+        beats,
+        pages,
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "bitcoin_reveal_8020"
+      },
+      concept,
+      true
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("must not name Bitcoin before page 10"))
+    ).toBe(true);
   });
 
   it("preserves the real page index for read-aloud sentence-budget failures", () => {

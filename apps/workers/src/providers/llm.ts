@@ -550,6 +550,14 @@ function fallbackStoryRewriteInstructions(
     return "";
   }
 
+  const policy = resolveBitcoinStoryPolicy({
+    lesson: context.lesson,
+    profile: context.profile,
+    storyMode: context.storyMode,
+    ageYears: context.ageYears,
+    pageCount: context.pageCount
+  });
+
   const profileLines =
     context.profile === "read_aloud_3_4"
       ? [
@@ -564,22 +572,12 @@ function fallbackStoryRewriteInstructions(
             "- Keep sentences short and decodable, with very long words used sparingly."
           ]
         : [];
-
-  if (context.profile === "read_aloud_3_4" && context.lesson === "better_rules" && context.pageCount >= 2) {
-    profileLines.push(
-      `- For better_rules read-aloud stories, keep Bitcoin on at least two pages: one earlier caregiver or narrator bridge before page ${context.pageCount - 2}, then one brief echo on page ${context.pageCount - 2}.`,
-      `- Do not move all Bitcoin language off page ${context.pageCount - 2}; keep that page to one short Bitcoin reminder plus emotional payoff.`,
-      `- Keep page ${context.pageCount - 1} for calm emotional closure only: togetherness, safety, calm pride, or relief.`
-    );
-  }
-
-  if (context.profile === "early_decoder_5_7" && context.lesson === "new_money_unfair" && context.pageCount >= 2) {
-    profileLines.push(
-      `- For new_money_unfair early-decoder stories, keep Bitcoin on at least two pages: one short caregiver or narrator bridge before page ${context.pageCount - 2}, then one brief echo on page ${context.pageCount - 2}.`,
-      `- Do not collapse the story to one late Bitcoin page just to avoid repetition; keep the earlier bridge short and concrete instead.`,
-      `- Keep page ${context.pageCount - 1} focused on emotional closure only: calm, pride, relief, or safety.`
-    );
-  }
+  profileLines.push(
+    `- Story-mode anchor: ${policy.basePromptSummary}`,
+    `- ${policy.writerLine}`,
+    ...policy.lessonPlacementRules,
+    ...policy.criticEndingRules
+  );
 
   const issueLines = hardIssues.map((issue) => {
     const fix = issue.suggestedFix.trim().length > 0 ? issue.suggestedFix.trim() : issue.evidence.trim();
@@ -1018,6 +1016,7 @@ function buildRewriteInstructions(
   const policy = resolveBitcoinStoryPolicy({
     lesson: context.lesson,
     profile: context.profile,
+    storyMode: context.storyMode,
     ageYears: context.ageYears,
     pageCount: context.pageCount
   });
@@ -1042,15 +1041,38 @@ function buildRewriteInstructions(
     .map((critic) => critic.verdict.rewriteInstructions)
     .filter((line) => line.trim().length > 0)
     .map((line) => `- ${line}`);
+  const bitcoinPolicyLines =
+    policy.minimumHighRelevanceBeats === 0
+      ? [
+          "- Bitcoin policy constraints:",
+          `- Story-mode anchor: ${policy.basePromptSummary}`,
+          "- Do not make any beat explicitly Bitcoin-forward in score or wording in this implicit mode.",
+          "- Treat bitcoinRelevanceScore as thematic salience, not a late-stage quota.",
+          `- ${policy.beatRewriteLine}`
+        ]
+      : [
+          "- Bitcoin policy constraints:",
+          `- Story-mode anchor: ${policy.basePromptSummary}`,
+          `- Ensure at least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} clearly keep the selected Bitcoin posture visible in caregiver or narrator framing through the story's value arc.`,
+          ...(policy.maximumHighRelevanceBeatsBeforePageIndex !== null && policy.revealStartPageIndex !== null
+            ? [
+                `- Do not place high-salience explicit Bitcoin beats before beat ${policy.revealStartPageIndex + 1}.`
+              ]
+            : []),
+          ...(policy.requireMentionBeforeEnding
+            ? [
+                `- Keep at least one explicit Bitcoin beat before the final ${policy.protectedEndingPageCount} beat${policy.protectedEndingPageCount === 1 ? "" : "s"} so the ending does not carry all of the Bitcoin framing.`
+              ]
+            : []),
+          "- Treat bitcoinRelevanceScore as thematic salience, not a late-stage quota.",
+          `- ${policy.beatRewriteLine}`
+        ];
 
   return [
     "Apply the following fixes:",
     ...deterministicLines,
     ...criticLines,
-    "- Bitcoin policy constraints:",
-    `- Ensure at least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} clearly keep Bitcoin story-forward in caregiver or narrator framing through the story's value arc.`,
-    "- Treat bitcoinRelevanceScore as thematic salience, not a late-stage quota.",
-    `- ${policy.beatRewriteLine}`,
+    ...bitcoinPolicyLines,
     ...(earlyReader
       ? [
           "- Science-of-Reading constraints:",

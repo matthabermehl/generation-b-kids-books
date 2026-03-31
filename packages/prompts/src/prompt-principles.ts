@@ -1,17 +1,36 @@
 export interface PromptPrinciple {
   id: string;
   summary: string;
-  appliesTo: "planner" | "critic" | "rewrite" | "writer";
+  appliesTo: "concept" | "planner" | "critic" | "rewrite" | "writer";
   requiredSignals: string[];
 }
 
 export const promptPrinciples: PromptPrinciple[] = [
   {
+    id: "story_mode_concept",
+    summary:
+      "Story concepts must obey the selected story_mode so implicit mode stays fully unspoken, reveal mode plans a late warm Bitcoin answer, and forward mode supports earlier recurring caregiver or narrator framing.",
+    appliesTo: "concept",
+    requiredSignals: [
+      "story-mode policy seam",
+      "sound_money_implicit",
+      "bitcoin_reveal_8020",
+      "bitcoin_forward",
+      "story_mode"
+    ]
+  },
+  {
     id: "bitcoin_theme_positive",
     summary:
       "Obey story_mode exactly: implicit mode never names Bitcoin, reveal mode delays Bitcoin until the late solution window, and forward mode names Bitcoin earlier in caregiver or narrator framing while the child's money problem stays primary.",
     appliesTo: "planner",
-    requiredSignals: ["story_mode", "implicit mode", "reveal mode", "forward mode", "child-centered"]
+    requiredSignals: [
+      "story-mode policy seam",
+      "sound_money_implicit",
+      "bitcoin_reveal_8020",
+      "bitcoin_forward",
+      "child-centered"
+    ]
   },
   {
     id: "child_agency",

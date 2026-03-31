@@ -95,6 +95,20 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-31T19:31:10-0400
+Task: bitcoin-story-modes-policy-prompt-01
+Baseline: `git fetch Github master` => local `master` matched `Github/master`; `bash scripts/agent/smoke.sh` => PASS
+Change: generalized the shared Bitcoin story policy seam so all three persisted modes now carry centralized concept-bridge, timing, title, and ending guidance; aligned story concept, beat planner, rewrite, writer, and critic prompts to consume that seam; and fixed worker rewrite/fallback guidance so it resolves the selected `storyMode` instead of silently falling back to Bitcoin-forward wording.
+Evidence:
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-story-modes-policy-prompt-01` passes=false -> true
+Next: `bitcoin-story-modes-validator-alignment-01`
+Notes: this slice stayed inside the existing persisted `storyMode` contract and did not change the parent selector, API/OpenAPI fields, migration path, or lesson/profile catalog.
+Commit: pending
+
 2026-03-31T19:04:00-0400
 Task: bitcoin-story-modes-contract-persistence-01
 Baseline: `bash scripts/agent/smoke.sh` PASS on `codex/bitcoin-story-modes`

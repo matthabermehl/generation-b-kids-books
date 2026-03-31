@@ -1,59 +1,55 @@
 ## Current State
 
-- Branch before split: `master` at `5238653`.
-- Baseline on `master`:
-  - `bash scripts/agent/smoke.sh` passed on 2026-03-31.
-  - The previously shipped Bitcoin-forward initiative is already merged to `master`.
-- The current product behavior is narrower than intended:
-  - prompt, validator, and worker logic assume one shipped `bitcoin_forward` posture
-  - there is no first-class `storyMode` field in domain types, API requests, persisted books, or parent UI
-  - retries and regeneration therefore cannot intentionally preserve distinct Bitcoin-emphasis modes
-- Harness state is now misleading for the new direction:
-  - `.agent/feature_list.json` has no failing tasks
-  - `.agent/current_task.md` still points at the completed single-mode deploy proof
-  - `docs/exec-plans/active/004-bitcoin-forward-modes.md` documents a locked single-mode scope that conflicts with the actual product goal
+- Branch before split: `master` at `876a301`.
+- Baseline on synced `master`:
+  - `git fetch Github master` confirms local `master` matches `Github/master`.
+  - `bash scripts/agent/smoke.sh` passed on 2026-03-31 from this clean `master` state.
+- The first task in the story-modes initiative is already merged:
+  - `storyMode` is now a first-class shared contract.
+  - `books.story_mode` is persisted.
+  - the parent-facing selector exists.
+  - API/OpenAPI/generated web types include the field.
+  - worker context already threads the selected mode through generation.
+- The remaining gap is policy and prompt behavior:
+  - the shared Bitcoin story seam still mostly reflects one shipped `bitcoin_forward` posture.
+  - prompt templates and prompt-principle coverage are not yet fully aligned across `sound_money_implicit`, `bitcoin_reveal_8020`, and `bitcoin_forward`.
+  - some validator/test wording still encodes thresholds or language that should instead live behind the centralized policy seam.
 
 ## Objectives
 
-- Build a real three-mode story dial that can move between:
-  - `sound_money_implicit`: no Bitcoin mention; teach the underlying money lesson only
-  - `bitcoin_reveal_8020`: most of the story builds the money problem first, then Bitcoin appears late as the solution
-  - `bitcoin_forward`: Bitcoin is present early and recurs while the child problem stays primary
-- Make `storyMode` first-class across:
-  - shared domain types and policy resolution
-  - parent/web create flow
-  - API request and response contracts
-  - persisted `books` data so retries and regeneration stay deterministic
-  - worker pipeline, prompts, validators, and mock/fallback outputs
-- Reset the harness so long-running follow-up work tracks the new direction rather than the superseded single-mode plan.
+- Generalize `packages/domain/src/bitcoin-story-policy.ts` so one shared seam fully describes all three supported modes:
+  - `sound_money_implicit`
+  - `bitcoin_reveal_8020`
+  - `bitcoin_forward`
+- Align story concept, beat planner, rewrite, writer, and critic prompt instructions to obey the persisted `storyMode`.
+- Keep mode semantics centralized so timing, salience, title guidance, and ending behavior are not duplicated across prompt call sites or tests.
+- Preserve the already-shipped `bitcoin_forward` behavior while making the two additional modes additive and deterministic.
 
 ## Risks
 
-- A partial implementation could create drift where the UI offers multiple modes but retries or rebuilds silently collapse back to one posture.
-- Existing deterministic checks were recently tightened around Bitcoin-forward assumptions; they must become mode-aware without weakening safety rules.
-- Introducing a new persisted book field touches migrations, OpenAPI, generated web types, tests, and live smoke tooling.
-- The 80/20 reveal mode needs especially careful ending rules so the Bitcoin reveal lands late without becoming preachy or technically framed.
+- Prompt copy can drift from policy if templates inline mode wording instead of deriving it from the shared seam.
+- The reveal mode is easy to overcorrect into a lecture-heavy ending if the late-answer guidance is not explicit and warm.
+- The implicit mode needs strong guardrails so no Bitcoin naming slips into concept/title/beats/pages/rewrite target while still teaching the underlying money lesson.
+- Worker/provider tests may have baked-in Bitcoin-forward expectations that need careful adjustment without widening runtime behavior outside this task.
 
 ## Assumptions
 
-- The original lesson taxonomy stays the same:
+- The current five lesson keys remain unchanged:
   - `prices_change`
   - `jar_saving_limits`
   - `new_money_unfair`
   - `keep_what_you_earn`
   - `better_rules`
-- The current picture-book reading profiles stay the same for this pass.
-- Safety rules remain fixed across every mode:
+- The current reading profiles remain unchanged.
+- The existing parent selector, API field, and persisted per-book mode are already the right contract and should not be redesigned in this slice.
+- Safety and tone constraints remain fixed across every mode:
   - no hype or investment promises
   - no technical or device-first framing
-  - no child decoding, explaining, or teaching Bitcoin
-- `bitcoin_forward` should preserve the effective behavior already shipped on `master`, while the other two modes become additive.
+  - no child decoding or explaining Bitcoin
+  - endings stay emotionally warm rather than lecture-like
+  - the child's concrete money problem stays primary
 
 ## Open Decisions
 
-- Storage/default behavior for historical books:
-  - whether to backfill existing rows to `bitcoin_forward` explicitly or rely on application defaults when the new column is absent/null
-- Parent-flow UX:
-  - whether the mode selector should be simple cards, segmented controls, or lesson-adjacent radio content on the create screen
-- Live-proof matrix:
-  - which lesson/profile combinations best demonstrate each mode distinctly during deploy smoke
+- No new product decisions are expected for this slice unless hidden coupling forces a prompt/validator contract exception.
+- If prompt wording and policy shape disagree, the shared policy seam should win and prompt/template wording should adapt to it rather than introducing a second source of truth.
