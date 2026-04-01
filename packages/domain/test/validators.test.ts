@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   pageSeed,
+  validateBitcoinStoryConcept,
   validateBitcoinStoryTitle,
   validateBitcoinUsage,
   validateCaregiverConsistency,
@@ -211,6 +212,19 @@ describe("caregiver consistency", () => {
 });
 
 describe("bitcoin usage", () => {
+  it("rejects sound_money_implicit concepts that still name Bitcoin", () => {
+    const result = validateBitcoinStoryConcept("early_decoder_5_7", "sound_money_implicit", concept, 12);
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        code: "BITCOIN_POLICY"
+      })
+    );
+    expect(result.issues[0]?.message).toContain("story concept");
+    expect(result.issues[0]?.message).toContain("bitcoinBridge");
+  });
+
   it("rejects generic Bitcoin Adventure fallback titles", () => {
     const result = validateBitcoinStoryTitle(
       "early_decoder_5_7",
@@ -356,6 +370,33 @@ describe("bitcoin usage", () => {
 
     expect(result.ok).toBe(false);
     expect(result.issues.some((issue) => issue.message.includes("grown-up language"))).toBe(true);
+  });
+
+  it("rejects reveal mode stories that name Bitcoin before the reveal window", () => {
+    const result = validateBitcoinUsage(
+      "read_aloud_3_4",
+      "bitcoin_reveal_8020",
+      concept,
+      Array.from({ length: 12 }, (_, idx) => ({
+        pageIndex: idx,
+        pageText:
+          idx === 3
+            ? "Mom said Bitcoin can help grown-ups save for later."
+            : idx === 10
+              ? "Mom said Bitcoin can be one steady grown-up money idea for later."
+              : idx === 11
+                ? "Mom held Mia close and softly echoed the same calm Bitcoin idea. Mia felt safe and proud."
+                : `Mia saves coin ${idx + 1}.`,
+        illustrationBrief: "",
+        sceneId: `scene-${idx}`,
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }))
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.message.includes("must not name Bitcoin before page 10"))).toBe(true);
   });
 });
 

@@ -5,6 +5,7 @@ import {
   type StoryPage,
   type ValidationIssue,
   validateBannedPhrases,
+  validateBitcoinStoryConcept,
   validateBitcoinStoryTitle,
   validateBitcoinUsage,
   validateCaregiverConsistency,
@@ -122,6 +123,16 @@ export function runDeterministicStoryChecks(
   const caregiver = validateCaregiverConsistency(concept, pages);
   if (!caregiver.ok) {
     issues.push(...caregiver.issues.map((issue) => fromValidationIssue(pages, issue, "caregiver_consistency")));
+  }
+
+  const conceptValidation = validateBitcoinStoryConcept(
+    profile,
+    story.storyMode ?? "bitcoin_forward",
+    concept,
+    pages.length
+  );
+  if (!conceptValidation.ok) {
+    issues.push(...conceptValidation.issues.map((issue) => fromValidationIssue(pages, issue, "bitcoin_fit", "concept")));
   }
 
   const title = validateBitcoinStoryTitle(profile, story.storyMode ?? "bitcoin_forward", concept, story.title, pages.length);

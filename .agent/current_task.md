@@ -1,34 +1,30 @@
 # Current Task
-Task ID: bitcoin-story-modes-policy-prompt-01
+Task ID: bitcoin-story-modes-fixtures-docs-01
 
 ## Goal
-Generalize the Bitcoin story policy seam and prompt templates so `sound_money_implicit`, `bitcoin_reveal_8020`, and `bitcoin_forward` each have clear deterministic prompt targets without drifting from the persisted mode contract.
+Refresh fixtures, mock outputs, prompt principles, and docs so the repo consistently describes the three-mode story-mode architecture after validator alignment.
 
 ## Constraints
-- Keep the current 5 lesson keys and current reading profiles.
-- Add a parent-visible selector rather than hidden config.
-- Persist the selected mode per book so retries and rebuilds stay deterministic.
-- Preserve safety rules:
+- Treat the merged contract/persistence, policy/prompt, and validator-alignment slices as settled groundwork.
+- Keep the existing parent-visible selector, API/OpenAPI field, and persisted per-book mode exactly as already merged.
+- Preserve the shared safety and tone rules across every mode:
   - no hype or investment promises
   - no technical or device-first framing
   - no child decoding or explaining Bitcoin
-- Preserve the existing shipped `bitcoin_forward` behavior as the default/backfill mode for historical books.
-- Keep the child's concrete money problem primary in every mode.
+- Keep endings emotionally warm, not lecture-like, and keep the child's concrete money problem primary in every mode.
 
 ## Plan (short)
-1. Finish aligning `packages/domain/src/bitcoin-story-policy.ts` to describe all three modes from one shared seam.
-2. Update prompt templates and prompt-principle coverage so story concept, beat planner, rewrite, writer, and critic prompts obey the selected `storyMode`.
-3. Verify with domain/prompts/workers tests before moving to the dedicated validator-alignment task.
+1. Refresh mock or fallback outputs, prompt-principle expectations, and any targeted fixtures so all three `storyMode` postures match the shared policy seam and the new validator behavior.
+2. Update the active docs and execution notes so the repo consistently describes the persisted selector, the mode semantics, and the validator-backed safety posture.
+3. Verify with targeted prompts/workers checks and repo quality before handing off to the deploy-smoke slice.
 
 ## Evidence required
-- `bash scripts/agent/smoke.sh`
-- `pnpm --filter @book/domain test`
 - `pnpm --filter @book/prompts test`
 - `pnpm --filter @book/workers test`
 - `bash scripts/agent/quality.sh`
 
 ## Status
-- baseline: synced `master` confirmed with `git fetch Github master`; `bash scripts/agent/smoke.sh` => PASS
-- previous: `bitcoin-story-modes-contract-persistence-01` complete with persisted `storyMode` threaded through domain/API/web/workers
-- work: complete
-- next: `bitcoin-story-modes-validator-alignment-01`
+- baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` commit `9f49701`
+- previous: `bitcoin-story-modes-validator-alignment-01` completed locally with passing smoke, domain, prompts, workers, and quality evidence
+- work: not started in this session
+- next: implement `bitcoin-story-modes-fixtures-docs-01`, then move to `bitcoin-story-modes-deploy-smoke-01`

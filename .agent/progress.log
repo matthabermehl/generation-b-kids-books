@@ -95,6 +95,21 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-31T20:18:45-0400
+Task: bitcoin-story-modes-validator-alignment-01
+Baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` (`9f49701`)
+Change: routed deterministic beat and story validation messaging through the shared Bitcoin story policy seam, added sound-money-implicit concept and beat-wording Bitcoin bans, added late-reveal beat-wording guards, and extended prompt and worker regressions so implicit, reveal, and forward validation now agree with the persisted `storyMode`.
+Evidence:
+- `bash scripts/agent/smoke.sh` => PASS
+- `pnpm --filter @book/domain test` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-story-modes-validator-alignment-01` passes=false -> true
+Next: `bitcoin-story-modes-fixtures-docs-01`
+Notes: preserved the existing parent selector, API/OpenAPI surface, worker contract, and persisted `books.story_mode`; the new checks stay inside validators, quality summaries, and tests.
+Commit: pending
+
 2026-03-31T19:31:10-0400
 Task: bitcoin-story-modes-policy-prompt-01
 Baseline: `git fetch Github master` => local `master` matched `Github/master`; `bash scripts/agent/smoke.sh` => PASS

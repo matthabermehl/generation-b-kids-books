@@ -1106,6 +1106,54 @@ describe("llm provider routing", () => {
     );
   });
 
+  it("mock critic flags sound_money_implicit concept Bitcoin naming as a concept-scope issue", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(true));
+
+    const implicitContext = {
+      ...context,
+      storyMode: "sound_money_implicit" as const
+    };
+    const result = await (
+      await resolveLlmProvider({ mockRunTag: "test-run", source: "unit-test" })
+    ).critic(
+      implicitContext,
+      compliantConcept,
+      {
+        title: "Ava's Saving Plan",
+        concept: compliantConcept,
+        beats: compliantBeatSheet.beats.map((beat) => ({
+          ...beat,
+          bitcoinRelevanceScore: 0.1
+        })),
+        pages: Array.from({ length: implicitContext.pageCount }, (_, index) => ({
+          pageIndex: index,
+          pageText:
+            index === implicitContext.pageCount - 1
+              ? "Mom held Ava close and Ava felt calm, proud, and safe."
+              : `Ava saves one coin after task ${index + 1}.`,
+          illustrationBrief: `Illustration ${index + 1}`,
+          sceneId: `scene_${Math.floor(index / 2) + 1}`,
+          sceneVisualDescription: "Quiet room with a blue coin jar and soft lamplight.",
+          newWordsIntroduced: [],
+          repetitionTargets: ["save"]
+        })),
+        readingProfileId: implicitContext.profile,
+        moneyLessonKey: implicitContext.lesson,
+        storyMode: implicitContext.storyMode
+      }
+    );
+
+    expect(result.verdict.ok).toBe(false);
+    expect(result.verdict.issues).toContainEqual(
+      expect.objectContaining({
+        issueType: "bitcoin_fit",
+        rewriteTarget: "concept",
+        evidence: expect.stringContaining("story concept")
+      })
+    );
+    expect(result.verdict.rewriteInstructions).toContain("story concept");
+  });
+
   it("uses legacy max_tokens for non-gpt-5 OpenAI models", async () => {
     const config = runtimeConfig(false);
     config.models.openaiJson = "gpt-4.1-mini";

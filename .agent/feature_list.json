@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-03-31T23:16:45Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-04-01T00:06:04Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -406,8 +406,8 @@
       "Forbid Bitcoin mention in implicit mode, require late-only reveal timing in reveal mode, and preserve earlier salience plus recurrence in forward mode",
       "Keep caregiver or narrator framing, anti-hype, anti-technical, anti-child-explainer, and warm-ending guardrails across all modes"
     ],
-    "passes": false,
-    "evidence": ""
+    "passes": true,
+    "evidence": "bash scripts/agent/smoke.sh => PASS; pnpm --filter @book/domain test => PASS; pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS"
   },
   {
     "id": "bitcoin-story-modes-fixtures-docs-01",
