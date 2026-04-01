@@ -48,7 +48,25 @@ describe("runDeterministicBeatChecks", () => {
 
     expect(result.ok).toBe(false);
     expect(
-      result.issues.some((issue) => issue.message.includes("No beat should use bitcoinRelevanceScore"))
+      result.issues.some((issue) => issue.message.includes("bitcoinRelevanceScore or wording"))
+    ).toBe(true);
+  });
+
+  it("fails sound_money_implicit beat sheets that name Bitcoin in beat wording even at low salience", () => {
+    const beats = Array.from({ length: 10 }, (_, index) => ({
+      ...makeBeat(index, 0.1),
+      conflict:
+        index === 6
+          ? "Mom says Bitcoin helps grown-ups save for later."
+          : "A real-world saving challenge at the grocery store."
+    }));
+    const result = runDeterministicBeatChecks(makeContext({ storyMode: "sound_money_implicit" }), {
+      beats
+    });
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("bitcoinRelevanceScore or wording"))
     ).toBe(true);
   });
 
@@ -100,6 +118,22 @@ describe("runDeterministicBeatChecks", () => {
     expect(result.ok).toBe(false);
     expect(
       result.issues.some((issue) => issue.message.includes("must not appear before beat 9"))
+    ).toBe(true);
+  });
+
+  it("fails reveal mode when Bitcoin is named in beat wording before the reveal window", () => {
+    const beats = Array.from({ length: 10 }, (_, index) => ({
+      ...makeBeat(index, 0.1),
+      purpose: index === 3 ? "Bitcoin arrives too early." : `Beat ${index}`
+    }));
+    const result = runDeterministicBeatChecks(
+      makeContext({ storyMode: "bitcoin_reveal_8020", pageCount: 10 }),
+      { beats }
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("Do not name Bitcoin in beat wording before beat 9"))
     ).toBe(true);
   });
 

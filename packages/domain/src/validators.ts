@@ -1,5 +1,14 @@
 import { type ReadingProfile, type StoryMode } from "./enums.js";
-import { bitcoinStoryTitlePolicyIssue, resolveBitcoinStoryPolicy } from "./bitcoin-story-policy.js";
+import {
+  bitcoinStoryBeforeEndingWindowMessage,
+  bitcoinStoryBeforeFinalPageMessage,
+  bitcoinStoryConceptNamingMessage,
+  bitcoinStoryRevealTimingMessage,
+  bitcoinStoryTitlePolicyIssue,
+  bitcoinStoryUsageMaximumMessage,
+  bitcoinStoryUsageMinimumMessage,
+  resolveBitcoinStoryPolicy
+} from "./bitcoin-story-policy.js";
 import { storyConceptDeadlineEvent, storyConceptEarningOptionLabels } from "./story-concepts.js";
 import type { StoryConcept, StoryPackage, StoryPage } from "./types.js";
 
@@ -107,6 +116,7 @@ const dialogueAttributionVerbs = new Set([
   "answered",
   "added"
 ]);
+const bitcoinNamePattern = /\bbitcoins?\b/i;
 
 function normalizePageTemplate(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -129,6 +139,14 @@ function pageMentions(page: StoryPage, phrase: string): boolean {
   return normalizedLower(page.pageText).includes(normalizedLower(phrase));
 }
 
+function mentionsBitcoin(value: string): boolean {
+  return bitcoinNamePattern.test(value);
+}
+
+function pageMentionsBitcoin(page: StoryPage): boolean {
+  return mentionsBitcoin(page.pageText);
+}
+
 function includesAnySignal(value: string, signals: string[]): boolean {
   const lowered = normalizedLower(value);
   return signals.some((signal) => lowered.includes(signal));
@@ -143,6 +161,40 @@ function bitcoinFramingPages(pages: StoryPage[], caregiverLabel: StoryConcept["c
       bitcoinAdultFramingTerms.some((term) => lowered.includes(term))
     );
   });
+}
+
+function collectBitcoinFieldPaths(
+  value: unknown,
+  path: string,
+  matches: string[]
+): void {
+  if (typeof value === "string") {
+    if (mentionsBitcoin(value)) {
+      matches.push(path);
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => {
+      collectBitcoinFieldPaths(entry, `${path}[${index}]`, matches);
+    });
+    return;
+  }
+
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  Object.entries(value).forEach(([key, entry]) => {
+    collectBitcoinFieldPaths(entry, path.length > 0 ? `${path}.${key}` : key, matches);
+  });
+}
+
+function storyConceptBitcoinFieldPaths(concept: StoryConcept): string[] {
+  const matches: string[] = [];
+  collectBitcoinFieldPaths(concept, "", matches);
+  return matches;
 }
 
 function tokenizePageWords(text: string): string[] {
@@ -463,6 +515,44 @@ export function validateBitcoinStoryTitle(
     : { ok: true, issues: [] };
 }
 
+export function validateBitcoinStoryConcept(
+  profile: ReadingProfile,
+  storyMode: StoryMode,
+  concept: StoryConcept,
+  pageCount = 12
+): ValidationResult {
+  const policy = resolveBitcoinStoryPolicy({
+    lesson: concept.lessonScenario.moneyLessonKey,
+    profile,
+    storyMode,
+    pageCount
+  });
+  const conceptNamingMessage = bitcoinStoryConceptNamingMessage(policy);
+  if (!conceptNamingMessage) {
+    return { ok: true, issues: [] };
+  }
+
+  const matchingFields = storyConceptBitcoinFieldPaths(concept);
+  if (matchingFields.length === 0) {
+    return { ok: true, issues: [] };
+  }
+
+  const fieldSummary =
+    matchingFields.length > 3
+      ? `${matchingFields.slice(0, 3).join(", ")}, ...`
+      : matchingFields.join(", ");
+
+  return {
+    ok: false,
+    issues: [
+      {
+        code: "BITCOIN_POLICY",
+        message: `${conceptNamingMessage} Offending fields: ${fieldSummary}.`
+      }
+    ]
+  };
+}
+
 export function validateBitcoinUsage(
   profile: ReadingProfile,
   storyMode: StoryMode,
@@ -480,28 +570,18 @@ export function validateBitcoinUsage(
     storyMode,
     pageCount: pages.length
   });
-  const mentionPages = pages.filter((page) => pageMentions(page, "bitcoin"));
+  const mentionPages = pages.filter((page) => pageMentionsBitcoin(page));
   if (policy.maximumBitcoinMentions !== null && mentionPages.length > policy.maximumBitcoinMentions) {
     issues.push({
       code: "BITCOIN_USAGE",
-      message:
-        storyMode === "sound_money_implicit"
-          ? "Sound-money-implicit mode must not name Bitcoin anywhere in the story."
-          : "Story mentions Bitcoin more often than this mode allows."
+      message: bitcoinStoryUsageMaximumMessage(policy)
     });
   }
 
   if (mentionPages.length < policy.minimumBitcoinMentions) {
     issues.push({
       code: "BITCOIN_USAGE",
-      message:
-        storyMode === "bitcoin_reveal_8020"
-          ? policy.minimumBitcoinMentions > 1
-            ? "Story must reveal Bitcoin late and more than once so the solution lands clearly before the warm ending."
-            : "Story must reveal Bitcoin late in caregiver or narrator framing before the ending."
-          : policy.minimumBitcoinMentions > 1
-          ? "Story must mention Bitcoin more than once so the caregiver or narrator framing feels meaningfully Bitcoin-forward."
-          : "Story must mention Bitcoin at least once in caregiver or narrator framing while the child's money problem stays primary."
+      message: bitcoinStoryUsageMinimumMessage(policy)
     });
   }
 
@@ -520,30 +600,33 @@ export function validateBitcoinUsage(
     revealStartPageIndex !== null &&
     preRevealMentionPages.length > policy.maximumBitcoinMentionsBeforePageIndex
   ) {
-    issues.push({
-      code: "BITCOIN_USAGE",
-      message: `Story must not name Bitcoin before page ${revealStartPageIndex + 1} in this late-reveal mode.`
-    });
+    const message = bitcoinStoryRevealTimingMessage(policy);
+    if (message) {
+      issues.push({
+        code: "BITCOIN_USAGE",
+        message
+      });
+    }
   }
 
   if (policy.requireMentionBeforeEnding && preEndingMentionPages.length === 0) {
-    issues.push({
-      code: "BITCOIN_USAGE",
-      message:
-        storyMode === "bitcoin_reveal_8020"
-          ? "Story must reveal Bitcoin before the final page so the ending does not carry the entire explanation."
-          : "Story must name Bitcoin before the final page so it does not read like a last-page add-on."
-    });
+    const message = bitcoinStoryBeforeFinalPageMessage(policy);
+    if (message) {
+      issues.push({
+        code: "BITCOIN_USAGE",
+        message
+      });
+    }
   }
 
   if (policy.requireMentionBeforeEnding && earlyMentionPages.length === 0) {
-    issues.push({
-      code: "BITCOIN_USAGE",
-      message:
-        storyMode === "bitcoin_reveal_8020"
-          ? `Story must reveal Bitcoin by page ${Math.max(1, endingWindowStart)} so the final page can stay warm instead of carrying all the explanation.`
-          : `Story must establish Bitcoin before the final ${policy.protectedEndingPageCount} pages so the ending can stay warm instead of carrying all the Bitcoin weight.`
-    });
+    const message = bitcoinStoryBeforeEndingWindowMessage(policy);
+    if (message) {
+      issues.push({
+        code: "BITCOIN_USAGE",
+        message
+      });
+    }
   }
 
   const framingPages = bitcoinFramingPages(mentionPages, concept.caregiverLabel);
@@ -568,7 +651,7 @@ export function validateBitcoinUsage(
   mentionPages.forEach((page) => {
     const lowered = normalizedLower(page.pageText);
 
-    if (page.newWordsIntroduced.some((word) => normalizedLower(word).includes("bitcoin"))) {
+    if (page.newWordsIntroduced.some((word) => mentionsBitcoin(word))) {
       issues.push({
         code: "BITCOIN_CHILD_LANGUAGE",
         message: `Page ${page.pageIndex} makes Bitcoin a child-facing new word.`,
@@ -628,7 +711,7 @@ export function validateStoryTone(
     issues.push({
       code: "PREACHY_TONE",
       message:
-        preachyPage.pageIndex === finalPage?.pageIndex && pageMentions(preachyPage, "bitcoin")
+        preachyPage.pageIndex === finalPage?.pageIndex && pageMentionsBitcoin(preachyPage)
           ? policy.endingLine
           : "Story uses preachy caregiver or narrator language instead of calm, story-first guidance.",
       pageStart: preachyPage.pageIndex,
@@ -640,7 +723,7 @@ export function validateStoryTone(
   if (finalPage && !includesAnySignal(finalPage.pageText, endingSignals)) {
     issues.push({
       code: "ENDING_EMOTION",
-      message: pageMentions(finalPage, "bitcoin")
+      message: pageMentionsBitcoin(finalPage)
         ? policy.endingLine
         : "Final page should land in reassurance, calm pride, safety, or relief.",
       pageStart: finalPage.pageIndex,

@@ -102,6 +102,10 @@ function revealStartPageIndex(pageCount: number): number {
   return Math.min(pageCount - 2, Math.floor(pageCount * 0.8));
 }
 
+function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return count === 1 ? singular : plural;
+}
+
 function youngProfileGuardrails(context: BitcoinStoryPolicyContext, storyMode: StoryMode): string[] {
   if (!isYoungPictureBookProfile(context)) {
     return [];
@@ -359,6 +363,95 @@ export function resolveBitcoinStoryPolicy(
     criticEndingRules: criticEndingRules(context, storyMode, pageCount),
     disallowedGenericTitlePatterns: [/\bbitcoin adventure\b/i]
   };
+}
+
+export function bitcoinBeatThemeRequirementMessage(policy: BitcoinStoryPolicy): string {
+  if (policy.minimumHighRelevanceBeats === 0) {
+    return "Do not make any beat explicitly Bitcoin-forward in bitcoinRelevanceScore or wording; keep the lesson implicit instead.";
+  }
+
+  if (policy.minimumHighRelevanceBeats > 1) {
+    return `At least ${policy.minimumHighRelevanceBeats} beats must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin feels recurring and story-forward instead of late-only.`;
+  }
+
+  return `At least one beat must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin is explicitly story-forward in caregiver or narrator framing.`;
+}
+
+export function bitcoinBeatRevealTimingMessage(policy: BitcoinStoryPolicy): string | null {
+  if (policy.revealStartPageIndex === null || policy.maximumHighRelevanceBeatsBeforePageIndex === null) {
+    return null;
+  }
+
+  return `High-salience Bitcoin beats must not appear before beat ${policy.revealStartPageIndex + 1} in late-reveal mode.`;
+}
+
+export function bitcoinBeatRevealWordingMessage(policy: BitcoinStoryPolicy): string | null {
+  if (policy.revealStartPageIndex === null || policy.maximumBitcoinMentionsBeforePageIndex === null) {
+    return null;
+  }
+
+  return `Do not name Bitcoin in beat wording before beat ${policy.revealStartPageIndex + 1} in this late-reveal mode.`;
+}
+
+export function bitcoinBeatBeforeEndingMessage(policy: BitcoinStoryPolicy): string | null {
+  if (!policy.requireMentionBeforeEnding) {
+    return null;
+  }
+
+  return `At least one high-salience Bitcoin beat must land before the final ${policy.protectedEndingPageCount} ${pluralize(policy.protectedEndingPageCount, "beat")} so the ending does not carry all of the Bitcoin framing.`;
+}
+
+export function bitcoinStoryConceptNamingMessage(policy: BitcoinStoryPolicy): string | null {
+  return policy.storyMode === "sound_money_implicit"
+    ? "Sound-money-implicit mode must not name Bitcoin anywhere in the story concept."
+    : null;
+}
+
+export function bitcoinStoryUsageMaximumMessage(policy: BitcoinStoryPolicy): string {
+  return policy.storyMode === "sound_money_implicit"
+    ? "Sound-money-implicit mode must not name Bitcoin anywhere in the story."
+    : "Story mentions Bitcoin more often than this mode allows.";
+}
+
+export function bitcoinStoryUsageMinimumMessage(policy: BitcoinStoryPolicy): string {
+  if (policy.storyMode === "bitcoin_reveal_8020") {
+    return policy.minimumBitcoinMentions > 1
+      ? "Story must reveal Bitcoin late and more than once so the solution lands clearly before the warm ending."
+      : "Story must reveal Bitcoin late in caregiver or narrator framing before the ending.";
+  }
+
+  return policy.minimumBitcoinMentions > 1
+    ? "Story must mention Bitcoin more than once so the caregiver or narrator framing feels meaningfully Bitcoin-forward."
+    : "Story must mention Bitcoin at least once in caregiver or narrator framing while the child's money problem stays primary.";
+}
+
+export function bitcoinStoryRevealTimingMessage(policy: BitcoinStoryPolicy): string | null {
+  if (policy.revealStartPageIndex === null || policy.maximumBitcoinMentionsBeforePageIndex === null) {
+    return null;
+  }
+
+  return `Story must not name Bitcoin before page ${policy.revealStartPageIndex + 1} in this late-reveal mode.`;
+}
+
+export function bitcoinStoryBeforeFinalPageMessage(policy: BitcoinStoryPolicy): string | null {
+  if (!policy.requireMentionBeforeEnding) {
+    return null;
+  }
+
+  return policy.storyMode === "bitcoin_reveal_8020"
+    ? "Story must reveal Bitcoin before the final page so the ending does not carry the entire explanation."
+    : "Story must name Bitcoin before the final page so it does not read like a last-page add-on.";
+}
+
+export function bitcoinStoryBeforeEndingWindowMessage(policy: BitcoinStoryPolicy): string | null {
+  if (!policy.requireMentionBeforeEnding) {
+    return null;
+  }
+
+  const endingWindowStart = Math.max(1, policy.pageCount - policy.protectedEndingPageCount);
+  return policy.storyMode === "bitcoin_reveal_8020"
+    ? `Story must reveal Bitcoin by page ${endingWindowStart} so the final page can stay warm instead of carrying all the explanation.`
+    : `Story must establish Bitcoin before the final ${policy.protectedEndingPageCount} ${pluralize(policy.protectedEndingPageCount, "page")} so the ending can stay warm instead of carrying all the Bitcoin weight.`;
 }
 
 export function buildBitcoinStoryBridgeText(

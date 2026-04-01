@@ -1,4 +1,8 @@
 import {
+  bitcoinBeatBeforeEndingMessage,
+  bitcoinBeatRevealTimingMessage,
+  bitcoinBeatRevealWordingMessage,
+  bitcoinBeatThemeRequirementMessage,
   resolveBitcoinStoryPolicy,
   type BeatSheet,
   type MoneyLessonKey,
@@ -20,6 +24,7 @@ const fantasyTerms = [
 const taughtWords = ["bitcoin"];
 const warmthSignals = ["calm", "reassur", "comfort", "close", "warm", "safe", "steady", "relief", "relieved", "proud", "secure"];
 const calmEndingSignals = ["calm", "relief", "relieved", "reassur", "proud", "safe", "secure", "close", "gentle"];
+const bitcoinNamePattern = /\bbitcoins?\b/i;
 
 export interface BeatDeterministicIssue {
   code: string;
@@ -47,6 +52,36 @@ function includesSignal(value: string, signal: string): boolean {
 
 function includesAnySignal(value: string, signals: string[]): boolean {
   return signals.some((signal) => includesSignal(value, signal));
+}
+
+function mentionsBitcoin(value: string): boolean {
+  return bitcoinNamePattern.test(value);
+}
+
+function beatMentionsBitcoin(beat: BeatSheet["beats"][number]): boolean {
+  return [
+    beat.purpose,
+    beat.conflict,
+    beat.sceneLocation,
+    beat.sceneVisualDescription,
+    beat.emotionalTarget,
+    ...beat.newWordsIntroduced,
+    ...beat.introduces,
+    ...beat.paysOff,
+    ...beat.continuityFacts
+  ].some((value) => mentionsBitcoin(value));
+}
+
+function pushIssueOnce(issues: BeatDeterministicIssue[], issue: BeatDeterministicIssue): void {
+  const exists = issues.some(
+    (existing) =>
+      existing.code === issue.code &&
+      existing.message === issue.message &&
+      existing.beatIndex === issue.beatIndex
+  );
+  if (!exists) {
+    issues.push(issue);
+  }
 }
 
 function isEarlyReader(profile: ReadingProfile, ageYears: number): boolean {
@@ -101,18 +136,17 @@ export function runDeterministicBeatChecks(
     .map((beat, index) => ({ index, score: beat.bitcoinRelevanceScore }))
     .filter((entry) => entry.score >= policy.minimumHighRelevanceScore)
     .map((entry) => entry.index);
+  const textualBitcoinBeatIndexes = beats
+    .map((beat, index) => ({ beat, index }))
+    .filter((entry) => beatMentionsBitcoin(entry.beat))
+    .map((entry) => entry.index);
   const endingWindowStart = Math.max(0, beats.length - policy.protectedEndingPageCount);
   const earlyBitcoinBeatIndexes = bitcoinBeatIndexes.filter((index) => index < endingWindowStart);
 
   if (bitcoinBeatIndexes.length < policy.minimumHighRelevanceBeats) {
     issues.push({
       code: "BITCOIN_THEME_INTEGRATION",
-      message:
-        policy.minimumHighRelevanceBeats === 0
-          ? "Do not make any beat explicitly Bitcoin-forward in this implicit mode."
-          : policy.minimumHighRelevanceBeats > 1
-          ? `At least ${policy.minimumHighRelevanceBeats} beats must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin feels recurring and story-forward instead of late-only.`
-          : `At least one beat must use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} so Bitcoin is explicitly story-forward in caregiver or narrator framing.`,
+      message: bitcoinBeatThemeRequirementMessage(policy),
       details: {
         highBeatIndexes: bitcoinBeatIndexes,
         highBeatCount: bitcoinBeatIndexes.length,
@@ -123,16 +157,26 @@ export function runDeterministicBeatChecks(
   }
 
   if (policy.maximumHighRelevanceBeats !== null && bitcoinBeatIndexes.length > policy.maximumHighRelevanceBeats) {
-    issues.push({
+    pushIssueOnce(issues, {
       code: "BITCOIN_THEME_INTEGRATION",
       message:
         context.storyMode === "sound_money_implicit"
-          ? `No beat should use bitcoinRelevanceScore >= ${policy.minimumHighRelevanceScore} because this mode keeps Bitcoin implicit.`
+          ? bitcoinBeatThemeRequirementMessage(policy)
           : "Beat sheet contains more high-salience Bitcoin beats than this mode allows.",
       details: {
         highBeatIndexes: bitcoinBeatIndexes,
         highBeatCount: bitcoinBeatIndexes.length,
         allowedHighBeatCount: policy.maximumHighRelevanceBeats
+      }
+    });
+  }
+
+  if (policy.maximumHighRelevanceBeats === 0 && textualBitcoinBeatIndexes.length > 0) {
+    pushIssueOnce(issues, {
+      code: "BITCOIN_THEME_INTEGRATION",
+      message: bitcoinBeatThemeRequirementMessage(policy),
+      details: {
+        beatIndexes: textualBitcoinBeatIndexes
       }
     });
   }
@@ -143,10 +187,14 @@ export function runDeterministicBeatChecks(
   ) {
     const revealStartBeatIndex = policy.revealStartPageIndex;
     const preRevealBitcoinBeatIndexes = bitcoinBeatIndexes.filter((index) => index < revealStartBeatIndex);
-    if (preRevealBitcoinBeatIndexes.length > policy.maximumHighRelevanceBeatsBeforePageIndex) {
+    const revealTimingMessage = bitcoinBeatRevealTimingMessage(policy);
+    if (
+      revealTimingMessage &&
+      preRevealBitcoinBeatIndexes.length > policy.maximumHighRelevanceBeatsBeforePageIndex
+    ) {
       issues.push({
         code: "BITCOIN_THEME_INTEGRATION",
-        message: `High-salience Bitcoin beats must not appear before beat ${revealStartBeatIndex + 1} in late-reveal mode.`,
+        message: revealTimingMessage,
         details: {
           highBeatIndexes: bitcoinBeatIndexes,
           preRevealBitcoinBeatIndexes,
@@ -154,18 +202,38 @@ export function runDeterministicBeatChecks(
         }
       });
     }
+
+    const preRevealTextualBitcoinBeatIndexes = textualBitcoinBeatIndexes.filter((index) => index < revealStartBeatIndex);
+    const revealWordingMessage = bitcoinBeatRevealWordingMessage(policy);
+    if (
+      revealWordingMessage &&
+      preRevealTextualBitcoinBeatIndexes.length > (policy.maximumBitcoinMentionsBeforePageIndex ?? 0)
+    ) {
+      issues.push({
+        code: "BITCOIN_THEME_INTEGRATION",
+        message: revealWordingMessage,
+        details: {
+          beatIndexes: textualBitcoinBeatIndexes,
+          preRevealBitcoinBeatIndexes: preRevealTextualBitcoinBeatIndexes,
+          revealStartBeatIndex
+        }
+      });
+    }
   }
 
   if (policy.requireMentionBeforeEnding && earlyBitcoinBeatIndexes.length === 0) {
-    issues.push({
-      code: "BITCOIN_THEME_INTEGRATION",
-      message: `At least one high-salience Bitcoin beat must land before the final ${policy.protectedEndingPageCount} beats so the ending does not carry all of the Bitcoin framing.`,
-      details: {
-        highBeatIndexes: bitcoinBeatIndexes,
-        earlyHighBeatIndexes: earlyBitcoinBeatIndexes,
-        endingWindowStart
-      }
-    });
+    const message = bitcoinBeatBeforeEndingMessage(policy);
+    if (message) {
+      issues.push({
+        code: "BITCOIN_THEME_INTEGRATION",
+        message,
+        details: {
+          highBeatIndexes: bitcoinBeatIndexes,
+          earlyHighBeatIndexes: earlyBitcoinBeatIndexes,
+          endingWindowStart
+        }
+      });
+    }
   }
 
   const warmBeatExists = beats.some((beat) =>

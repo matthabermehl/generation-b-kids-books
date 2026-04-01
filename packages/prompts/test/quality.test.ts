@@ -163,6 +163,41 @@ describe("runDeterministicStoryChecks", () => {
     ).toBe(true);
   });
 
+  it("fails sound_money_implicit stories when the story concept still names Bitcoin", () => {
+    const pages = Array.from({ length: 12 }, (_, idx) => ({
+      pageIndex: idx,
+      pageText:
+        idx === 11
+          ? "Mom held Mia close and Mia felt calm, proud, and safe."
+          : `Mia saves one coin after task ${idx + 1}.`,
+      illustrationBrief: "Calm room scene",
+      sceneId: `scene-${Math.floor(idx / 2) + 1}`,
+      sceneVisualDescription: "Calm room scene with a small coin jar.",
+      newWordsIntroduced: [],
+      repetitionTargets: []
+    }));
+
+    const result = runDeterministicStoryChecks(
+      "read_aloud_3_4",
+      {
+        title: "Mia's Saving Plan",
+        concept,
+        beats: beats.map((beat) => ({ ...beat, bitcoinRelevanceScore: 0.2 })),
+        pages,
+        readingProfileId: "read_aloud_3_4",
+        moneyLessonKey: "jar_saving_limits",
+        storyMode: "sound_money_implicit"
+      },
+      concept,
+      true
+    );
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.issues.some((issue) => issue.message.includes("story concept") && issue.message.includes("bitcoinBridge"))
+    ).toBe(true);
+  });
+
   it("fails repetitive low-variation stories", () => {
     const pages = Array.from({ length: 12 }, (_, idx) => ({
       pageIndex: idx,
