@@ -372,6 +372,24 @@ describe("bitcoin usage", () => {
     expect(result.issues.some((issue) => issue.message.includes("grown-up language"))).toBe(true);
   });
 
+  it("does not treat a caregiver's private Bitcoin thought as valid framing", () => {
+    const result = validateBitcoinUsage("early_decoder_5_7", "bitcoin_forward", concept, [
+      {
+        pageIndex: 0,
+        pageText:
+          "Mom thinks of Bitcoin, a kind of money with steady rules. She says some money for grown-ups has rules that never change.",
+        illustrationBrief: "",
+        sceneId: "scene-1",
+        sceneVisualDescription: "Kitchen table",
+        newWordsIntroduced: [],
+        repetitionTargets: []
+      }
+    ]);
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((issue) => issue.message.includes("grown-up language"))).toBe(true);
+  });
+
   it("rejects reveal mode stories that name Bitcoin before the reveal window", () => {
     const result = validateBitcoinUsage(
       "read_aloud_3_4",

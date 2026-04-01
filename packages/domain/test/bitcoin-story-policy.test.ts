@@ -42,6 +42,8 @@ describe("bitcoin story policy", () => {
     expect(policy.maximumBitcoinMentionsBeforePageIndex).toBe(0);
     expect(policy.maximumHighRelevanceBeatsBeforePageIndex).toBe(0);
     expect(policy.storyConceptBridgeLine).toContain("late, warm caregiver or narrator Bitcoin answer");
+    expect(policy.beatPlannerLine).toContain("keep bitcoinRelevanceScore below the explicit-Bitcoin threshold");
+    expect(policy.beatRewriteLine).toContain("pre-reveal beats stay below the explicit-Bitcoin salience threshold");
     expect(policy.lessonPlacementRules.join(" ")).toContain("do not name Bitcoin before page 10");
     expect(policy.criticEndingRules.join(" ")).toContain("prefer one warm reveal beat");
     expect(buildBitcoinStoryBridgeText("Dad", "prices_change", "bitcoin_reveal_8020")).toContain(

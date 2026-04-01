@@ -10,6 +10,7 @@ import { ExecuteStatementCommand, RDSDataClient } from "@aws-sdk/client-rds-data
 const apiBaseUrl = process.env.API_BASE_URL;
 const smokeEmail = process.env.SMOKE_EMAIL ?? "picture-book-smoke@example.com";
 const readingProfileId = process.env.READING_PROFILE_ID ?? "early_decoder_5_7";
+const storyMode = process.env.STORY_MODE ?? "bitcoin_forward";
 const childFirstName = process.env.CHILD_FIRST_NAME ?? "Ava";
 const moneyLessonKey = process.env.MONEY_LESSON_KEY ?? "jar_saving_limits";
 const characterDescription =
@@ -23,6 +24,8 @@ const region = process.env.AWS_REGION ?? "us-east-1";
 const prefix = process.env.SSM_PREFIX ?? "/ai-childrens-book/dev";
 const stackName = process.env.STACK_NAME ?? "AiChildrensBookDevStack";
 const smokeTimeoutMinutes = Number(process.env.SMOKE_TIMEOUT_MINUTES ?? "30");
+const artifactPathOverride = process.env.ARTIFACT_PATH;
+const supportedStoryModes = ["sound_money_implicit", "bitcoin_reveal_8020", "bitcoin_forward"];
 
 if (!apiBaseUrl) {
   throw new Error("API_BASE_URL is required");
@@ -36,6 +39,10 @@ if (!Number.isFinite(smokeTimeoutMinutes) || smokeTimeoutMinutes <= 0) {
   throw new Error(`Unsupported SMOKE_TIMEOUT_MINUTES=${process.env.SMOKE_TIMEOUT_MINUTES ?? "30"}`);
 }
 
+if (!supportedStoryModes.includes(storyMode)) {
+  throw new Error(`Unsupported STORY_MODE=${storyMode}`);
+}
+
 const ssm = new SSMClient({ region });
 const cloudFormation = new CloudFormationClient({ region });
 const rds = new RDSDataClient({ region });
@@ -45,6 +52,9 @@ function normalizeName(name) {
 }
 
 function outputPath(timestamp) {
+  if (artifactPathOverride) {
+    return resolve(artifactPathOverride);
+  }
   return resolve(".agent/artifacts", `picture-book-smoke-${timestamp}.json`);
 }
 
@@ -270,6 +280,7 @@ async function main() {
       pronouns: "she/her",
       ageYears: readingProfileId === "read_aloud_3_4" ? 4 : 7,
       moneyLessonKey,
+      storyMode,
       interestTags,
       readingProfileId,
       characterDescription
@@ -355,6 +366,8 @@ async function main() {
     characterCandidateCount: selectedCharacterState.candidates?.length ?? 0,
     executionArn: webhookResult.executionArn ?? null,
     readingProfileId,
+    storyMode,
+    moneyLessonKey,
     llmMode: "real",
     terminalOrderStatus: terminalStatus.status,
     terminalBookStatus: terminalStatus.bookStatus,

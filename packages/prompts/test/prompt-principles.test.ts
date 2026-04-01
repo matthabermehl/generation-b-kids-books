@@ -197,18 +197,47 @@ describe("prompt principles", () => {
       bitcoinBridge:
         "Mom later calmly names Bitcoin as one grown-up saving idea for protecting patient effort over time."
     };
+    const revealBeatSheet = {
+      beats: Array.from({ length: 12 }, (_, index) => ({
+        ...beatSheet.beats[Math.min(index, beatSheet.beats.length - 1)],
+        pageIndexEstimate: index,
+        sceneId: `scene_${Math.floor(index / 2) + 1}`
+      }))
+    };
+    const plannerPrompt = buildBeatPlannerPrompt(revealContext, revealConcept, 12);
+    const rewritePrompt = buildBeatRewritePrompt(
+      revealContext,
+      JSON.stringify(revealConcept),
+      JSON.stringify(revealBeatSheet),
+      "Move explicit Bitcoin later."
+    );
     const writerPrompt = buildPageWriterPrompt(revealContext, revealConcept, beatSheet, 12);
     const criticPrompt = buildCriticPrompt(revealContext, revealConcept, "{\"pages\":[]}");
 
+    expectSignals(plannerPrompt, [
+      "story-mode anchor",
+      "keep bitcoinrelevancescore below the explicit-bitcoin threshold",
+      "avoid bitcoin-solution wording",
+      "do not name bitcoin explicitly until the late reveal window",
+      "beats before beat 10 must keep bitcoinrelevancescore below 0.35"
+    ]);
+    expectSignals(rewritePrompt, [
+      "story-mode anchor",
+      "rewrite any beat before beat 10 so bitcoinrelevancescore stays below 0.35",
+      "child-problem or value-thread setup",
+      "explicit bitcoin solution framing"
+    ]);
     expectSignals(writerPrompt, [
       "story-mode anchor",
       "reveal bitcoin late in caregiver or narrator framing",
+      "spoken aloud or plainly narrated",
       "title should center the child's concrete money problem and should not spoil the late bitcoin reveal",
       "if bitcoin is mentioned there, it must echo the late reveal softly"
     ]);
     expectSignals(criticPrompt, [
       "story-mode anchor",
       "flag stories that spoil bitcoin too early",
+      "private thoughts",
       "title keep the late bitcoin reveal hidden",
       "prefer one warm reveal beat plus, at most, one brief emotional echo"
     ]);
@@ -258,6 +287,7 @@ describe("prompt principles", () => {
       "thematic guidance",
       "investment promises",
       "child should not say, decode, or explain bitcoin",
+      "spoken caregiver dialogue or plain narrator wording",
       "avoid generic fallback titles like 'bitcoin adventure'"
     ]);
   });

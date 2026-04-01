@@ -287,6 +287,11 @@ export function buildBeatPlannerPrompt(
     "Include at least one meaningful child choice and at least one clear caregiver reassurance or connection beat.",
     `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.beatPlannerLine}`,
+    ...(policy.revealStartPageIndex !== null
+      ? [
+          `- In ${policy.storyMode} mode, beats before beat ${policy.revealStartPageIndex + 1} must keep bitcoinRelevanceScore below ${policy.minimumHighRelevanceScore.toFixed(2)} and stay thematic rather than explicit Bitcoin solution beats.`
+        ]
+      : []),
     "Let the child experience the underlying money value before a beat names Bitcoin directly.",
     "If a deadlineEvent is used in the final two beats, it must be introduced earlier.",
     ...(storyConceptEarningOptionLabels(concept).length > 0
@@ -447,6 +452,11 @@ export function buildBeatRewritePrompt(
     "- For early-reader profiles, keep newWordsIntroduced <= 2 in every beat and do not make Bitcoin a decoding target.",
     `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.beatRewriteLine}`,
+    ...(policy.revealStartPageIndex !== null
+      ? [
+          `- In ${policy.storyMode} mode, rewrite any beat before beat ${policy.revealStartPageIndex + 1} so bitcoinRelevanceScore stays below ${policy.minimumHighRelevanceScore.toFixed(2)} and the beat remains child-problem or value-thread setup rather than explicit Bitcoin solution framing.`
+        ]
+      : []),
     `- ${policy.endingLine}`,
     "- Ensure at least one meaningful child choice with visible downstream consequences.",
     "- Ensure at least one clear caregiver reassurance or connection beat.",
@@ -504,6 +514,7 @@ export function buildPageWriterPrompt(
     `- ${policy.titleGuidanceLine}`,
     "- Use StoryConcept.bitcoinBridge as thematic guidance, not as an exact quote that must be copied.",
     "- If Bitcoin is named directly, keep it in caregiver or narrator language; the child should not say, decode, or explain Bitcoin.",
+    "- Do not hide the only direct Bitcoin mention inside a caregiver's private thoughts. Put that mention in spoken caregiver dialogue or plain narrator wording.",
     "- Keep adult-managed money tools secondary; the child's visible choices and consequences must stay primary.",
     `- ${policy.endingLine}`,
     ...betterRulesReadAloudEndingRules(context, pageCount),
@@ -543,6 +554,7 @@ export function buildCriticPrompt(
     `- ${policy.criticLine}`,
     "- Does the selected story mode positively reinforce the lesson's value thread rather than feeling pasted on or contradictory?",
     "- If Bitcoin appears, is it kept child-safe, concrete, non-technical, and out of the child's decoding or explaining voice?",
+    "- If Bitcoin is named directly, is that mention spoken by the caregiver or stated by the narrator rather than hidden in private thoughts?",
     `- ${policy.titleReviewLine}`,
     "- Do not require exact reuse of StoryConcept.bitcoinBridge wording; judge thematic fit instead.",
     "- Use theme_integration for weak or bolted-on Bitcoin theming. Reserve bitcoin_fit for actual policy violations such as hype, technical framing, child-speaking Bitcoin, or thematic contradiction.",
