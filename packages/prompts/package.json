@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/prompts/src/index.js",
+  "types": "dist/prompts/src/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./dist/prompts/src/index.js"
   },
   "scripts": {
     "build": "pnpm --filter @book/domain build && tsc -p tsconfig.json",

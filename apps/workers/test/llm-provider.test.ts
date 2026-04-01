@@ -196,6 +196,19 @@ function anthropicCriticResponse(payload: unknown): Response {
   return anthropicToolResponse(payload, "CriticVerdict");
 }
 
+function anthropicTextResponse(text: string): Response {
+  return new Response(
+    JSON.stringify({
+      content: [{ type: "text", text }],
+      usage: { input_tokens: 10, output_tokens: 5 }
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }
+  );
+}
+
 function openAiCriticResponse(): Response {
   return new Response(
     JSON.stringify({
@@ -462,6 +475,246 @@ describe("llm provider routing", () => {
         })
       )
       .mockResolvedValueOnce(anthropicToolResponse({ beat_sheet: compliantBeatSheet }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("normalizes nested Anthropic beat-sheet arrays hidden under non-schema wrapper keys", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        anthropicToolResponse({
+          summary: "Beat plan follows.",
+          outline: {
+            sequence: compliantBeatSheet.beats
+          }
+        })
+      )
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("normalizes stringified Anthropic beat-sheet payloads", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse(JSON.stringify({ BeatSheet: compliantBeatSheet })))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("normalizes Anthropic beat-sheet arrays encoded as numeric-key objects", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        anthropicToolResponse({
+          wrapper: {
+            beats: Object.fromEntries(
+              compliantBeatSheet.beats.map((beat, index) => [String(index), beat])
+            )
+          }
+        })
+      )
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("normalizes Anthropic beat-sheet objects keyed by beat labels", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(
+        anthropicToolResponse({
+          wrapper: Object.fromEntries(
+            compliantBeatSheet.beats.map((beat, index) => [`beat_${index + 1}`, beat])
+          )
+        })
+      )
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("falls back to Anthropic plain-text JSON when the BeatSheet tool payload is empty", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse({}))
+      .mockResolvedValueOnce(anthropicTextResponse(JSON.stringify(compliantBeatSheet)))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("extracts JSON from Anthropic plain-text fallback responses with prose wrappers", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse({}))
+      .mockResolvedValueOnce(
+        anthropicTextResponse(`Here is the BeatSheet JSON:\n\`\`\`json\n${JSON.stringify(compliantBeatSheet)}\n\`\`\``)
+      )
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("unwraps double-encoded JSON strings from Anthropic plain-text fallbacks", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse({}))
+      .mockResolvedValueOnce(
+        anthropicTextResponse(`\`\`\`json\n${JSON.stringify(JSON.stringify(compliantBeatSheet))}\n\`\`\``)
+      )
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
+      .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(context, compliantConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.beatSheet.beats).toHaveLength(context.pageCount);
+    expect(result.meta.provider).toBe("anthropic");
+  });
+
+  it("decodes backslash-escaped JSON objects from Anthropic plain-text fallbacks", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const escapedObject = JSON.stringify(compliantBeatSheet)
+      .replace(/\n/g, "\\n")
+      .replace(/"/g, "\\\"");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "not authorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        })
+      )
+      .mockResolvedValueOnce(anthropicToolResponse({}))
+      .mockResolvedValueOnce(anthropicTextResponse(`\`\`\`json\n${escapedObject}\n\`\`\``))
       .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
       .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }))
       .mockResolvedValueOnce(anthropicCriticResponse({ pass: true, issues: [], rewriteInstructions: "" }));

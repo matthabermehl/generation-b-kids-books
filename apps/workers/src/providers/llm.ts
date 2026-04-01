@@ -364,10 +364,192 @@ function parseWithSchema<T>(
   return schema.parse(raw);
 }
 
+function previewStructuredToolInput(raw: unknown): string {
+  try {
+    return JSON.stringify(raw).slice(0, 2000);
+  } catch (error) {
+    return `<<unserializable:${error instanceof Error ? error.message : String(error)}>>`;
+  }
+}
+
+function stripMarkdownCodeFences(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("```")) {
+    return trimmed;
+  }
+
+  return trimmed.replace(/^```[a-zA-Z0-9_-]*\s*/, "").replace(/\s*```$/, "").trim();
+}
+
+function parseJsonLikeRecursively(value: unknown, maxDepth = 3): unknown {
+  let candidate = value;
+  for (let depth = 0; depth < maxDepth; depth += 1) {
+    const parsed = parseJsonLikeString(candidate);
+    if (parsed === candidate) {
+      break;
+    }
+    candidate = parsed;
+  }
+  return candidate;
+}
+
+function unescapeJsonEscapes(value: string): string {
+  return value
+    .replace(/\\r/g, "\r")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, "\"");
+}
+
+function extractJsonFromText(value: string): unknown {
+  const stripped = stripMarkdownCodeFences(value);
+  const direct = parseJsonLikeRecursively(stripped);
+  if (direct !== stripped) {
+    return direct;
+  }
+  const unescapedDirect = parseJsonLikeRecursively(unescapeJsonEscapes(stripped));
+  if (unescapedDirect !== stripped) {
+    return unescapedDirect;
+  }
+
+  const objectStart = stripped.indexOf("{");
+  const objectEnd = stripped.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    const objectSlice = stripped.slice(objectStart, objectEnd + 1);
+    const parsedObject = parseJsonLikeRecursively(objectSlice);
+    if (parsedObject !== objectSlice) {
+      return parsedObject;
+    }
+    const unescapedObject = unescapeJsonEscapes(objectSlice);
+    const parsedUnescapedObject = parseJsonLikeRecursively(unescapedObject);
+    if (parsedUnescapedObject !== unescapedObject) {
+      return parsedUnescapedObject;
+    }
+  }
+
+  const arrayStart = stripped.indexOf("[");
+  const arrayEnd = stripped.lastIndexOf("]");
+  if (arrayStart >= 0 && arrayEnd > arrayStart) {
+    const arraySlice = stripped.slice(arrayStart, arrayEnd + 1);
+    const parsedArray = parseJsonLikeRecursively(arraySlice);
+    if (parsedArray !== arraySlice) {
+      return parsedArray;
+    }
+    const unescapedArray = unescapeJsonEscapes(arraySlice);
+    const parsedUnescapedArray = parseJsonLikeRecursively(unescapedArray);
+    if (parsedUnescapedArray !== unescapedArray) {
+      return parsedUnescapedArray;
+    }
+  }
+
+  return stripped;
+}
+
+function parseJsonLikeString(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[") && !trimmed.startsWith("\"")) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+function isBeatLikeEntry(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  const hintKeys = [
+    "purpose",
+    "conflict",
+    "sceneLocation",
+    "sceneId",
+    "sceneVisualDescription",
+    "pageIndexEstimate",
+    "bitcoinRelevanceScore"
+  ];
+  const matches = hintKeys.filter((key) => record[key] !== undefined).length;
+  return matches >= 3;
+}
+
+function objectToBeatLikeArray(raw: unknown): unknown[] | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length === 0 || !entries.every(([, value]) => isBeatLikeEntry(value))) {
+    return null;
+  }
+
+  const numericKeys = entries.every(([key]) => /^\d+$/.test(key));
+  const ordered = numericKeys
+    ? [...entries].sort(
+        ([leftKey], [rightKey]) => Number.parseInt(leftKey, 10) - Number.parseInt(rightKey, 10)
+      )
+    : entries;
+
+  return ordered.map(([, value]) => value);
+}
+
+function findBeatLikeArray(raw: unknown, depth = 0, seen = new Set<unknown>()): unknown[] | null {
+  if (depth > 3 || raw === null || raw === undefined) {
+    return null;
+  }
+
+  const parsedString = parseJsonLikeString(raw);
+  if (parsedString !== raw) {
+    return findBeatLikeArray(parsedString, depth + 1, seen);
+  }
+
+  if (Array.isArray(raw)) {
+    return raw.length > 0 && raw.every(isBeatLikeEntry) ? raw : null;
+  }
+
+  if (typeof raw !== "object") {
+    return null;
+  }
+  if (seen.has(raw)) {
+    return null;
+  }
+  seen.add(raw);
+
+  const objectArray = objectToBeatLikeArray(raw);
+  if (objectArray) {
+    return objectArray;
+  }
+
+  for (const value of Object.values(raw as Record<string, unknown>)) {
+    const nested = findBeatLikeArray(value, depth + 1, seen);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
 function normalizeStructuredToolInput(raw: unknown, schemaName: string): unknown {
   let candidate = raw;
   const seen = new Set<unknown>();
   const normalizedSchemaName = schemaName.replace(/[^a-z0-9]/gi, "").toLowerCase();
+
+  while (typeof candidate === "string") {
+    const parsed = parseJsonLikeString(candidate);
+    if (parsed === candidate) {
+      break;
+    }
+    candidate = parsed;
+  }
 
   while (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
     if (seen.has(candidate)) {
@@ -398,10 +580,30 @@ function normalizeStructuredToolInput(raw: unknown, schemaName: string): unknown
         if (Array.isArray(onlyValue)) {
           return { beats: onlyValue };
         }
+        const parsedOnlyValue = parseJsonLikeString(onlyValue);
+        if (Array.isArray(parsedOnlyValue)) {
+          return { beats: parsedOnlyValue };
+        }
         if (onlyValue && typeof onlyValue === "object") {
           candidate = onlyValue;
           continue;
         }
+        if (parsedOnlyValue && typeof parsedOnlyValue === "object") {
+          candidate = parsedOnlyValue;
+          continue;
+        }
+      }
+      const beatsField = parseJsonLikeString(record.beats);
+      if (Array.isArray(beatsField)) {
+        return { beats: beatsField };
+      }
+      const objectBeats = objectToBeatLikeArray(beatsField);
+      if (objectBeats) {
+        return { beats: objectBeats };
+      }
+      const inferredBeats = findBeatLikeArray(record);
+      if (inferredBeats) {
+        return { beats: inferredBeats };
       }
     }
     break;
@@ -2134,7 +2336,23 @@ class OpenAiAnthropicProvider implements LlmProvider {
         );
       }
 
-      const data = parseWithSchema(normalizeStructuredToolInput(toolOutput.input, input.schemaName), input.parser);
+      const normalizedInput = normalizeStructuredToolInput(toolOutput.input, input.schemaName);
+      if (process.env.DEBUG_STRUCTURED_TOOL_INPUT === "1") {
+        console.error("STRUCTURED_TOOL_INPUT_PREVIEW", {
+          stage: input.stage,
+          schemaName: input.schemaName,
+          content: previewStructuredToolInput(payload.content),
+          raw: previewStructuredToolInput(toolOutput.input),
+          normalized: previewStructuredToolInput(normalizedInput)
+        });
+      }
+      let data: T;
+      try {
+        data = parseWithSchema(normalizedInput, input.parser);
+      } catch {
+        const fallback = await this.callAnthropicTextJson<T>(input);
+        return fallback;
+      }
       const promptTokens = payload.usage?.input_tokens ?? 0;
       const completionTokens = payload.usage?.output_tokens ?? 0;
       const totalTokens = promptTokens + completionTokens;
@@ -2160,6 +2378,124 @@ class OpenAiAnthropicProvider implements LlmProvider {
       }
       if (error instanceof Error && error.name === "AbortError") {
         throw new ProviderRequestError("anthropic", `Anthropic ${input.stage} request timed out`, null, true);
+      }
+
+      throw new ProviderRequestError(
+        "anthropic",
+        error instanceof Error ? error.message : String(error),
+        null,
+        true
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async callAnthropicTextJson<T>(input: {
+    stage: string;
+    model: string;
+    messages: StructuredMessage[];
+    systemPrompt: string;
+    schemaName: string;
+    jsonSchema: Record<string, unknown>;
+    parser: z.ZodType<T, z.ZodTypeDef, unknown>;
+    maxTokens: number;
+  }): Promise<{ data: T; meta: LlmMetadata }> {
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90_000);
+
+    try {
+      const response = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: {
+          "x-api-key": this.config.secrets.anthropicApiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: input.model,
+          max_tokens: Math.max(input.maxTokens * 2, 5000),
+          temperature: 0.2,
+          system: [
+            input.systemPrompt,
+            "The structured tool path failed. Respond in plain text with ONLY valid JSON.",
+            `Schema name: ${input.schemaName}.`,
+            `Schema: ${JSON.stringify(input.jsonSchema)}`
+          ].join("\n\n"),
+          messages: input.messages
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new ProviderRequestError(
+          "anthropic",
+          `Anthropic text-json request failed: ${response.status} ${body.slice(0, 256)}`,
+          response.status,
+          isRetryableStatus(response.status)
+        );
+      }
+
+      const payload = (await response.json()) as {
+        content?: Array<{ type?: string; text?: string }>;
+        usage?: { input_tokens?: number; output_tokens?: number };
+      };
+      const textContent = payload.content
+        ?.filter((item) => item.type === "text" && typeof item.text === "string")
+        .map((item) => item.text ?? "")
+        .join("\n")
+        .trim();
+
+      if (!textContent) {
+        throw new ProviderRequestError(
+          "anthropic",
+          `Anthropic ${input.stage} text-json response missing text`,
+          null,
+          true
+        );
+      }
+
+      const normalizedText = extractJsonFromText(textContent);
+      if (process.env.DEBUG_STRUCTURED_TOOL_INPUT === "1") {
+        console.error("STRUCTURED_TOOL_TEXT_FALLBACK_PREVIEW", {
+          stage: input.stage,
+          schemaName: input.schemaName,
+          content: previewStructuredToolInput(payload.content),
+          normalized: previewStructuredToolInput(normalizedText)
+        });
+      }
+      const data = parseWithSchema(normalizedText, input.parser);
+      const promptTokens = payload.usage?.input_tokens ?? 0;
+      const completionTokens = payload.usage?.output_tokens ?? 0;
+      const totalTokens = promptTokens + completionTokens;
+
+      return {
+        data,
+        meta: {
+          provider: "anthropic",
+          model: input.model,
+          latencyMs: Date.now() - startedAt,
+          usage: {
+            promptTokens,
+            completionTokens,
+            totalTokens,
+            estimatedCostUsd: estimateCostUsd("anthropic", promptTokens, completionTokens)
+          }
+        }
+      };
+    } catch (error) {
+      if (error instanceof ProviderRequestError) {
+        throw error;
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ProviderRequestError(
+          "anthropic",
+          `Anthropic ${input.stage} text-json request timed out`,
+          null,
+          true
+        );
       }
 
       throw new ProviderRequestError(

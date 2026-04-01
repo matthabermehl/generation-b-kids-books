@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-04-01T02:44:53Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-04-01T03:23:53Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -432,5 +432,17 @@
     ],
     "passes": false,
     "evidence": "Local gates on latest code: bash scripts/agent/smoke.sh => PASS (2026-04-01T02:44:53Z); pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS; pnpm cdk:deploy:dev => PASS; pnpm ops:provider-smoke => PASS. Partial live proof saved: .agent/artifacts/story-modes/bitcoin-forward-read-aloud-smoke.json + .agent/artifacts/story-modes/bitcoin-forward-read-aloud-book.pdf, .agent/artifacts/story-modes/sound-money-implicit-read-aloud-smoke.json + .agent/artifacts/story-modes/sound-money-implicit-read-aloud-book.pdf. Reveal-mode pre-billing live failures are saved at .agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-smoke.json and .agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-postdeploy-smoke.json. Fresh finalpass rerun for all three modes is blocked by OpenAI billing_hard_limit_reached during /character/candidates; see .agent/artifacts/story-modes/finalpass-billing-blocker.md."
+  },
+  {
+    "id": "story-only-markdown-export-01",
+    "priority": 2,
+    "category": "functional",
+    "description": "Add an on-demand ops path that generates only the story draft and exports it as a local Markdown transcript without running character or image generation",
+    "steps": [
+      "Create a narrow ops command that reuses the existing deployed auth and order creation flow, then invokes `prepare_story` directly for the new draft book",
+      "Read the persisted story artifact or equivalent page text, write a local Markdown file, and optionally clean up the created draft records afterward"
+    ],
+    "passes": false,
+    "evidence": ""
   }
 ]
