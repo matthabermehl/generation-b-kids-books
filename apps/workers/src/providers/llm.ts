@@ -1055,7 +1055,15 @@ function buildRewriteInstructions(
       : [
           "- Bitcoin policy constraints:",
           `- Story-mode anchor: ${policy.basePromptSummary}`,
-          `- Ensure at least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} clearly keep the selected Bitcoin posture visible in caregiver or narrator framing through the story's value arc.`,
+          ...(policy.storyMode === "bitcoin_reveal_8020" &&
+          policy.revealStartPageIndex !== null
+            ? [
+                `- Beats before beat ${policy.revealStartPageIndex + 1} must keep bitcoinRelevanceScore below ${policy.minimumHighRelevanceScore.toFixed(2)} and avoid explicit Bitcoin solution wording.`,
+                `- Use beat ${policy.revealStartPageIndex + 1} or later for the first explicit Bitcoin reveal beat. If another explicit Bitcoin beat is needed, keep it to one brief emotional echo after the reveal.`
+              ]
+            : [
+                `- Ensure at least ${policy.minimumHighRelevanceBeats} beat${policy.minimumHighRelevanceBeats === 1 ? "" : "s"} clearly keep the selected Bitcoin posture visible in caregiver or narrator framing through the story's value arc.`
+              ]),
           ...(policy.maximumHighRelevanceBeatsBeforePageIndex !== null && policy.revealStartPageIndex !== null
             ? [
                 `- Do not place high-salience explicit Bitcoin beats before beat ${policy.revealStartPageIndex + 1}.`

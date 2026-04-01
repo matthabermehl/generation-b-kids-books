@@ -1230,6 +1230,104 @@ describe("llm provider routing", () => {
     expect(rewritePrompt).toContain("caregiver or narrator language");
   });
 
+  it("pins late-reveal rewrite guidance to the reveal window and low pre-reveal salience", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const revealContext = {
+      ...context,
+      ageYears: 4,
+      lesson: "better_rules" as const,
+      storyMode: "bitcoin_reveal_8020" as const,
+      interests: ["marbles"],
+      profile: "read_aloud_3_4" as const,
+      pageCount: 12
+    };
+    const revealConcept = {
+      premise: "Ava feels upset when the marble-race finish line keeps moving.",
+      caregiverLabel: "Mom" as const,
+      bitcoinBridge: "Mom later calmly names Bitcoin as one grown-up way to keep the rules steady.",
+      emotionalPromise: "Ava moves from frustration to calm relief.",
+      caregiverWarmthMoment: "Mom kneels beside Ava and helps her breathe slowly.",
+      bitcoinValueThread: "fair rules and steady agreements",
+      requiredSetups: ["backyard marble race", "starting rule", "shared goal"],
+      requiredPayoffs: ["fair rule becomes clear", "game feels calm again"],
+      forbiddenLateIntroductions: ["surprise referee app"],
+      lessonScenario: {
+        moneyLessonKey: "better_rules" as const,
+        gameName: "backyard marble race",
+        brokenRule: "the finish line keeps moving after the race starts",
+        fairRule: "the finish line stays fixed once everyone begins",
+        sharedGoal: "everyone wants a fair chance to finish together",
+        deadlineEvent: "before supper"
+      }
+    };
+    const makeRevealBeat = (index: number, bitcoinRelevanceScore: number) => ({
+      purpose: index === 9 ? "Late reveal beat" : index === 11 ? "Warm resolution beat" : `Beat ${index + 1}`,
+      conflict:
+        index < 9
+          ? "Ava feels the rules change before she can settle into the game."
+          : index === 9
+            ? "Mom finally names the steadier grown-up money idea."
+            : "The fair rule feels calm and clear again.",
+      sceneLocation: "Backyard",
+      sceneId: `scene_${Math.floor(index / 2) + 1}`,
+      sceneVisualDescription: "Backyard marble race with a chalk line, warm evening light, and plenty of open paper.",
+      emotionalTarget:
+        index === 0
+          ? "curious and unsure"
+          : index === 9
+            ? "reassured and close"
+            : index === 11
+              ? "calm, relieved, and proud"
+              : "frustrated but hopeful",
+      pageIndexEstimate: index,
+      decodabilityTags: ["controlled_vocab", "repetition"],
+      newWordsIntroduced: ["rule"],
+      bitcoinRelevanceScore,
+      introduces: index === 0 ? ["backyard marble race", "starting rule"] : [],
+      paysOff: index === 11 ? ["fair rule becomes clear", "game feels calm again"] : [],
+      continuityFacts: ["caregiver_label:Mom", "deadline_event:before supper"]
+    });
+    const revealBadBeatSheet = {
+      beats: Array.from({ length: 12 }, (_, index) =>
+        makeRevealBeat(index, index === 2 || index === 9 ? 0.8 : 0.1)
+      )
+    };
+    const revealGoodBeatSheet = {
+      beats: Array.from({ length: 12 }, (_, index) =>
+        makeRevealBeat(index, index === 9 ? 0.8 : index === 10 ? 0.3 : 0.1)
+      )
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(openAiStructuredResponse(revealBadBeatSheet))
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiStructuredResponse(revealGoodBeatSheet))
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse())
+      .mockResolvedValueOnce(openAiCriticResponse());
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateBeatSheet(revealContext, revealConcept);
+
+    expect(result.audit.passed).toBe(true);
+    expect(result.audit.rewritesApplied).toBe(1);
+
+    const rewriteRequestBody = JSON.parse(String(fetchMock.mock.calls[4]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const rewritePrompt =
+      rewriteRequestBody.messages?.find((message) => message.role === "user")?.content ?? "";
+    expect(rewritePrompt).toContain("Beats before beat 10 must keep bitcoinRelevanceScore below 0.35");
+    expect(rewritePrompt).toContain("Use beat 10 or later for the first explicit Bitcoin reveal beat");
+    expect(rewritePrompt).toContain("Do not place high-salience explicit Bitcoin beats before beat 10");
+  });
+
   it("normalizes oversized beat sheets back to pageCount before deterministic checks", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 

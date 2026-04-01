@@ -108,6 +108,25 @@ Next: `bitcoin-story-modes-deploy-smoke-01`
 Notes: preserved the settled selector, contract, persistence, and validator behavior; the worker change only widened fallback rewrite guidance so reveal-mode rewrites now keep title and ending rules aligned with the centralized policy seam.
 Commit: pending
 
+2026-03-31T22:55:54-0400
+Task: bitcoin-story-modes-deploy-smoke-01
+Baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` (`ad4adb8`)
+Change: taught the smoke harness to send `storyMode` and write deterministic artifact paths, tightened late-reveal planner/rewrite guidance in prompts and worker rewrite instructions after repeated live reveal failures, and added provider-level and prompt-level regressions for the beat-rewrite path.
+Evidence:
+- `bash scripts/agent/smoke.sh` => PASS
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+- `pnpm cdk:deploy:dev` => PASS
+- `pnpm ops:provider-smoke` => PASS
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules STORY_MODE=bitcoin_forward ARTIFACT_PATH=.agent/artifacts/story-modes/bitcoin-forward-read-aloud-smoke.json pnpm ops:picture-book-smoke` => READY (`.agent/artifacts/story-modes/bitcoin-forward-read-aloud-smoke.json`, pdf `.agent/artifacts/story-modes/bitcoin-forward-read-aloud-book.pdf`)
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules STORY_MODE=sound_money_implicit ARTIFACT_PATH=.agent/artifacts/story-modes/sound-money-implicit-read-aloud-smoke.json pnpm ops:picture-book-smoke` => READY (`.agent/artifacts/story-modes/sound-money-implicit-read-aloud-smoke.json`, pdf `.agent/artifacts/story-modes/sound-money-implicit-read-aloud-book.pdf`)
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules STORY_MODE=bitcoin_reveal_8020 ARTIFACT_PATH=.agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-smoke.json pnpm ops:picture-book-smoke` => FAILED with `BeatPlanningError: High-salience Bitcoin beats must not appear before beat 10 in late-reveal mode` (`.agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-smoke.json`)
+- `API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules STORY_MODE=bitcoin_reveal_8020 ARTIFACT_PATH=.agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-postdeploy-smoke.json pnpm ops:picture-book-smoke` => FAILED with the same `BeatPlanningError` after the first late-reveal fix (`.agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-postdeploy-smoke.json`)
+- Fresh `finalpass` rerun for all three modes failed before story generation because `POST /v1/books/<bookId>/character/candidates` returned `OpenAI character image generation failed ... billing_hard_limit_reached` (`.agent/artifacts/story-modes/finalpass-billing-blocker.md`)
+Notes: task remains open and `passes=false`; the latest local code is deployed and locally verified, but a real three-mode final artifact sweep on that deploy is externally blocked by the OpenAI billing cap on character candidate generation.
+Commit: pending
+
 2026-03-31T20:18:45-0400
 Task: bitcoin-story-modes-validator-alignment-01
 Baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` (`9f49701`)

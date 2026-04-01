@@ -300,15 +300,15 @@ export function resolveBitcoinStoryPolicy(
       storyConceptLine:
         "Keep the child's lived money problem primary for most of the concept. Plan a late, warm caregiver or narrator Bitcoin reveal that solves the problem without turning the ending into a lecture.",
       storyConceptBridgeLine:
-        "bitcoinBridge must justify a late, warm caregiver or narrator Bitcoin answer. Keep it strong enough that later prompts know the reveal belongs in the solution window, not earlier.",
+        "bitcoinBridge must justify a late, warm caregiver or narrator Bitcoin answer spoken aloud or plainly narrated, not hidden in a private adult thought. Keep it strong enough that later prompts know the reveal belongs in the solution window, not earlier.",
       beatPlannerLine:
-        "Let the child experience the money problem first. Do not name Bitcoin explicitly until the late reveal window, then use a brief caregiver or narrator solution beat and preserve an emotionally warm ending.",
+        "Let the child experience the money problem first. Before the late reveal window, keep bitcoinRelevanceScore below the explicit-Bitcoin threshold and avoid Bitcoin-solution wording so those beats stay thematic rather than high-salience. Do not name Bitcoin explicitly until the late reveal window, then use a brief caregiver or narrator solution beat spoken aloud or plainly narrated, never buried in a private adult thought, and preserve an emotionally warm ending.",
       beatRewriteLine:
-        "Rewrite until Bitcoin stays absent through most of the story, then appears late as a warm caregiver or narrator solution instead of an early or technical explanation.",
+        "Rewrite until pre-reveal beats stay below the explicit-Bitcoin salience threshold and avoid Bitcoin-solution wording, while Bitcoin stays absent through most of the story and then appears late as a warm caregiver or narrator solution spoken aloud or plainly narrated instead of an early, technical, or private-thought explanation.",
       writerLine:
-        "For most of the story, keep Bitcoin unspoken while the child's concrete money problem grows clear. Reveal Bitcoin late in caregiver or narrator framing, then keep the ending warm and non-lecture-like.",
+        "For most of the story, keep Bitcoin unspoken while the child's concrete money problem grows clear. Reveal Bitcoin late in caregiver or narrator framing, with the explicit Bitcoin mention spoken aloud or plainly narrated rather than hidden in private thoughts, then keep the ending warm and non-lecture-like.",
       criticLine:
-        "Flag stories that spoil Bitcoin too early, skip the late reveal entirely, or overload the ending with late explanation.",
+        "Flag stories that spoil Bitcoin too early, skip the late reveal entirely, hide the only direct Bitcoin mention inside private thoughts, or overload the ending with late explanation.",
       titleGuidanceLine:
         "Title should center the child's concrete money problem and should not spoil the late Bitcoin reveal by naming Bitcoin up front.",
       titleReviewLine:
@@ -343,15 +343,15 @@ export function resolveBitcoinStoryPolicy(
     storyConceptLine:
       "Feature the child's lived money problem first, then define a warm caregiver or narrator Bitcoin bridge that can recur before the ending without turning the story into a lecture.",
     storyConceptBridgeLine:
-      "bitcoinBridge must clearly explain how Bitcoin warmly fits this exact child-sized problem in caregiver or narrator framing, strong enough to appear before the ending and echo again in longer stories without becoming a lecture.",
+      "bitcoinBridge must clearly explain how Bitcoin warmly fits this exact child-sized problem in caregiver or narrator framing, spoken aloud or plainly narrated rather than hidden in private thoughts, strong enough to appear before the ending and echo again in longer stories without becoming a lecture.",
     beatPlannerLine:
-      "Make the story Bitcoin-forward in caregiver or narrator framing: once the child has felt the problem, plan at least one non-final explicit Bitcoin bridge and let a later beat echo it when the page budget allows.",
+      "Make the story Bitcoin-forward in caregiver or narrator framing: once the child has felt the problem, plan at least one non-final explicit Bitcoin bridge spoken aloud or plainly narrated, not hidden in private thoughts, and let a later beat echo it when the page budget allows.",
     beatRewriteLine:
-      "Preserve the child's concrete money problem as the main arc, but rewrite until Bitcoin is clearly present in caregiver or narrator framing before the ending and no longer reads like a late-only add-on.",
+      "Preserve the child's concrete money problem as the main arc, but rewrite until Bitcoin is clearly present in caregiver or narrator framing before the ending, spoken aloud or plainly narrated rather than tucked into private thoughts, and no longer reads like a late-only add-on.",
     writerLine:
-      "Keep the child's concrete money problem primary, but name Bitcoin in caregiver or narrator framing before the ending and let it recur briefly in longer stories so it feels like the shipped posture instead of a final-page footnote.",
+      "Keep the child's concrete money problem primary, but name Bitcoin in caregiver or narrator framing before the ending with a spoken or plainly narrated mention, never as the only private-thought reference, and let it recur briefly in longer stories so it feels like the shipped posture instead of a final-page footnote.",
     criticLine:
-      "Flag stories where Bitcoin arrives only as a last-page add-on or is so sparse that the caregiver or narrator framing no longer feels meaningfully Bitcoin-forward.",
+      "Flag stories where Bitcoin arrives only as a last-page add-on, is hidden only in private thoughts, or is so sparse that the caregiver or narrator framing no longer feels meaningfully Bitcoin-forward.",
     titleGuidanceLine:
       "Title should center the child's concrete money problem or emotional goal. Avoid generic fallback titles like 'Bitcoin Adventure'; if Bitcoin appears in the title, keep it warm and problem-led.",
     titleReviewLine:

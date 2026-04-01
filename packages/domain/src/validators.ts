@@ -37,6 +37,22 @@ const montessoriFantasyTerms = [
 ];
 const explicitCaregiverTerms = ["mom", "dad"];
 const bitcoinAdultFramingTerms = ["grown-up", "grown-ups", "adult", "adults", "parent", "parents"];
+const bitcoinSpeechVerbs = ["said", "says", "told", "asks", "asked", "whispered", "murmured", "answered", "replied"];
+const bitcoinInternalThoughtTerms = [
+  "thought",
+  "thinks",
+  "thinking",
+  "wondered",
+  "imagined",
+  "remembered",
+  "inside her head",
+  "inside his head",
+  "in her thoughts",
+  "in his thoughts",
+  "to herself",
+  "to himself"
+];
+const quotedBitcoinPattern = /["“'‘][^"'“”‘’\n]*bitcoin[^"'“”‘’\n]*["”'’]/i;
 const bitcoinTechnicalTerms = [
   "app",
   "phone",
@@ -156,6 +172,16 @@ function bitcoinFramingPages(pages: StoryPage[], caregiverLabel: StoryConcept["c
   const caregiverTerm = caregiverLabel.toLowerCase();
   return pages.filter((page) => {
     const lowered = normalizedLower(page.pageText);
+    const hasInternalThought = bitcoinInternalThoughtTerms.some((term) => lowered.includes(term));
+    const hasQuotedBitcoin = quotedBitcoinPattern.test(page.pageText);
+    const hasCaregiverSpeech = bitcoinSpeechVerbs.some(
+      (verb) => lowered.includes(`${caregiverTerm} ${verb}`) || lowered.includes(`${verb} ${caregiverTerm}`)
+    );
+
+    if (hasInternalThought && !hasQuotedBitcoin && !hasCaregiverSpeech) {
+      return false;
+    }
+
     return (
       lowered.includes(caregiverTerm) ||
       bitcoinAdultFramingTerms.some((term) => lowered.includes(term))
