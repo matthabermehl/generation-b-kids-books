@@ -27,6 +27,11 @@ Generate personalized, visually polished children's books that teach money conce
   - `new_money_unfair`
   - `keep_what_you_earn`
   - `better_rules`
+- Parent-visible story-mode selector with three supported per-book postures:
+  - `sound_money_implicit`
+  - `bitcoin_reveal_8020`
+  - `bitcoin_forward`
+- Persisted per-book `storyMode` carried from create flow through checkout, generation, review, retry, and download responses
 - Book-scoped character approval before checkout, with a selected character reference reused across page art generation
 - Layered spread model with deterministic `text-left / art-right` composition
 - Canonical picture-book length tracked as spreads, with print-friendly PDF output rendered as separate physical pages (`physicalPageCount = spreadCount * 2`)
@@ -35,11 +40,16 @@ Generate personalized, visually polished children's books that teach money conce
   - public landing plus parent create, checkout, and current-book routes
   - internal reviewer queue and case detail console
 - Tailwind + shadcn clean-product UI system for both parent and reviewer surfaces
-- Prompting and story-generation rules that keep Bitcoin clearly story-forward in caregiver or narrator framing without turning the book into a pitch or lecture:
+- Centralized three-mode story policy seam consumed by prompts, mock outputs, and validators:
+  - `sound_money_implicit`: no Bitcoin mention anywhere; teach the sound-money lesson through the child's concrete money problem
+  - `bitcoin_reveal_8020`: let the money problem dominate most of the story, then reveal Bitcoin late as a warm grown-up answer
+  - `bitcoin_forward`: name Bitcoin earlier in caregiver or narrator framing and let it recur without taking over the story
+- Shared story-generation rules across every mode:
   - story-first, value-first framing
   - warm caregiver reassurance
   - calm ending that lands in relief or quiet pride
   - no hype, price-prediction, or technical Bitcoin instruction
+  - no child decoding, repeating, or explaining Bitcoin
 - Manual review actions:
   - approve and continue build
   - reject book
@@ -63,9 +73,12 @@ Primary behavioral acceptance criteria must live in `.agent/feature_list.json`.
 
 ## Story Experience Rules
 - Every book should read like a warm bedtime story first and a money lesson second.
-- Bitcoin should be clearly named in caregiver or narrator framing before the ending, through values the child already experienced in the story, such as patience, fair rules, long-term thinking, stewardship, and earned rewards.
+- The parent-selected `storyMode` is visible in the create flow and is persisted per book so rebuilds, review resumes, and downloads stay deterministic.
+- `sound_money_implicit` books must never name Bitcoin in concept, title, beats, pages, or ending language.
+- `bitcoin_reveal_8020` books should keep the child's money problem primary for most of the story, then reveal Bitcoin late as a warm caregiver or narrator answer.
+- `bitcoin_forward` books should name Bitcoin in caregiver or narrator framing before the ending and recur when the page budget allows, while the child's problem stays primary.
 - The story should include at least one clear caregiver reassurance or connection beat.
-- The ending should land in reassurance, calm understanding, or quiet pride rather than a transactional finish.
+- The ending should land in reassurance, calm understanding, or quiet pride rather than a transactional or lecture-like finish.
 
 ## Reviewer Product Rules
 - Reviewer UI is internal-only and gated by an allowlisted email.

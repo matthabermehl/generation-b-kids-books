@@ -95,6 +95,19 @@ Evidence:
 Notes: prompt changes removed the earlier tablet/digital-jar/transfer failure cluster; the remaining live blocker is narrower and sits in the SoR critic/rewrite contract, which still pushes a late taught-word Bitcoin framing plus taught-word overload at beat 9.
 Commit: pending
 
+2026-03-31T21:29:55-0400
+Task: bitcoin-story-modes-fixtures-docs-01
+Baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` (`462be30`)
+Change: refreshed three-mode prompt and worker expectations, added worker coverage for story-mode-specific mock outputs plus late-reveal fallback rewrite guidance, and updated product, architecture, docs index, and the active execution plan so the repo consistently describes the parent-visible selector, persisted per-book `storyMode`, centralized policy seam, and validator-backed semantics.
+Evidence:
+- `pnpm --filter @book/prompts test` => PASS
+- `pnpm --filter @book/workers test` => PASS
+- `bash scripts/agent/quality.sh` => PASS
+Feature toggle: `bitcoin-story-modes-fixtures-docs-01` passes=false -> true
+Next: `bitcoin-story-modes-deploy-smoke-01`
+Notes: preserved the settled selector, contract, persistence, and validator behavior; the worker change only widened fallback rewrite guidance so reveal-mode rewrites now keep title and ending rules aligned with the centralized policy seam.
+Commit: pending
+
 2026-03-31T20:18:45-0400
 Task: bitcoin-story-modes-validator-alignment-01
 Baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` (`9f49701`)

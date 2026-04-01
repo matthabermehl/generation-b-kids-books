@@ -1293,6 +1293,171 @@ describe("llm provider routing", () => {
     expect(story.story.title).not.toContain("Bitcoin Adventure");
   });
 
+  it("mock provider outputs stay mode-specific across implicit, reveal, and forward books", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(true));
+
+    const provider = await resolveLlmProvider({ mockRunTag: "test-run", source: "unit-test" });
+    const baseContext = {
+      ...context,
+      lesson: "better_rules" as const,
+      profile: "early_decoder_5_7" as const,
+      pageCount: 12,
+      mockRunTag: "test-run"
+    };
+
+    const implicitConcept = await provider.generateStoryConcept({
+      ...baseContext,
+      storyMode: "sound_money_implicit"
+    });
+    const implicitBeatPlan = await provider.generateBeatSheet(
+      { ...baseContext, storyMode: "sound_money_implicit" },
+      implicitConcept.concept
+    );
+    const implicitStory = await provider.draftPages(
+      { ...baseContext, storyMode: "sound_money_implicit" },
+      implicitConcept.concept,
+      implicitBeatPlan.beatSheet
+    );
+
+    expect(implicitConcept.concept.bitcoinBridge).not.toContain("Bitcoin");
+    expect(
+      implicitBeatPlan.beatSheet.beats.every((beat) => beat.bitcoinRelevanceScore < 0.35)
+    ).toBe(true);
+    expect(implicitStory.story.pages.map((page) => page.pageText).join(" ")).not.toContain("Bitcoin");
+    expect(implicitStory.story.title).toBe("Ava and the Fair Rule");
+
+    const revealConcept = await provider.generateStoryConcept({
+      ...baseContext,
+      storyMode: "bitcoin_reveal_8020"
+    });
+    const revealBeatPlan = await provider.generateBeatSheet(
+      { ...baseContext, storyMode: "bitcoin_reveal_8020" },
+      revealConcept.concept
+    );
+    const revealStory = await provider.draftPages(
+      { ...baseContext, storyMode: "bitcoin_reveal_8020" },
+      revealConcept.concept,
+      revealBeatPlan.beatSheet
+    );
+    const revealMentionPages = revealStory.story.pages
+      .filter((page) => page.pageText.includes("Bitcoin"))
+      .map((page) => page.pageIndex);
+
+    expect(revealConcept.concept.bitcoinBridge).toContain("later calmly names Bitcoin");
+    expect(revealMentionPages.length).toBeGreaterThan(0);
+    expect(revealMentionPages[0]).toBeGreaterThanOrEqual(baseContext.pageCount - 3);
+    expect(revealStory.story.title).toBe("Ava and the Fair Rule");
+
+    const forwardConcept = await provider.generateStoryConcept({
+      ...baseContext,
+      storyMode: "bitcoin_forward"
+    });
+    const forwardBeatPlan = await provider.generateBeatSheet(
+      { ...baseContext, storyMode: "bitcoin_forward" },
+      forwardConcept.concept
+    );
+    const forwardStory = await provider.draftPages(
+      { ...baseContext, storyMode: "bitcoin_forward" },
+      forwardConcept.concept,
+      forwardBeatPlan.beatSheet
+    );
+    const forwardMentionPages = forwardStory.story.pages
+      .filter((page) => page.pageText.includes("Bitcoin"))
+      .map((page) => page.pageIndex);
+
+    expect(forwardConcept.concept.bitcoinBridge).toContain("calmly names Bitcoin");
+    expect(forwardConcept.concept.bitcoinBridge).not.toContain("later calmly names Bitcoin");
+    expect(forwardMentionPages.length).toBeGreaterThanOrEqual(2);
+    expect(forwardMentionPages[0]).toBeLessThanOrEqual(1);
+    expect(forwardMentionPages.some((pageIndex) => pageIndex >= baseContext.pageCount - 2)).toBe(
+      true
+    );
+    expect(forwardStory.story.title).toBe("Ava and the Fair Rule");
+  });
+
+  it("blank fallback rewrite guidance keeps bitcoin_reveal_8020 late, title-safe, and warm", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const revealContext = {
+      ...context,
+      storyMode: "bitcoin_reveal_8020" as const,
+      pageCount: 12
+    };
+    const revealConcept = {
+      ...compliantConcept,
+      bitcoinBridge:
+        "Mom later calmly names Bitcoin as one grown-up saving idea for protecting patient effort over time."
+    };
+    const revealBeatSheet = {
+      beats: Array.from({ length: revealContext.pageCount }, (_, index) => ({
+        ...compliantBeatSheet.beats[Math.min(index, compliantBeatSheet.beats.length - 1)],
+        pageIndexEstimate: index,
+        sceneId: `reveal-scene-${Math.floor(index / 2) + 1}`,
+        purpose: `Reveal beat ${index + 1}`
+      }))
+    };
+    const revealStory = {
+      title: "Bitcoin and Ava's Saving Plan",
+      concept: revealConcept,
+      beats: revealBeatSheet.beats,
+      pages: revealBeatSheet.beats.map((beat, index) => ({
+        pageIndex: index,
+        pageText: `Draft reveal page ${index + 1}`,
+        illustrationBrief: beat.sceneLocation,
+        sceneId: beat.sceneId,
+        sceneVisualDescription: beat.sceneVisualDescription,
+        newWordsIntroduced: [],
+        repetitionTargets: ["save"]
+      })),
+      readingProfileId: revealContext.profile,
+      moneyLessonKey: revealContext.lesson,
+      storyMode: revealContext.storyMode
+    };
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiStructuredResponse({
+        ...revealStory,
+        title: "Ava's Saving Plan"
+      })
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    await provider.draftPages(revealContext, revealConcept, revealBeatSheet, {
+      rewriteHistory: [
+        {
+          story: revealStory,
+          criticVerdict: {
+            ok: false,
+            issues: [
+              {
+                pageStart: 0,
+                pageEnd: revealContext.pageCount - 1,
+                issueType: "bitcoin_fit",
+                severity: "hard",
+                rewriteTarget: "story",
+                evidence: "Reveal-mode draft spoils Bitcoin too early and names it in the title.",
+                suggestedFix: ""
+              }
+            ],
+            rewriteInstructions: ""
+          }
+        }
+      ]
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const messages = requestBody.messages ?? [];
+    expect(messages[3]?.content).toContain("Story-mode anchor:");
+    expect(messages[3]?.content).toContain("Title should center the child's concrete money problem");
+    expect(messages[3]?.content).toContain("should not spoil the late Bitcoin reveal");
+    expect(messages[3]?.content).toContain("The final page must stay emotionally warm");
+    expect(messages[3]?.content).toContain("do not name Bitcoin before page 10");
+  });
+
   it("requires mock run tag when mock providers are enabled", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(true));
     await expect(resolveLlmProvider()).rejects.toThrow("X-Mock-Run-Tag");

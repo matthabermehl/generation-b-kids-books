@@ -17,6 +17,7 @@
 - [exec-plans/active/002-visual-continuity-hardening.md](exec-plans/active/002-visual-continuity-hardening.md)
 - [exec-plans/active/003-bitcoin-story-emotional-vision.md](exec-plans/active/003-bitcoin-story-emotional-vision.md)
 - [exec-plans/active/005-bitcoin-story-modes.md](exec-plans/active/005-bitcoin-story-modes.md)
+- [exec-plans/completed/004-bitcoin-forward-modes.md](exec-plans/completed/004-bitcoin-forward-modes.md)
 - `exec-plans/completed/`
 
 ## Design

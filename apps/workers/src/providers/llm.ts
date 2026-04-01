@@ -575,6 +575,8 @@ function fallbackStoryRewriteInstructions(
   profileLines.push(
     `- Story-mode anchor: ${policy.basePromptSummary}`,
     `- ${policy.writerLine}`,
+    `- ${policy.titleGuidanceLine}`,
+    `- ${policy.endingLine}`,
     ...policy.lessonPlacementRules,
     ...policy.criticEndingRules
   );
