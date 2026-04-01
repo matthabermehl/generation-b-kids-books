@@ -24,7 +24,11 @@ Refresh fixtures, mock outputs, prompt principles, and docs so the repo consiste
 - `bash scripts/agent/quality.sh`
 
 ## Status
-- baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` commit `9f49701`
+- baseline: `bash scripts/agent/smoke.sh` => PASS on clean `master` commit `462be30`
 - previous: `bitcoin-story-modes-validator-alignment-01` completed locally with passing smoke, domain, prompts, workers, and quality evidence
-- work: not started in this session
-- next: implement `bitcoin-story-modes-fixtures-docs-01`, then move to `bitcoin-story-modes-deploy-smoke-01`
+- work: complete
+- evidence:
+  - `pnpm --filter @book/prompts test` => PASS
+  - `pnpm --filter @book/workers test` => PASS
+  - `bash scripts/agent/quality.sh` => PASS
+- next: move to `bitcoin-story-modes-deploy-smoke-01`

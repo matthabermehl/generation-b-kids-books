@@ -20,6 +20,8 @@
 6. Final artifacts are written to S3 and indexed in Aurora; flagged books are moved to `needs_review` and blocked from release.
 7. Parent can request child profile deletion (`DELETE /v1/child-profiles/{childProfileId}`) which queues artifact purge.
 
+Every book now carries a persisted `storyMode` selected in the parent flow. That `storyMode` is threaded through API contracts, `books.story_mode`, worker load context, the centralized Bitcoin story policy seam, prompt builders, deterministic validators, mock providers, and final book payloads so retries and review resumes stay deterministic.
+
 For `picture_book_fixed_layout` books, the image/render chain is:
 1. explicit character approval before checkout
 2. deterministic spread composition selection plus persisted `scene-plan.json` / `image-plan.json`
@@ -36,7 +38,7 @@ For `picture_book_fixed_layout` books, the image/render chain is:
 - Tailwind v4 + shadcn/Radix component system with a shared clean-product shell
 - Parent shell:
   - `/` public landing page with magic-link request and checkout callback handling
-  - `/create` authenticated order creation plus five visible lesson cards, shared lesson helper copy, and character generate/select flow
+  - `/create` authenticated order creation plus five visible lesson cards, a parent-visible three-mode story selector, shared helper copy, and character generate/select flow
   - `/checkout` authenticated order summary and Stripe checkout launch
   - `/books/current` authenticated build-status, reader, download, and privacy workspace
   - persisted parent flow state backed by the existing localStorage keys for active order, checkout URL, book payload, and download URL
@@ -75,11 +77,13 @@ Cross-cutting:
 - `Idempotency-Key` on API-initiated POST routes
 - `X-Mock-Run-Tag` required on `POST /v1/orders/{orderId}/mark-paid` when mock LLM/image flags are enabled
 - status transition guards for order/book lifecycle
+- create-order, order-summary, and book payloads all carry the selected `storyMode`
 - Stripe webhook replay dedupe via `payment_events`
 - runtime secrets/config from SSM (cached)
 
 ### Workers (`apps/workers`)
 - `pipeline.ts`: beat-planning pipeline (planner -> deterministic checks -> critics -> rewrite) + story drafting + moderation + render preparation
+  - loads persisted `books.story_mode` and routes every story stage through the centralized three-mode Bitcoin story policy seam
   - fail-closed beat planning with persisted failure lineage (`beat-plan-failed.json`) before execution failure
   - beat critics emit `hard` and `soft` issues; soft-only approvals persist `beat-plan-report.json` without blocking the book
   - blocking beat gates: deterministic + Montessori + Science-of-Reading
@@ -88,6 +92,7 @@ Cross-cutting:
   - persists `story.json`, `story-qa-report.json`, and `render/story-proof.pdf` before any `finalize_gate` review stop
   - `story-qa-report.json` now includes per-attempt story draft/critic audit and final pass vs review status
   - story concepts now carry shared emotional fields (`emotionalPromise`, `caregiverWarmthMoment`, `bitcoinValueThread`) plus a discriminated `lessonScenario` union keyed by `moneyLessonKey`
+  - mock and fallback outputs are story-mode-aware so local mock runs preserve implicit, late-reveal, and forward semantics
   - mock-provider authorization gate based on `mockRunTag`
 - `image-worker.ts`: OpenAI-backed `page_art` generation for picture books plus legacy page generation fallback, prompt safety checks, and page QA
 - `check-images.ts`: completion + image safety / picture-book QA escalation to `needs_review`
@@ -110,8 +115,8 @@ Cross-cutting:
 - final illustrated `pdf` remains separate from the worker-generated `story_proof_pdf`
 
 ### Shared Packages
-- `packages/domain`: enums/types/validators plus the centralized lesson-definition registry (`label`, helper copy, emotional arc target, Bitcoin value thread, scenario guidance) and `StoryConcept` helpers
-- `packages/prompts`: schema-first planner/critic/rewrite/writer templates + deterministic beat/story quality checks + prompt-principle invariants, now aligned around bedtime warmth, caregiver reassurance, lesson-specific scenarios, and story-first Bitcoin framing
+- `packages/domain`: enums/types/validators plus the centralized lesson-definition registry (`label`, helper copy, emotional arc target, Bitcoin value thread, scenario guidance), `StoryMode` definitions, the shared three-mode Bitcoin story policy seam, and `StoryConcept` helpers
+- `packages/prompts`: schema-first planner/critic/rewrite/writer templates + deterministic beat/story quality checks + prompt-principle invariants, now aligned around bedtime warmth, caregiver reassurance, lesson-specific scenarios, parent-selected `storyMode`, and validator-backed mode semantics
 
 ## AWS Infrastructure (CDK JavaScript)
 - API Gateway HTTP API
@@ -157,6 +162,7 @@ Phase 3 additions:
 Fixed-layout additions:
 - `books.product_family`
 - `books.layout_profile_id`
+- `books.story_mode`
 - `pages.composition_json`
 - `images.parent_image_id`
 - `images.input_assets_json`
@@ -187,7 +193,10 @@ Fixed-layout additions:
 - Deterministic spread template selection for fixed-layout books
 - Story checks:
   - strict beat sheet schema validation (planner, critics, rewrite, final writer)
-  - policy-backed Bitcoin-forward integration through lesson-specific value threads, including pre-ending distribution, caregiver or narrator framing, and warm-ending guardrails
+  - policy-backed three-mode Bitcoin semantics through one shared seam:
+    - `sound_money_implicit` forbids Bitcoin naming while preserving the lesson's value thread
+    - `bitcoin_reveal_8020` delays explicit Bitcoin until the late solution window and protects a warm ending
+    - `bitcoin_forward` requires earlier caregiver or narrator framing plus recurrence when the page budget allows
   - banned financial claims
   - SoR decodability checks (beat planning + page-level checks)
   - low-variation/repetition guard for final story pages

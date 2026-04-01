@@ -418,8 +418,8 @@
       "Update mock or fallback outputs, prompt-principle tests, and example artifacts to cover all three modes",
       "Refresh product, architecture, and execution docs to document the new parent-visible selector and persisted per-book mode"
     ],
-    "passes": false,
-    "evidence": ""
+    "passes": true,
+    "evidence": "pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS"
   },
   {
     "id": "bitcoin-story-modes-deploy-smoke-01",

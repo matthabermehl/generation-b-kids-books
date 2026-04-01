@@ -171,6 +171,49 @@ describe("prompt principles", () => {
     ]);
   });
 
+  it("writer prompt keeps sound_money_implicit fully unnamed and title-safe", () => {
+    const prompt = buildPageWriterPrompt(
+      { ...context, storyMode: "sound_money_implicit" },
+      {
+        ...concept,
+        bitcoinBridge: "Mom calmly names the grown-up habit of protecting patient effort over time."
+      },
+      beatSheet,
+      12
+    );
+
+    expectSignals(prompt, [
+      "story-mode anchor",
+      "do not name bitcoin anywhere in the story, title, or ending",
+      "title must center the child's concrete money problem or emotional goal and must not mention bitcoin",
+      "final page must stay emotionally warm and must not pivot into naming bitcoin"
+    ]);
+  });
+
+  it("writer and critic prompts keep bitcoin_reveal_8020 late, hidden in the title, and warm at the end", () => {
+    const revealContext = { ...context, storyMode: "bitcoin_reveal_8020" as const };
+    const revealConcept = {
+      ...concept,
+      bitcoinBridge:
+        "Mom later calmly names Bitcoin as one grown-up saving idea for protecting patient effort over time."
+    };
+    const writerPrompt = buildPageWriterPrompt(revealContext, revealConcept, beatSheet, 12);
+    const criticPrompt = buildCriticPrompt(revealContext, revealConcept, "{\"pages\":[]}");
+
+    expectSignals(writerPrompt, [
+      "story-mode anchor",
+      "reveal bitcoin late in caregiver or narrator framing",
+      "title should center the child's concrete money problem and should not spoil the late bitcoin reveal",
+      "if bitcoin is mentioned there, it must echo the late reveal softly"
+    ]);
+    expectSignals(criticPrompt, [
+      "story-mode anchor",
+      "flag stories that spoil bitcoin too early",
+      "title keep the late bitcoin reveal hidden",
+      "prefer one warm reveal beat plus, at most, one brief emotional echo"
+    ]);
+  });
+
   it("montessori critic no longer treats Bitcoin as merely secondary", () => {
     const prompt = buildMontessoriCriticPrompt(
       context,

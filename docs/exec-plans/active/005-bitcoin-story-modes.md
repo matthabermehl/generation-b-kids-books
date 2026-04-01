@@ -9,6 +9,16 @@ Turn the recently centralized Bitcoin-forward policy seam into a true three-mode
 - `bitcoin_reveal_8020`: the monetary problem dominates most of the story, then Bitcoin arrives late as the solution
 - `bitcoin_forward`: Bitcoin appears early and recurs while the child's concrete money problem stays primary
 
+## Status Snapshot
+- Completed on `master`:
+  - contract + persistence (`storyMode` contract, parent selector, API/OpenAPI/web types, `books.story_mode`)
+  - centralized three-mode policy seam across concept, planner, rewrite, writer, and critic prompts
+  - validator alignment so deterministic beat/story checks agree with the selected mode
+- Current slice:
+  - refresh fixtures, mock/fallback outputs, prompt-principle expectations, and core docs so the repo consistently describes the shipped three-mode architecture
+- Next slice:
+  - deploy dev and capture live smoke/PDF artifacts for all three modes under `.agent/artifacts/story-modes/`
+
 ## Why Now
 - The prior Bitcoin-forward work successfully centralized the story policy, but it implemented a narrower single-mode scope than the original product intent.
 - The current `master` branch already has the lesson taxonomy, emotional arc model, and safety guardrails we want; what is missing is first-class mode choice and deterministic persistence of that choice.
@@ -46,7 +56,7 @@ Turn the recently centralized Bitcoin-forward policy seam into a true three-mode
    - Preserve safety bans and caregiver/narrator framing rules wherever Bitcoin is mentioned.
 4. Parent UX, fixtures, and docs
    - Add a simple selector to the create-order screen with mode guidance copy.
-   - Update prompt-principle tests, mock/fallback outputs, and docs so the repo consistently describes the three-mode architecture.
+   - Update prompt-principle tests, mock/fallback outputs, and docs so the repo consistently describes the three-mode architecture, persisted per-book `storyMode`, and validator-backed semantics.
 5. Verification and live proof
    - Run local smoke, targeted package tests, and repo quality.
    - Deploy dev and run live picture-book smoke across the three modes with saved JSON/PDF artifacts under `.agent/artifacts/story-modes/`.
