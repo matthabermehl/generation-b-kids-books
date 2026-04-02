@@ -160,9 +160,17 @@ function lessonPlacementRules(
 
   if (storyMode === "bitcoin_reveal_8020") {
     const revealStart = revealStartPageIndex(pageCount);
+    const recurringReveal = pageCount >= 8;
     return [
       `- Keep the problem-led setup dominant through page ${Math.max(1, revealStart)}; do not name Bitcoin before page ${revealStart + 1}.`,
       `- Use page ${revealStart + 1} or later for the first explicit Bitcoin solution beat.`,
+      ...(recurringReveal
+        ? [
+            "- In longer late-reveal books, keep one later brief emotional Bitcoin echo after that first reveal so Bitcoin is named more than once without turning the ending into a lecture.",
+            "- In longer late-reveal books, make that later echo a plain narrator sentence, never a new quoted caregiver line, a child private thought, or a remembered-thought line.",
+            "- In longer late-reveal books, do not solve ending warmth by deleting the second late Bitcoin mention entirely; shorten it into one warm emotional narrator echo instead."
+          ]
+        : []),
       `- Keep the final ${protectedEndingPageCount} page${protectedEndingPageCount === 1 ? "" : "s"} emotionally warm; if Bitcoin appears there, it must echo the reveal rather than introduce fresh explanation.`
     ];
   }
@@ -170,7 +178,8 @@ function lessonPlacementRules(
   if (context.profile === "read_aloud_3_4" && context.lesson === "better_rules" && pageCount >= 2) {
     return [
       `- For better_rules in read_aloud_3_4, add one earlier caregiver or narrator Bitcoin bridge before page ${pageCount - 2} once the child has already felt why fair rules matter.`,
-      `- For better_rules in read_aloud_3_4, reserve page ${pageCount - 2} for a brief caregiver or narrator Bitcoin echo that reconnects the repaired fair rule to Bitcoin without turning the ending into a lecture.`,
+      `- For better_rules in read_aloud_3_4, reserve page ${pageCount - 2} for exactly one short, warm caregiver or narrator Bitcoin echo that reconnects the repaired fair rule to Bitcoin without turning the ending into a lecture.`,
+      `- For better_rules in read_aloud_3_4, keep that page ${pageCount - 2} echo tied to the game that is restarting right now. Do not use a narrator summary like "Bitcoin is special because..." or any fresh why-Bitcoin explanation there.`,
       `- Keep page ${pageCount - 1} for emotional resolution only: togetherness, safety, calm pride, or relief. Do not introduce new Bitcoin explanation there.`
     ];
   }
@@ -199,10 +208,18 @@ function criticEndingRules(
 
   if (storyMode === "bitcoin_reveal_8020") {
     const revealStart = revealStartPageIndex(pageCount);
+    const recurringReveal = pageCount >= 8;
     return [
       `- In bitcoin_reveal_8020 mode, any explicit Bitcoin beat before page ${revealStart + 1} is too early.`,
       "- In bitcoin_reveal_8020 mode, the reveal should be late and concise. Do not let it turn the final page into a lecture.",
-      "- In bitcoin_reveal_8020 mode, prefer one warm reveal beat plus, at most, one brief emotional echo."
+      ...(recurringReveal
+        ? [
+            "- In bitcoin_reveal_8020 mode for longer books, expect two late Bitcoin mentions: one concise warm reveal beat, then one brief emotional echo on a later page.",
+            "- In bitcoin_reveal_8020 mode for longer books, the later echo must stay in plain narrator framing, not a new caregiver quote, child memory, or private-thought line.",
+            "- In bitcoin_reveal_8020 mode for longer books, do not collapse the ending to a single reveal mention just to reduce repetition; shorten the later echo instead.",
+            "- In bitcoin_reveal_8020 mode for longer books, keep the later echo to one short warm narrator sentence, not fresh explanation or new quoted dialogue."
+          ]
+        : ["- In bitcoin_reveal_8020 mode, prefer one warm reveal beat plus, at most, one brief emotional echo."])
     ];
   }
 
@@ -210,6 +227,7 @@ function criticEndingRules(
     return [
       "- For better_rules in read_aloud_3_4, expect Bitcoin more than once: one earlier caregiver or narrator bridge, then one brief echo on the penultimate page.",
       "- For better_rules in read_aloud_3_4, do not push every Bitcoin line earlier if that would erase the penultimate echo; shorten the penultimate echo instead.",
+      '- For better_rules in read_aloud_3_4, the penultimate echo should be one short warm line, not a new narrator explanation about why Bitcoin works. If needed, prefer a gentle in-scene line such as "Mom smiles. \\"Just like Bitcoin, your game has fair rules now.\\""',
       "- For better_rules in read_aloud_3_4, the final page should close emotionally and must not introduce new Bitcoin explanation."
     ];
   }
@@ -300,21 +318,33 @@ export function resolveBitcoinStoryPolicy(
       storyConceptLine:
         "Keep the child's lived money problem primary for most of the concept. Plan a late, warm caregiver or narrator Bitcoin reveal that solves the problem without turning the ending into a lecture.",
       storyConceptBridgeLine:
-        "bitcoinBridge must justify a late, warm caregiver or narrator Bitcoin answer spoken aloud or plainly narrated, not hidden in a private adult thought. Keep it strong enough that later prompts know the reveal belongs in the solution window, not earlier.",
+        minimumBitcoinMentions > 1
+          ? "bitcoinBridge must justify a late, warm caregiver or narrator Bitcoin answer spoken aloud or plainly narrated, not hidden in a private adult thought. Keep it strong enough that later prompts know the reveal belongs in the solution window, not earlier, and that longer books still need one brief emotional Bitcoin echo after the first reveal in plain narrator framing rather than a quoted line or a child private-thought line."
+          : "bitcoinBridge must justify a late, warm caregiver or narrator Bitcoin answer spoken aloud or plainly narrated, not hidden in a private adult thought. Keep it strong enough that later prompts know the reveal belongs in the solution window, not earlier.",
       beatPlannerLine:
-        "Let the child experience the money problem first. Before the late reveal window, keep bitcoinRelevanceScore below the explicit-Bitcoin threshold and avoid Bitcoin-solution wording so those beats stay thematic rather than high-salience. Do not name Bitcoin explicitly until the late reveal window, then use a brief caregiver or narrator solution beat spoken aloud or plainly narrated, never buried in a private adult thought, and preserve an emotionally warm ending.",
+        minimumBitcoinMentions > 1
+          ? "Let the child experience the money problem first. Before the late reveal window, keep bitcoinRelevanceScore below the explicit-Bitcoin threshold and avoid Bitcoin-solution wording so those beats stay thematic rather than high-salience. Do not name Bitcoin explicitly until the late reveal window, then use a brief caregiver or narrator solution beat spoken aloud or plainly narrated, never buried in a private adult thought, and keep one later brief emotional Bitcoin echo so the ending still names Bitcoin more than once without turning into a lecture. That later echo must stay in plain narrator wording, not quoted caregiver dialogue or the child's private thoughts."
+          : "Let the child experience the money problem first. Before the late reveal window, keep bitcoinRelevanceScore below the explicit-Bitcoin threshold and avoid Bitcoin-solution wording so those beats stay thematic rather than high-salience. Do not name Bitcoin explicitly until the late reveal window, then use a brief caregiver or narrator solution beat spoken aloud or plainly narrated, never buried in a private adult thought, and preserve an emotionally warm ending.",
       beatRewriteLine:
-        "Rewrite until pre-reveal beats stay below the explicit-Bitcoin salience threshold and avoid Bitcoin-solution wording, while Bitcoin stays absent through most of the story and then appears late as a warm caregiver or narrator solution spoken aloud or plainly narrated instead of an early, technical, or private-thought explanation.",
+        minimumBitcoinMentions > 1
+          ? "Rewrite until pre-reveal beats stay below the explicit-Bitcoin salience threshold and avoid Bitcoin-solution wording, while Bitcoin stays absent through most of the story and then appears late as a warm caregiver or narrator solution spoken aloud or plainly narrated instead of an early, technical, or private-thought explanation. In longer books, preserve one later brief emotional Bitcoin echo rather than collapsing the story back to a single reveal mention, and keep that echo out of quoted dialogue and the child's private thoughts."
+          : "Rewrite until pre-reveal beats stay below the explicit-Bitcoin salience threshold and avoid Bitcoin-solution wording, while Bitcoin stays absent through most of the story and then appears late as a warm caregiver or narrator solution spoken aloud or plainly narrated instead of an early, technical, or private-thought explanation.",
       writerLine:
-        "For most of the story, keep Bitcoin unspoken while the child's concrete money problem grows clear. Reveal Bitcoin late in caregiver or narrator framing, with the explicit Bitcoin mention spoken aloud or plainly narrated rather than hidden in private thoughts, then keep the ending warm and non-lecture-like.",
+        minimumBitcoinMentions > 1
+          ? "For most of the story, keep Bitcoin unspoken while the child's concrete money problem grows clear. Reveal Bitcoin late in caregiver or narrator framing, with the explicit Bitcoin mention spoken aloud or plainly narrated rather than hidden in private thoughts. In longer books, keep one later brief emotional Bitcoin echo after the reveal so Bitcoin lands more than once, but make that echo shorter and warmer than the reveal and keep it in plain narrator wording rather than quoted dialogue or the child's internal thoughts."
+          : "For most of the story, keep Bitcoin unspoken while the child's concrete money problem grows clear. Reveal Bitcoin late in caregiver or narrator framing, with the explicit Bitcoin mention spoken aloud or plainly narrated rather than hidden in private thoughts, then keep the ending warm and non-lecture-like.",
       criticLine:
-        "Flag stories that spoil Bitcoin too early, skip the late reveal entirely, hide the only direct Bitcoin mention inside private thoughts, or overload the ending with late explanation.",
+        minimumBitcoinMentions > 1
+          ? "Flag stories that spoil Bitcoin too early, skip the late reveal entirely, hide the only direct Bitcoin mention inside private thoughts, collapse longer late-reveal books to only one explicit Bitcoin mention, or overload the ending with late explanation."
+          : "Flag stories that spoil Bitcoin too early, skip the late reveal entirely, hide the only direct Bitcoin mention inside private thoughts, or overload the ending with late explanation.",
       titleGuidanceLine:
         "Title should center the child's concrete money problem and should not spoil the late Bitcoin reveal by naming Bitcoin up front.",
       titleReviewLine:
         "Does the title keep the late Bitcoin reveal hidden and stay anchored in the child's concrete money problem?",
       endingLine:
-        "The final page must stay emotionally warm. If Bitcoin is mentioned there, it must echo the late reveal softly rather than introduce fresh explanation.",
+        minimumBitcoinMentions > 1
+          ? "The final page must stay emotionally warm. In longer late-reveal books, keep one brief emotional Bitcoin echo there in plain narrator wording rather than deleting the second late mention entirely, but do not introduce fresh explanation, quoted dialogue, or child private thoughts."
+          : "The final page must stay emotionally warm. If Bitcoin is mentioned there, it must echo the late reveal softly rather than introduce fresh explanation.",
       youngProfileGuardrails: youngProfileGuardrails(context, storyMode),
       lessonPlacementRules: lessonPlacementRules(context, storyMode, pageCount, 1),
       criticEndingRules: criticEndingRules(context, storyMode, pageCount),

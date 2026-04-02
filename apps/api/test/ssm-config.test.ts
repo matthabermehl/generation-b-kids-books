@@ -57,7 +57,7 @@ describe("api runtime ssm config", () => {
         parameter("sendgrid_from_email", "noreply@example.com"),
         parameter("web_base_url", "https://example.com"),
         parameter("reviewer_email_allowlist", "reviewer@example.com,qa@example.com"),
-        parameter("openai_model_image", "gpt-image-1.5"),
+        parameter("openai_model_image", "gpt-image-1-mini"),
         parameter("enable_mock_llm", "false"),
         parameter("enable_mock_image", "false"),
         parameter("enable_mock_checkout", "false"),
@@ -77,7 +77,7 @@ describe("api runtime ssm config", () => {
     expect(config.featureFlags.enableMockCheckout).toBe(false);
     expect(config.featureFlags.enablePictureBookPipeline).toBe(true);
     expect(config.featureFlags.enableIndependent8To10).toBe(false);
-    expect(config.models.openaiImage).toBe("gpt-image-1.5");
+    expect(config.models.openaiImage).toBe("gpt-image-1-mini");
     expect(config.stripe.priceId).toBe("price_123");
 
     await getRuntimeConfig();
@@ -99,7 +99,7 @@ describe("api runtime ssm config", () => {
         parameter("sendgrid_from_email", "noreply@example.com"),
         parameter("web_base_url", "https://example.com"),
         parameter("reviewer_email_allowlist", "__unset__"),
-        parameter("openai_model_image", "gpt-image-1.5"),
+        parameter("openai_model_image", "gpt-image-1-mini"),
         parameter("enable_mock_llm", "false"),
         parameter("enable_mock_image", "false"),
         parameter("enable_mock_checkout", "false"),

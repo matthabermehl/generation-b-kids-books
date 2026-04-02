@@ -246,7 +246,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
 
     const pipelineFunction = new lambdaNode.NodejsFunction(this, "PipelineFunction", {
       runtime: lambda.Runtime.NODEJS_22_X,
-      timeout: cdk.Duration.minutes(5),
+      timeout: cdk.Duration.minutes(10),
       memorySize: 1024,
       entry: path.resolve(repoRoot, "apps/workers/src/pipeline.ts"),
       projectRoot: repoRoot,
@@ -904,7 +904,7 @@ export class AiChildrensBookDevStack extends cdk.Stack {
       WEB_BASE_URL: process.env.WEB_BASE_URL ?? `https://${distribution.distributionDomainName}`,
       OPENAI_MODEL_JSON: process.env.OPENAI_MODEL_JSON ?? "gpt-5-mini-2025-08-07",
       OPENAI_MODEL_VISION: process.env.OPENAI_MODEL_VISION ?? "gpt-5-mini-2025-08-07",
-      OPENAI_MODEL_IMAGE: process.env.OPENAI_MODEL_IMAGE ?? "gpt-image-1.5",
+      OPENAI_MODEL_IMAGE: process.env.OPENAI_MODEL_IMAGE ?? "gpt-image-1-mini",
       ANTHROPIC_MODEL_WRITER: process.env.ANTHROPIC_MODEL_WRITER ?? "claude-sonnet-4-5",
       STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID ?? "price_SET_ME",
       STRIPE_SUCCESS_URL:

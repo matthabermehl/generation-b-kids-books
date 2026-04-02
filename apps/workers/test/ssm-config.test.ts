@@ -57,7 +57,7 @@ describe("worker runtime ssm config", () => {
         parameter("stripe_cancel_url", "https://example.com/cancel"),
         parameter("sendgrid_from_email", "hello@example.com"),
         parameter("web_base_url", "https://example.com"),
-        parameter("openai_model_image", "gpt-image-1.5"),
+        parameter("openai_model_image", "gpt-image-1-mini"),
         parameter("enable_mock_llm", "false"),
         parameter("enable_mock_image", "false"),
         parameter("enable_mock_checkout", "false"),
@@ -77,7 +77,7 @@ describe("worker runtime ssm config", () => {
     expect(second.featureFlags.enableMockCheckout).toBe(false);
     expect(second.featureFlags.enablePictureBookPipeline).toBe(true);
     expect(second.featureFlags.enableIndependent8To10).toBe(false);
-    expect(first.models.openaiImage).toBe("gpt-image-1.5");
+    expect(first.models.openaiImage).toBe("gpt-image-1-mini");
     expect(first.stripe.priceId).toBe("price_123");
     expect(sendMock).toHaveBeenCalledTimes(1);
 
