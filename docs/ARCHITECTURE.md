@@ -245,5 +245,5 @@ Fixed-layout additions:
 - `sql/`
 
 ### File extension distribution
-- .ts:112, .tsx:28, .md:23, .json:19, .sh:10, .mjs:6, .js:4, .yaml:2
+- .json:5884, .ts:2393, .tsx:588, .md:509, .sh:210, .yaml:168, .mjs:126, .js:118
 <!-- HARNESS-INFERRED:END -->
