@@ -27,7 +27,7 @@ describe("character image generation", () => {
 
     const image = await generateCharacterCandidateImage({
       apiKey: "oa",
-      model: "gpt-image-1.5",
+      model: "gpt-image-1-mini",
       characterDescription: "A curious child in a red raincoat with a yellow backpack.",
       bookId: "book-1",
       userId: "user-1",
@@ -43,12 +43,12 @@ describe("character image generation", () => {
     };
 
     expect(String(fetchMock.mock.calls[0]?.[0] ?? "")).toBe("https://api.openai.com/v1/images/generations");
-    expect(requestBody.model).toBe("gpt-image-1.5");
+    expect(requestBody.model).toBe("gpt-image-1-mini");
     expect(requestBody.size).toBe("1024x1536");
     expect(requestBody.quality).toBe("low");
     expect(requestBody.user).toBe("book:book-1:user:user-1");
     expect(image.providerRequestId).toBe("req-character");
-    expect(image.endpoint).toBe("openai:gpt-image-1.5");
+    expect(image.endpoint).toBe("openai:gpt-image-1-mini");
     expect(image.contentType).toBe("image/png");
     expect(image.bytes.length).toBeGreaterThan(0);
   });

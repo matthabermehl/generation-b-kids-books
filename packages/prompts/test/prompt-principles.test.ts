@@ -166,6 +166,7 @@ describe("prompt principles", () => {
     expectSignals(prompt, [
       "story-mode anchor",
       "late, warm caregiver or narrator bitcoin answer",
+      "brief emotional bitcoin echo",
       "solution window",
       "not earlier"
     ]);
@@ -219,27 +220,31 @@ describe("prompt principles", () => {
       "keep bitcoinrelevancescore below the explicit-bitcoin threshold",
       "avoid bitcoin-solution wording",
       "do not name bitcoin explicitly until the late reveal window",
+      "later brief emotional bitcoin echo",
       "beats before beat 10 must keep bitcoinrelevancescore below 0.35"
     ]);
     expectSignals(rewritePrompt, [
       "story-mode anchor",
       "rewrite any beat before beat 10 so bitcoinrelevancescore stays below 0.35",
       "child-problem or value-thread setup",
-      "explicit bitcoin solution framing"
+      "explicit bitcoin solution framing",
+      "single reveal mention"
     ]);
     expectSignals(writerPrompt, [
       "story-mode anchor",
       "reveal bitcoin late in caregiver or narrator framing",
       "spoken aloud or plainly narrated",
+      "later brief emotional bitcoin echo",
+      "plain narrator wording",
       "title should center the child's concrete money problem and should not spoil the late bitcoin reveal",
-      "if bitcoin is mentioned there, it must echo the late reveal softly"
+      "keep one brief emotional bitcoin echo there"
     ]);
     expectSignals(criticPrompt, [
       "story-mode anchor",
       "flag stories that spoil bitcoin too early",
       "private thoughts",
       "title keep the late bitcoin reveal hidden",
-      "prefer one warm reveal beat plus, at most, one brief emotional echo"
+      "collapse longer late-reveal books to only one explicit bitcoin mention"
     ]);
   });
 
@@ -324,7 +329,8 @@ describe("prompt principles", () => {
       "prefer 2-3 short sentences",
       "one short quoted sentence plus narration",
       "before page 10",
-      "reserve page 10 for a brief caregiver or narrator bitcoin echo",
+      "exactly one short, warm caregiver or narrator bitcoin echo",
+      'do not use a narrator summary like "bitcoin is special because..."',
       "keep page 11 for emotional resolution only"
     ]);
     expectSignals(earlyDecoderPrompt, [
@@ -366,13 +372,14 @@ describe("prompt principles", () => {
 
     expectSignals(plannerPrompt, [
       "before page 10",
-      "reserve page 10 for a brief caregiver or narrator bitcoin echo",
+      "exactly one short, warm caregiver or narrator bitcoin echo",
       "keep page 11 for emotional resolution only"
     ]);
     expectSignals(criticPrompt, [
       "expect bitcoin more than once",
       "penultimate page",
       "do not push every bitcoin line earlier",
+      "one short warm line",
       "final page should close emotionally",
       "late, verbose bitcoin explanation overloads the ending"
     ]);

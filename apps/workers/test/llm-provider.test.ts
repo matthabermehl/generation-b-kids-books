@@ -531,6 +531,50 @@ describe("llm provider routing", () => {
     expect(result.concept.lessonScenario.fairRule).toContain("same goal rule");
   });
 
+  it("sanitizes sound_money_implicit story concepts that still name Bitcoin", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const implicitContext = {
+      ...context,
+      lesson: "better_rules" as const,
+      profile: "read_aloud_3_4" as const,
+      storyMode: "sound_money_implicit" as const,
+      ageYears: 4,
+      pageCount: 12
+    };
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiStructuredResponse({
+        premise: "Ava learns why Bitcoin helps fair games feel steadier.",
+        caregiverLabel: "Mom",
+        bitcoinBridge: "Mom says Bitcoin keeps the rules the same for everyone.",
+        emotionalPromise: "Ava feels calmer once Bitcoin explains the fair rule.",
+        caregiverWarmthMoment: "Mom hugs Ava and says Bitcoin can help.",
+        bitcoinValueThread: "Bitcoin fairness and trust",
+        requiredSetups: ["backyard game", "bitcoin rule talk"],
+        requiredPayoffs: ["bitcoin fairness feels clear", "game feels calm again"],
+        forbiddenLateIntroductions: ["Any mention of Bitcoin or digital money"],
+        lessonScenario: {
+          moneyLessonKey: "better_rules",
+          gameName: "Backyard Ball",
+          brokenRule: "one child keeps changing the score",
+          fairRule: "Bitcoin fairness means the rule stays the same",
+          sharedGoal: "play together under one fair rule",
+          deadlineEvent: null
+        }
+      })
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    const result = await provider.generateStoryConcept(implicitContext);
+
+    expect(JSON.stringify(result.concept)).not.toMatch(/\bbitcoin\b/i);
+    expect(result.concept.bitcoinBridge).toContain("steady");
+    expect(result.concept.forbiddenLateIntroductions.join(" ")).toContain("money");
+  });
+
   it("allows soft beat-critic issues without triggering rewrites", async () => {
     getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
 
@@ -885,12 +929,255 @@ describe("llm provider routing", () => {
     expect(messages[3]?.content).toContain("page 10");
     expect(messages[3]?.content).toContain("Story-mode anchor:");
     expect(messages[3]?.content).toContain("add one earlier caregiver or narrator Bitcoin bridge before page 10");
-    expect(messages[3]?.content).toContain("reserve page 10 for a brief caregiver or narrator Bitcoin echo");
+    expect(messages[3]?.content).toContain("exactly one short, warm caregiver or narrator Bitcoin echo");
+    expect(messages[3]?.content).toContain('Do not use a narrator summary like "Bitcoin is special because..."');
     expect(messages[3]?.content).toContain("expect Bitcoin more than once");
     expect(messages[3]?.content).toContain("do not push every Bitcoin line earlier");
+    expect(messages[3]?.content).toContain("one short warm line");
     expect(messages[3]?.content).toContain("combine clipped observations");
     expect(messages[3]?.content).toContain("one short quoted sentence plus narration");
     expect(messages[3]?.content).toContain("final page should close emotionally");
+  });
+
+  it("appends better_rules penultimate-page guardrails even when the critic supplies rewrite instructions", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const betterRulesContext = {
+      ...context,
+      lesson: "better_rules" as const,
+      profile: "read_aloud_3_4" as const,
+      ageYears: 4,
+      pageCount: 12
+    };
+    const betterRulesConcept = {
+      premise: "Ava wants fair rules for a backyard game.",
+      caregiverLabel: "Mom" as const,
+      bitcoinBridge: "Bitcoin can reinforce trusted shared rules.",
+      emotionalPromise: "Ava moves from frustration to calm relief.",
+      caregiverWarmthMoment: "Mom kneels beside Ava and helps her feel steady.",
+      bitcoinValueThread: "fair rules and shared trust",
+      requiredSetups: ["ball", "friends", "rule talk"],
+      requiredPayoffs: ["fair rule agreed", "game feels calm again"],
+      forbiddenLateIntroductions: ["new coach"],
+      lessonScenario: {
+        moneyLessonKey: "better_rules" as const,
+        gameName: "Backyard Ball",
+        brokenRule: "one child keeps changing the score",
+        fairRule: "every goal counts once for everyone",
+        sharedGoal: "play together under one fair rule",
+        deadlineEvent: null
+      }
+    };
+    const betterRulesBeatSheet = {
+      beats: Array.from({ length: 12 }, (_, index) => ({
+        ...compliantBeatSheet.beats[Math.min(index, compliantBeatSheet.beats.length - 1)],
+        pageIndexEstimate: index,
+        sceneId: `fair-echo-scene-${Math.floor(index / 2) + 1}`,
+        purpose: `Fair echo beat ${index + 1}`,
+        conflict: "Ava wants the game rules to stay fair for everyone.",
+        sceneLocation: "Backyard field",
+        sceneVisualDescription: "Backyard field with a ball, soft grass, and evening light.",
+        emotionalTarget: index < 9 ? "frustrated" : index === 10 ? "understanding" : "relieved",
+        bitcoinRelevanceScore: index === 10 ? 0.9 : index === 11 ? 0.3 : 0.1,
+        introduces: index === 0 ? ["ball", "friends", "rule talk"] : [],
+        paysOff: index === 11 ? ["fair rule agreed", "game feels calm again"] : [],
+        continuityFacts: ["caregiver_label:Mom", "deadline_event:null"]
+      }))
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiStructuredResponse({
+        title: "Ava Plays Fair",
+        concept: betterRulesConcept,
+        beats: betterRulesBeatSheet.beats,
+        pages: betterRulesBeatSheet.beats.map((beat, index) => ({
+          pageIndex: index,
+          pageText: `Rewritten fair echo page ${index + 1}`,
+          illustrationBrief: beat.sceneLocation,
+          sceneId: beat.sceneId,
+          sceneVisualDescription: beat.sceneVisualDescription,
+          newWordsIntroduced: [],
+          repetitionTargets: ["fair"]
+        }))
+      })
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    await provider.draftPages(betterRulesContext, betterRulesConcept, betterRulesBeatSheet, {
+      rewriteHistory: [
+        {
+          story: {
+            title: "Ava Plays Fair",
+            concept: betterRulesConcept,
+            beats: betterRulesBeatSheet.beats,
+            pages: betterRulesBeatSheet.beats.map((beat, index) => ({
+              pageIndex: index,
+              pageText: `Draft fair echo page ${index + 1}`,
+              illustrationBrief: beat.sceneLocation,
+              sceneId: beat.sceneId,
+              sceneVisualDescription: beat.sceneVisualDescription,
+              newWordsIntroduced: [],
+              repetitionTargets: ["fair"]
+            })),
+            readingProfileId: "read_aloud_3_4",
+            moneyLessonKey: "better_rules",
+            storyMode: betterRulesContext.storyMode
+          },
+          criticVerdict: {
+            ok: false,
+            issues: [
+              {
+                pageStart: 10,
+                pageEnd: 10,
+                issueType: "ending_emotion",
+                severity: "hard",
+                rewriteTarget: "page",
+                evidence: "Page 10 interrupts the emotional close with a didactic Bitcoin explanation.",
+                suggestedFix: 'Replace page 10 with a single warm line like "Mom smiles. \\"Just like Bitcoin, your game has fair rules now.\\""'
+              }
+            ],
+            rewriteInstructions:
+              "Revise page 10 to replace the narrator's Bitcoin explanation with a brief, warm echo from Mom."
+          }
+        }
+      ]
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const messages = requestBody.messages ?? [];
+    expect(messages[3]?.content).toContain("Revise page 10 to replace the narrator's Bitcoin explanation with a brief, warm echo from Mom.");
+    expect(messages[3]?.content).toContain("Story-mode anchor:");
+    expect(messages[3]?.content).toContain("exactly one short, warm caregiver or narrator Bitcoin echo");
+    expect(messages[3]?.content).toContain("one short warm line");
+    expect(messages[3]?.content).toContain('Do not use a narrator explanation like "Bitcoin is special because..." on that page.');
+    expect(messages[3]?.content).toContain("Keep any broader Bitcoin explanation on page 9 or earlier.");
+  });
+
+  it("keeps the final late-reveal echo when critic instructions are blank", async () => {
+    getRuntimeConfigMock.mockResolvedValue(runtimeConfig(false));
+
+    const revealContext = {
+      ...context,
+      storyMode: "bitcoin_reveal_8020" as const,
+      profile: "read_aloud_3_4" as const,
+      lesson: "jar_saving_limits" as const,
+      ageYears: 4,
+      pageCount: 12
+    };
+    const revealConcept = {
+      premise: "Ava wants a kite and learns to wait for the steadier plan.",
+      caregiverLabel: "Mom" as const,
+      bitcoinBridge:
+        "Mom later calmly names Bitcoin as one grown-up saving idea for protecting patient effort over time.",
+      emotionalPromise: "Ava moves from stretched feelings to calm pride.",
+      caregiverWarmthMoment: "Mom sits close and helps Ava breathe before the last choice.",
+      bitcoinValueThread: "patience, stewardship, and protecting long-term effort",
+      requiredSetups: ["kite price", "coin jar", "family plan"],
+      requiredPayoffs: ["the saving choice feels clear", "Ava feels calm and proud"],
+      forbiddenLateIntroductions: ["surprise sale"],
+      lessonScenario: {
+        moneyLessonKey: "jar_saving_limits" as const,
+        targetItem: "red kite",
+        targetPrice: 12,
+        startingAmount: 7,
+        gapAmount: 5,
+        earningOptions: [
+          { label: "rake leaves", action: "rake leaves in the yard", sceneLocation: "yard" },
+          { label: "help bake muffins", action: "help bake muffins in the kitchen", sceneLocation: "kitchen" }
+        ] as const,
+        temptation: "berry ice pop",
+        deadlineEvent: "before the windy picnic"
+      }
+    };
+    const revealBeatSheet = {
+      beats: Array.from({ length: 12 }, (_, index) => ({
+        ...compliantBeatSheet.beats[Math.min(index, compliantBeatSheet.beats.length - 1)],
+        pageIndexEstimate: index,
+        sceneId: `reveal-scene-${Math.floor(index / 2) + 1}`,
+        purpose: `Reveal beat ${index + 1}`,
+        conflict: "Ava wants the kite now but needs a steadier plan.",
+        sceneLocation: index < 8 ? "toy aisle" : "family room",
+        sceneVisualDescription: "Warm family room with a coin jar, kite sketch, and soft evening light.",
+        emotionalTarget: index < 9 ? "stretched" : index === 10 ? "understanding" : "relieved",
+        bitcoinRelevanceScore: index === 10 ? 0.9 : index === 11 ? 0.3 : 0.1,
+        introduces: index === 0 ? ["kite price", "coin jar", "family plan"] : [],
+        paysOff: index === 11 ? ["the saving choice feels clear", "Ava feels calm and proud"] : [],
+        continuityFacts: ["caregiver_label:Mom", "deadline_event:before the windy picnic"]
+      }))
+    };
+
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      openAiStructuredResponse({
+        title: "Ava and the Windy Plan",
+        concept: revealConcept,
+        beats: revealBeatSheet.beats,
+        pages: revealBeatSheet.beats.map((beat, index) => ({
+          pageIndex: index,
+          pageText: `Rewritten reveal page ${index + 1}`,
+          illustrationBrief: beat.sceneLocation,
+          sceneId: beat.sceneId,
+          sceneVisualDescription: beat.sceneVisualDescription,
+          newWordsIntroduced: [],
+          repetitionTargets: ["save"]
+        }))
+      })
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolveLlmProvider();
+    await provider.draftPages(revealContext, revealConcept, revealBeatSheet, {
+      rewriteHistory: [
+        {
+          story: {
+            title: "Ava and the Windy Plan",
+            concept: revealConcept,
+            beats: revealBeatSheet.beats,
+            pages: revealBeatSheet.beats.map((beat, index) => ({
+              pageIndex: index,
+              pageText: `Draft reveal page ${index + 1}`,
+              illustrationBrief: beat.sceneLocation,
+              sceneId: beat.sceneId,
+              sceneVisualDescription: beat.sceneVisualDescription,
+              newWordsIntroduced: [],
+              repetitionTargets: ["save"]
+            })),
+            readingProfileId: revealContext.profile,
+            moneyLessonKey: revealContext.lesson,
+            storyMode: revealContext.storyMode
+          },
+          criticVerdict: {
+            ok: false,
+            issues: [
+              {
+                pageStart: 11,
+                pageEnd: 11,
+                issueType: "ending_emotion",
+                severity: "hard",
+                rewriteTarget: "page",
+                evidence: "Page 11 explains too much after the reveal.",
+                suggestedFix: "Page 11 explains too much after the reveal."
+              }
+            ],
+            rewriteInstructions: ""
+          }
+        }
+      ]
+    });
+
+    const requestBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages?: Array<{ role?: string; content?: string }>;
+    };
+    const messages = requestBody.messages ?? [];
+    expect(messages[3]?.content).toContain("expect two late Bitcoin mentions");
+    expect(messages[3]?.content).toContain("single reveal mention");
+    expect(messages[3]?.content).toContain("keep one brief emotional Bitcoin echo there");
+    expect(messages[3]?.content).toContain("Do not delete the second late Bitcoin mention entirely.");
+    expect(messages[3]?.content).toContain("one short warm Bitcoin echo");
+    expect(messages[3]?.content).toContain("brief narrator line");
   });
 
   it("keeps an earlier Bitcoin bridge plus penultimate echo for new_money_unfair early decoders when critic instructions are blank", async () => {

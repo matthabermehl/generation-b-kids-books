@@ -1,55 +1,49 @@
 ## Current State
 
-- Branch before split: `master` at `876a301`.
-- Baseline on synced `master`:
-  - `git fetch Github master` confirms local `master` matches `Github/master`.
-  - `bash scripts/agent/smoke.sh` passed on 2026-03-31 from this clean `master` state.
-- The first task in the story-modes initiative is already merged:
-  - `storyMode` is now a first-class shared contract.
-  - `books.story_mode` is persisted.
-  - the parent-facing selector exists.
-  - API/OpenAPI/generated web types include the field.
-  - worker context already threads the selected mode through generation.
-- The remaining gap is policy and prompt behavior:
-  - the shared Bitcoin story seam still mostly reflects one shipped `bitcoin_forward` posture.
-  - prompt templates and prompt-principle coverage are not yet fully aligned across `sound_money_implicit`, `bitcoin_reveal_8020`, and `bitcoin_forward`.
-  - some validator/test wording still encodes thresholds or language that should instead live behind the centralized policy seam.
+- Branch before split: `master` at `f8d12fd`.
+- Baseline on clean `master`:
+  - `bash scripts/agent/smoke.sh` => PASS on 2026-04-01.
+  - `.agent/current_task.md` already targets `bitcoin-story-modes-deploy-smoke-01`.
+- The supporting story-mode groundwork is already merged:
+  - parent-visible `storyMode` selector
+  - per-book `storyMode` persistence
+  - centralized three-mode Bitcoin story policy seam
+  - validator alignment and refreshed fixtures/docs
+- The remaining gap is live proof, not product behavior:
+  - local gates and deploy evidence were previously captured
+  - fresh reveal-mode live proof was blocked by OpenAI image billing during `/character/candidates`
+  - the task remains open until three current-mode JSON/PDF artifacts exist under `.agent/artifacts/story-modes/`
 
 ## Objectives
 
-- Generalize `packages/domain/src/bitcoin-story-policy.ts` so one shared seam fully describes all three supported modes:
+- Finish `bitcoin-story-modes-deploy-smoke-01` from the latest `master` baseline.
+- Re-run the required local verification:
+  - `bash scripts/agent/smoke.sh`
+  - `pnpm --filter @book/prompts test`
+  - `pnpm --filter @book/workers test`
+  - `bash scripts/agent/quality.sh`
+- Deploy dev and then capture real provider + live picture-book smoke evidence for:
   - `sound_money_implicit`
   - `bitcoin_reveal_8020`
   - `bitcoin_forward`
-- Align story concept, beat planner, rewrite, writer, and critic prompt instructions to obey the persisted `storyMode`.
-- Keep mode semantics centralized so timing, salience, title guidance, and ending behavior are not duplicated across prompt call sites or tests.
-- Preserve the already-shipped `bitcoin_forward` behavior while making the two additional modes additive and deterministic.
+- Save matching smoke JSON plus downloadable final PDFs under `.agent/artifacts/story-modes/`.
+- Update harness evidence only after the fresh artifacts are real.
 
 ## Risks
 
-- Prompt copy can drift from policy if templates inline mode wording instead of deriving it from the shared seam.
-- The reveal mode is easy to overcorrect into a lecture-heavy ending if the late-answer guidance is not explicit and warm.
-- The implicit mode needs strong guardrails so no Bitcoin naming slips into concept/title/beats/pages/rewrite target while still teaching the underlying money lesson.
-- Worker/provider tests may have baked-in Bitcoin-forward expectations that need careful adjustment without widening runtime behavior outside this task.
+- OpenAI image billing or rate limits may still fail `/character/candidates` before story generation starts.
+- Reveal mode can still expose hidden coupling if the latest live prompts regress into an early high-salience Bitcoin beat.
+- Live smoke runs are expensive and time-consuming, so retries should stay narrow and artifact-driven.
+- This task should avoid accidental redesign of the selector, persistence, policy seam, or validators while chasing live proof.
 
 ## Assumptions
 
-- The current five lesson keys remain unchanged:
-  - `prices_change`
-  - `jar_saving_limits`
-  - `new_money_unfair`
-  - `keep_what_you_earn`
-  - `better_rules`
-- The current reading profiles remain unchanged.
-- The existing parent selector, API field, and persisted per-book mode are already the right contract and should not be redesigned in this slice.
-- Safety and tone constraints remain fixed across every mode:
-  - no hype or investment promises
-  - no technical or device-first framing
-  - no child decoding or explaining Bitcoin
-  - endings stay emotionally warm rather than lecture-like
-  - the child's concrete money problem stays primary
+- The current deployed API base remains `https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com` unless deploy output says otherwise.
+- Existing story-mode semantics are correct; only narrow smoke-path fixes are allowed if live coupling forces them.
+- The current artifact directory `.agent/artifacts/story-modes/` remains the source of truth for final evidence.
+- Dev deployment and smoke work are acceptable repo-side effects for this harness task.
 
 ## Open Decisions
 
-- No new product decisions are expected for this slice unless hidden coupling forces a prompt/validator contract exception.
-- If prompt wording and policy shape disagree, the shared policy seam should win and prompt/template wording should adapt to it rather than introducing a second source of truth.
+- If live smoke fails again, prefer the smallest evidence-backed fix and preserve any failed JSON artifacts before retrying.
+- If the remaining blocker is purely external billing or provider availability, keep the task open and document that explicitly instead of forcing unrelated code changes.

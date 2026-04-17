@@ -42,10 +42,19 @@ describe("bitcoin story policy", () => {
     expect(policy.maximumBitcoinMentionsBeforePageIndex).toBe(0);
     expect(policy.maximumHighRelevanceBeatsBeforePageIndex).toBe(0);
     expect(policy.storyConceptBridgeLine).toContain("late, warm caregiver or narrator Bitcoin answer");
+    expect(policy.storyConceptBridgeLine).toContain("brief emotional Bitcoin echo");
     expect(policy.beatPlannerLine).toContain("keep bitcoinRelevanceScore below the explicit-Bitcoin threshold");
+    expect(policy.beatPlannerLine).toContain("later brief emotional Bitcoin echo");
     expect(policy.beatRewriteLine).toContain("pre-reveal beats stay below the explicit-Bitcoin salience threshold");
+    expect(policy.beatRewriteLine).toContain("single reveal mention");
     expect(policy.lessonPlacementRules.join(" ")).toContain("do not name Bitcoin before page 10");
-    expect(policy.criticEndingRules.join(" ")).toContain("prefer one warm reveal beat");
+    expect(policy.lessonPlacementRules.join(" ")).toContain("brief emotional Bitcoin echo");
+    expect(policy.lessonPlacementRules.join(" ")).toContain("plain narrator sentence");
+    expect(policy.criticEndingRules.join(" ")).toContain("expect two late Bitcoin mentions");
+    expect(policy.criticEndingRules.join(" ")).toContain("single reveal mention");
+    expect(policy.criticEndingRules.join(" ")).toContain("new caregiver quote");
+    expect(policy.endingLine).toContain("keep one brief emotional Bitcoin echo");
+    expect(policy.endingLine).toContain("plain narrator wording");
     expect(buildBitcoinStoryBridgeText("Dad", "prices_change", "bitcoin_reveal_8020")).toContain(
       "later calmly names Bitcoin"
     );
@@ -67,8 +76,11 @@ describe("bitcoin story policy", () => {
     expect(policy.lessonPlacementRules.join(" ")).toContain("before page 10");
     expect(policy.lessonPlacementRules.join(" ")).toContain("page 10");
     expect(policy.lessonPlacementRules.join(" ")).toContain("page 11");
+    expect(policy.lessonPlacementRules.join(" ")).toContain("exactly one short, warm caregiver or narrator Bitcoin echo");
+    expect(policy.lessonPlacementRules.join(" ")).toContain('Do not use a narrator summary like "Bitcoin is special because..."');
     expect(policy.criticEndingRules.join(" ")).toContain("more than once");
     expect(policy.criticEndingRules.join(" ")).toContain("penultimate page");
+    expect(policy.criticEndingRules.join(" ")).toContain("one short warm line");
   });
 
   it("adds an earlier bridge and penultimate echo for new_money_unfair early decoders", () => {

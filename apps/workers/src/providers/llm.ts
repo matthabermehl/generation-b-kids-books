@@ -587,6 +587,29 @@ function fallbackStoryRewriteInstructions(
 
     if (
       context.profile === "read_aloud_3_4" &&
+      context.lesson === "better_rules" &&
+      issue.pageStart === context.pageCount - 2 &&
+      issue.pageEnd === context.pageCount - 2 &&
+      ["bitcoin_fit", "ending_emotion", "reading_level"].includes(issue.issueType)
+    ) {
+      return `- ${rangeLabel} (${issue.issueType}): ${fix} Keep page ${context.pageCount - 2} to one short warm Bitcoin echo tied to the game restarting in-scene, preferably a single caregiver line such as Mom smiling and saying the game has fair rules now. Do not use a narrator explanation like "Bitcoin is special because..." on that page. Keep any broader Bitcoin explanation on page ${Math.max(
+        0,
+        context.pageCount - 3
+      )} or earlier.`;
+    }
+
+    if (
+      context.storyMode === "bitcoin_reveal_8020" &&
+      policy.minimumBitcoinMentions > 1 &&
+      issue.pageStart === context.pageCount - 1 &&
+      issue.pageEnd === context.pageCount - 1 &&
+      ["theme_integration", "bitcoin_fit", "ending_emotion", "reading_level"].includes(issue.issueType)
+    ) {
+      return `- ${rangeLabel} (${issue.issueType}): ${fix} Keep the final page to one short warm Bitcoin echo so the late reveal still lands more than once. Do not delete the second late Bitcoin mention entirely. Instead, shorten it to a brief narrator line that names Bitcoin once and immediately lands on closeness, relief, or calm pride with no fresh explanation or quoted dialogue.`;
+    }
+
+    if (
+      context.profile === "read_aloud_3_4" &&
       issue.issueType === "reading_level" &&
       issue.pageStart === context.pageCount - 1 &&
       issue.pageEnd === context.pageCount - 1
@@ -610,8 +633,10 @@ function buildStoryRewriteFeedbackMessage(
   const hardIssues = verdict.issues.filter((issue) => issue.severity === "hard");
   const softIssues = verdict.issues.filter((issue) => issue.severity === "soft");
   const fallbackInstructions = fallbackStoryRewriteInstructions(context, verdict);
-  const rewriteInstructions =
-    verdict.rewriteInstructions.trim().length > 0 ? verdict.rewriteInstructions.trim() : fallbackInstructions;
+  const explicitInstructions = verdict.rewriteInstructions.trim();
+  const rewriteInstructions = [explicitInstructions, fallbackInstructions]
+    .filter((value, index, values) => value.length > 0 && values.indexOf(value) === index)
+    .join("\n");
 
   return [
     "The critic rejected the previous draft. Rewrite the story so it satisfies the critic while preserving the parts that already work.",
@@ -946,37 +971,196 @@ function storyConceptParser(context: StoryContext): z.ZodType<StoryConcept, z.Zo
   }, storyConceptSchema);
 }
 
-function normalizeStoryConcept(concept: StoryConcept): StoryConcept {
-  if (concept.lessonScenario.moneyLessonKey !== "jar_saving_limits") {
-    if (concept.lessonScenario.moneyLessonKey === "prices_change") {
-      const beforePrice = Math.max(1, Math.round(concept.lessonScenario.beforePrice));
-      const afterPrice = Math.max(beforePrice + 1, Math.round(concept.lessonScenario.afterPrice));
-      return {
-        ...concept,
-        lessonScenario: {
-          ...concept.lessonScenario,
-          beforePrice,
-          afterPrice
-        }
-      };
-    }
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
 
-    return concept;
+function implicitConceptBitcoinReplacement(lesson: MoneyLessonKey): string {
+  switch (lesson) {
+    case "prices_change":
+      return "steadier money";
+    case "jar_saving_limits":
+      return "a steadier saving habit";
+    case "new_money_unfair":
+      return "fair money rules";
+    case "keep_what_you_earn":
+      return "protection for earned effort";
+    case "better_rules":
+      return "steady rules everyone can trust";
   }
+}
 
-  const targetPrice = Math.max(1, Math.round(concept.lessonScenario.targetPrice));
-  const startingAmount = Math.max(0, Math.round(concept.lessonScenario.startingAmount));
-  const gapAmount = Math.max(1, targetPrice - startingAmount);
+function implicitLateIntroductionFallback(lesson: MoneyLessonKey): string {
+  switch (lesson) {
+    case "prices_change":
+      return "last-minute money lesson";
+    case "jar_saving_limits":
+      return "last-minute saving explanation";
+    case "new_money_unfair":
+      return "last-minute fairness explanation";
+    case "keep_what_you_earn":
+      return "last-minute earned-reward explanation";
+    case "better_rules":
+      return "last-minute fair-rule explanation";
+  }
+}
 
+function sanitizeImplicitConceptText(value: string, lesson: MoneyLessonKey): string {
+  const replacement = implicitConceptBitcoinReplacement(lesson);
+  return normalizeWhitespace(
+    value
+      .replace(/\bbitcoins?\b/gi, replacement)
+      .replace(/\bdigital money\b/gi, "money-system talk")
+      .replace(/\bcrypto(?:currency)?\b/gi, "money-system talk")
+  );
+}
+
+function sanitizeImplicitConceptList(
+  entries: string[],
+  lesson: MoneyLessonKey,
+  fallback: string
+): string[] {
+  return entries.map((entry, index) => {
+    const sanitized = sanitizeImplicitConceptText(entry, lesson);
+    return sanitized.length > 0 ? sanitized : `${fallback} ${index + 1}`;
+  });
+}
+
+function sanitizeImplicitLessonScenario(
+  scenario: StoryConcept["lessonScenario"],
+  lesson: MoneyLessonKey
+): StoryConcept["lessonScenario"] {
+  switch (scenario.moneyLessonKey) {
+    case "prices_change":
+      return {
+        ...scenario,
+        anchorItem: sanitizeImplicitConceptText(scenario.anchorItem, lesson),
+        purchaseUnit: sanitizeImplicitConceptText(scenario.purchaseUnit, lesson),
+        countableComparison: sanitizeImplicitConceptText(scenario.countableComparison, lesson),
+        noticingMoment: sanitizeImplicitConceptText(scenario.noticingMoment, lesson),
+        deadlineEvent:
+          typeof scenario.deadlineEvent === "string"
+            ? sanitizeImplicitConceptText(scenario.deadlineEvent, lesson)
+            : scenario.deadlineEvent
+      };
+    case "jar_saving_limits":
+      return {
+        ...scenario,
+        targetItem: sanitizeImplicitConceptText(scenario.targetItem, lesson),
+        earningOptions: scenario.earningOptions.map((option) => ({
+          label: sanitizeImplicitConceptText(option.label, lesson),
+          action: sanitizeImplicitConceptText(option.action, lesson),
+          sceneLocation: sanitizeImplicitConceptText(option.sceneLocation, lesson)
+        })) as typeof scenario.earningOptions,
+        temptation: sanitizeImplicitConceptText(scenario.temptation, lesson),
+        deadlineEvent:
+          typeof scenario.deadlineEvent === "string"
+            ? sanitizeImplicitConceptText(scenario.deadlineEvent, lesson)
+            : scenario.deadlineEvent
+      };
+    case "new_money_unfair":
+      return {
+        ...scenario,
+        gameName: sanitizeImplicitConceptText(scenario.gameName, lesson),
+        tokenName: sanitizeImplicitConceptText(scenario.tokenName, lesson),
+        childGoal: sanitizeImplicitConceptText(scenario.childGoal, lesson),
+        ruleDisruption: sanitizeImplicitConceptText(scenario.ruleDisruption, lesson),
+        fairnessRepair: sanitizeImplicitConceptText(scenario.fairnessRepair, lesson),
+        deadlineEvent:
+          typeof scenario.deadlineEvent === "string"
+            ? sanitizeImplicitConceptText(scenario.deadlineEvent, lesson)
+            : scenario.deadlineEvent
+      };
+    case "keep_what_you_earn":
+      return {
+        ...scenario,
+        workAction: sanitizeImplicitConceptText(scenario.workAction, lesson),
+        earnedReward: sanitizeImplicitConceptText(scenario.earnedReward, lesson),
+        rewardUse: sanitizeImplicitConceptText(scenario.rewardUse, lesson),
+        unfairLossRisk: sanitizeImplicitConceptText(scenario.unfairLossRisk, lesson),
+        deadlineEvent:
+          typeof scenario.deadlineEvent === "string"
+            ? sanitizeImplicitConceptText(scenario.deadlineEvent, lesson)
+            : scenario.deadlineEvent
+      };
+    case "better_rules":
+      return {
+        ...scenario,
+        gameName: sanitizeImplicitConceptText(scenario.gameName, lesson),
+        brokenRule: sanitizeImplicitConceptText(scenario.brokenRule, lesson),
+        fairRule: sanitizeImplicitConceptText(scenario.fairRule, lesson),
+        sharedGoal: sanitizeImplicitConceptText(scenario.sharedGoal, lesson),
+        deadlineEvent:
+          typeof scenario.deadlineEvent === "string"
+            ? sanitizeImplicitConceptText(scenario.deadlineEvent, lesson)
+            : scenario.deadlineEvent
+      };
+  }
+}
+
+function sanitizeSoundMoneyImplicitConcept(
+  concept: StoryConcept,
+  context: StoryContext
+): StoryConcept {
+  const lesson = concept.lessonScenario.moneyLessonKey;
   return {
     ...concept,
-    lessonScenario: {
-      ...concept.lessonScenario,
-      targetPrice,
-      startingAmount,
-      gapAmount
-    }
+    premise: sanitizeImplicitConceptText(concept.premise, lesson),
+    bitcoinBridge: buildBitcoinStoryBridgeText(concept.caregiverLabel, lesson, "sound_money_implicit"),
+    emotionalPromise: sanitizeImplicitConceptText(concept.emotionalPromise, lesson),
+    caregiverWarmthMoment: sanitizeImplicitConceptText(concept.caregiverWarmthMoment, lesson),
+    bitcoinValueThread: getMoneyLessonDefinition(context.lesson).bitcoinValueThread,
+    requiredSetups: sanitizeImplicitConceptList(
+      concept.requiredSetups,
+      lesson,
+      "early money problem setup"
+    ),
+    requiredPayoffs: sanitizeImplicitConceptList(
+      concept.requiredPayoffs,
+      lesson,
+      "calm emotional payoff"
+    ),
+    forbiddenLateIntroductions: sanitizeImplicitConceptList(
+      concept.forbiddenLateIntroductions,
+      lesson,
+      implicitLateIntroductionFallback(lesson)
+    ),
+    lessonScenario: sanitizeImplicitLessonScenario(concept.lessonScenario, lesson)
   };
+}
+
+function normalizeStoryConcept(concept: StoryConcept, context: StoryContext): StoryConcept {
+  let normalized = concept;
+
+  if (concept.lessonScenario.moneyLessonKey === "prices_change") {
+    const beforePrice = Math.max(1, Math.round(concept.lessonScenario.beforePrice));
+    const afterPrice = Math.max(beforePrice + 1, Math.round(concept.lessonScenario.afterPrice));
+    normalized = {
+      ...concept,
+      lessonScenario: {
+        ...concept.lessonScenario,
+        beforePrice,
+        afterPrice
+      }
+    };
+  } else if (concept.lessonScenario.moneyLessonKey === "jar_saving_limits") {
+    const targetPrice = Math.max(1, Math.round(concept.lessonScenario.targetPrice));
+    const startingAmount = Math.max(0, Math.round(concept.lessonScenario.startingAmount));
+    const gapAmount = Math.max(1, targetPrice - startingAmount);
+    normalized = {
+      ...concept,
+      lessonScenario: {
+        ...concept.lessonScenario,
+        targetPrice,
+        startingAmount,
+        gapAmount
+      }
+    };
+  }
+
+  return context.storyMode === "sound_money_implicit"
+    ? sanitizeSoundMoneyImplicitConcept(normalized, context)
+    : normalized;
 }
 
 function hardCriticIssues(verdict: CriticVerdict): CriticVerdict["issues"] {
@@ -1516,7 +1700,7 @@ class OpenAiAnthropicProvider implements LlmProvider {
     });
 
     return {
-      concept: normalizeStoryConcept(concept.data),
+      concept: normalizeStoryConcept(concept.data, context),
       meta: concept.meta
     };
   }

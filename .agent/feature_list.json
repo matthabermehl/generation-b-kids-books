@@ -9,7 +9,7 @@
       "Confirm output indicates PASS or actionable missing-runner warnings"
     ],
     "passes": true,
-    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-04-01T02:44:53Z)"
+    "evidence": "bash scripts/agent/smoke.sh => PASS (2026-04-01T23:03:22Z)"
   },
   {
     "id": "wip-carryover-01",
@@ -430,7 +430,7 @@
       "Run smoke, targeted package tests, and repo quality before deploying dev",
       "Run provider smoke plus live picture-book smoke across the three modes and store smoke JSON plus final PDFs under `.agent/artifacts/story-modes/`"
     ],
-    "passes": false,
-    "evidence": "Local gates on latest code: bash scripts/agent/smoke.sh => PASS (2026-04-01T02:44:53Z); pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS; pnpm cdk:deploy:dev => PASS; pnpm ops:provider-smoke => PASS. Partial live proof saved: .agent/artifacts/story-modes/bitcoin-forward-read-aloud-smoke.json + .agent/artifacts/story-modes/bitcoin-forward-read-aloud-book.pdf, .agent/artifacts/story-modes/sound-money-implicit-read-aloud-smoke.json + .agent/artifacts/story-modes/sound-money-implicit-read-aloud-book.pdf. Reveal-mode pre-billing live failures are saved at .agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-smoke.json and .agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-postdeploy-smoke.json. Fresh finalpass rerun for all three modes is blocked by OpenAI billing_hard_limit_reached during /character/candidates; see .agent/artifacts/story-modes/finalpass-billing-blocker.md."
+    "passes": true,
+    "evidence": "bash scripts/agent/smoke.sh => PASS; pnpm --filter @book/prompts test => PASS; pnpm --filter @book/workers test => PASS; bash scripts/agent/quality.sh => PASS; pnpm cdk:deploy:dev => PASS (AiChildrensBookDevStack UPDATE_COMPLETE, web deploy complete); pnpm ops:provider-smoke => PASS (openai json=gpt-4.1 image=gpt-image-1-mini, anthropic/sendgrid/stripe PASS); API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules STORY_MODE=bitcoin_reveal_8020 ARTIFACT_PATH=.agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-final-smoke.json pnpm ops:picture-book-smoke => PASS (order d8ff4590-498e-49ee-9b9d-49529d91e9ba, book 1e13240d-ae24-4c09-8161-67bce482af2e, previews 12/12, pdf .agent/artifacts/story-modes/bitcoin-reveal-8020-read-aloud-final-book.pdf); API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules STORY_MODE=sound_money_implicit ARTIFACT_PATH=.agent/artifacts/story-modes/sound-money-implicit-read-aloud-final-smoke.json pnpm ops:picture-book-smoke => PASS (order bc71ab61-dd13-4842-bf59-b5d38e4c0ba0, book adbf956c-dba4-4e2f-8075-7213c419ebad, previews 12/12, pdf .agent/artifacts/story-modes/sound-money-implicit-read-aloud-final-book.pdf); API_BASE_URL=https://ufm4cqfnqe.execute-api.us-east-1.amazonaws.com READING_PROFILE_ID=read_aloud_3_4 MONEY_LESSON_KEY=better_rules STORY_MODE=bitcoin_forward ARTIFACT_PATH=.agent/artifacts/story-modes/bitcoin-forward-read-aloud-final-smoke.json pnpm ops:picture-book-smoke => PASS (order 1fdaf020-3d60-4914-81da-c528f22c3829, book b59d9dd4-dda8-41cd-a9ad-83e1c589889c, previews 12/12, pdf .agent/artifacts/story-modes/bitcoin-forward-read-aloud-final-book.pdf)."
   }
 ]

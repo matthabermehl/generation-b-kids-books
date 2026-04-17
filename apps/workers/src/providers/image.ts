@@ -114,6 +114,16 @@ function responseStatus(response: Response): string {
   return String(response.status);
 }
 
+function openAiEditCompatibilityFields(model: string): Record<string, unknown> {
+  if (model.startsWith("gpt-image-1-mini")) {
+    return {};
+  }
+
+  return {
+    input_fidelity: "high"
+  };
+}
+
 async function bytesFromOpenAiResult(result: OpenAiImageResult): Promise<{ bytes: Buffer; contentType: string }> {
   if (result.b64_json) {
     return {
@@ -355,7 +365,7 @@ class OpenAiPageArtProvider extends OpenAiTransport implements PageArtProvider {
         background: "opaque",
         output_format: "png",
         moderation: "auto",
-        input_fidelity: "high",
+        ...openAiEditCompatibilityFields(this.config.models.openaiImage),
         images: [
           {
             image_url: input.canvasImageUrl

@@ -21,7 +21,7 @@ function runtimeConfig(overrides?: Record<string, unknown>) {
     models: {
       openaiJson: "gpt-5-mini-2025-08-07",
       openaiVision: "gpt-5-mini-2025-08-07",
-      openaiImage: "gpt-image-1.5",
+      openaiImage: "gpt-image-1-mini",
       anthropicWriter: "claude-sonnet-4-5"
     },
     stripe: {
@@ -89,17 +89,28 @@ describe("image provider", () => {
       user?: string;
     };
     expect(String(fetchMock.mock.calls[0]?.[0] ?? "")).toBe("https://api.openai.com/v1/images/generations");
-    expect(requestBody.model).toBe("gpt-image-1.5");
+    expect(requestBody.model).toBe("gpt-image-1-mini");
     expect(requestBody.size).toBe("1536x1024");
     expect(requestBody.quality).toBe("high");
     expect(requestBody.user).toBe("book:book-1:page:0");
     expect(image.requestId).toBe("req-generate");
-    expect(image.endpoint).toBe("openai:gpt-image-1.5:generate");
+    expect(image.endpoint).toBe("openai:gpt-image-1-mini:generate");
     expect(image.contentType).toContain("image/png");
     expect(image.bytes.length).toBeGreaterThan(0);
   });
 
   it("calls OpenAI image edits for picture-book page art", async () => {
+    getRuntimeConfigMock.mockResolvedValue(
+      runtimeConfig({
+        models: {
+          openaiJson: "gpt-5-mini-2025-08-07",
+          openaiVision: "gpt-5-mini-2025-08-07",
+          openaiImage: "gpt-image-1.5",
+          anthropicWriter: "claude-sonnet-4-5"
+        }
+      })
+    );
+
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -151,6 +162,56 @@ describe("image provider", () => {
     expect(image.endpoint).toBe("openai:gpt-image-1.5:edit");
     expect(image.width).toBe(1024);
     expect(image.height).toBe(1024);
+  });
+
+  it("omits input_fidelity for gpt-image-1-mini page edits", async () => {
+    getRuntimeConfigMock.mockResolvedValue(
+      runtimeConfig({
+        models: {
+          openaiJson: "gpt-5-mini-2025-08-07",
+          openaiVision: "gpt-5-mini-2025-08-07",
+          openaiImage: "gpt-image-1-mini",
+          anthropicWriter: "claude-sonnet-4-5"
+        }
+      })
+    );
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ b64_json: Buffer.from([9, 8, 7, 6]).toString("base64") }]
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "x-request-id": "req-edit-mini"
+          }
+        }
+      )
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const provider = await resolvePictureBookImageProvider();
+    await provider.generatePageArt(
+      {
+        bookId: "book-mini",
+        pageIndex: 0,
+        prompt: "Paint the masked watercolor region.",
+        canvasImageUrl: "https://example.com/canvas.png",
+        maskImageUrl: "https://example.com/mask.png",
+        referenceImageUrls: []
+      },
+      1
+    );
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body ?? "{}")) as {
+      input_fidelity?: string;
+      model?: string;
+    };
+    expect(requestBody.model).toBe("gpt-image-1-mini");
+    expect("input_fidelity" in requestBody).toBe(false);
   });
 
   it("uses mock adapters when enable_mock_image is true", async () => {
@@ -223,7 +284,7 @@ describe("image provider", () => {
       name: "OpenAiImageRequestError",
       code: "provider_timeout",
       retryable: true,
-      endpoint: "openai:gpt-image-1.5:edit"
+      endpoint: "openai:gpt-image-1-mini:edit"
     } satisfies Partial<OpenAiImageRequestError>);
     await vi.runAllTimersAsync();
     await assertion;
